@@ -1675,49 +1675,6 @@ loadEloData();
 setInterval(loadEloData, 60000);
 
 // ══════════════════════════════════════════
-// THEMED PAGE — LIVE RESULTS FROM SUPABASE
-// ══════════════════════════════════════════
-let themedEvents = [];
-let themedActiveEvent = null;
-
-async function loadThemedResults() {
-  try {
-    const results = await sb('results', 'select=*&order=date.desc,position.asc');
-    if (!results || !results.length) return;
-    const seen = new Set();
-    themedEvents = [];
-    results.forEach(r => {
-      if (r.event_name && !seen.has(r.event_name)) {
-        seen.add(r.event_name);
-        themedEvents.push({ name: r.event_name, date: r.date });
-      }
-    });
-    const sel = document.getElementById('themed-event-selector');
-    if (sel) {
-      sel.innerHTML = '<span class="event-selector-lbl">EVENT:</span>' +
-        themedEvents.slice(0,5).map((ev,i) =>
-          `<button class="ev-btn${i===0?' active':''}" onclick="themedSelectEvent('${ev.name}',this)">${ev.name}</button>`
-        ).join('');
-    }
-    if (themedEvents.length) renderThemedEvent(themedEvents[0].name, results);
-    themedActiveEvent = themedEvents[0]?.name;
-    window._themedResults = results;
-  } catch(e) { console.error('loadThemedResults:', e); }
-}
-
-// LEGACY — ersetzt durch themedSelectEvent(eventId) weiter oben
-// Diese Funktion bleibt als Fallback falls alter Code sie noch referenziert
-function themedSelectEvent(eventId, el) {
-  document.querySelectorAll('#themed-event-selector .ev-btn').forEach(b => b.classList.remove('active'));
-  if (el) el.classList.add('active');
-  const ev = themedEvents.find(e => e.id === eventId);
-  if (ev) loadThemedEventResults(ev);
-}
-
-// LEGACY renderThemedEvent entfernt — wird nicht mehr verwendet
-// Rendering läuft jetzt über renderThemedResults() weiter oben
-
-// ══════════════════════════════════════════
 // ADMIN PAGE
 // ══════════════════════════════════════════
 const ADMIN_PW = 'grf2024'; // replace with actual password check
