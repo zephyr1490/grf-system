@@ -1341,484 +1341,727 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 </div>
 
 <script>
-// ── PAGE NAVIGATION ──
+'use strict';
+
+// ══════════════════════════════════════════════════════════════
+// GRF SYSTEM — MAIN SCRIPT
+//
+// Struktur:
+//   1. CONFIG & CONSTANTS
+//   2. SUPABASE HELPER
+//   3. UTILS (DOM, Datum, Formatierung)
+//   4. NAVIGATION (showPage, showSubTab, showAdminTab)
+//   5. CLOCK & COUNTDOWN
+//   6. HOME PAGE   (loadHome, loadNextEvent, renderMostImproved)
+//   7. THEMED PAGE (loadThemedResults, loadStandings)
+//   8. ELO PAGE    (loadEloData, eloRender, eloFilter, eloClub)
+//   9. ADMIN PAGE  (adminLogin, adminLogout, initAdminPanel)
+//  10. ADMIN — CAR RATING CALCULATOR
+//  11. ADMIN — ELO UPDATE
+//  12. ADMIN — EVENT CREATION
+//  13. ADMIN — FONT SWITCHER
+//  14. INIT (DOMContentLoaded)
+//
+// Supabase-Tabellen:
+//   championships   → id, club_id, name, start_date, end_date, vehicle_class, season, narrative
+//   events          → id, championship_id, club_id, name, location, start_date, end_date,
+//                     status (0=planned · 1=active · 2=finished)
+//   event_results   → id, event_id, championship_id, driver_name, driver_id, position, time, vehicle,
+//                     points, is_dnf, platform, base_points, cr_multiplier, cr_points,
+//                     bonus_points, bonus_detail, total_points
+//   drivers         → id, name, country, elo, elo_change, starts, wins, club
+//   car_ratings     → Fahrzeug-CR-Werte pro Championship
+//   championship_rules → Regeln/Challenges pro Championship
+//   manual_bonuses  → manuell vergebene Punkte (z.B. Livery Challenge)
+//   results         → LEGACY — nicht mehr verwenden
+//
+// Sicherheit: SB_KEY ist der anon-key — öffentlich ok,
+//   SOLANGE RLS auf allen Tabellen aktiv ist (nur SELECT für anon).
+// ══════════════════════════════════════════════════════════════
+
+
+// ── 1. CONFIG & CONSTANTS ─────────────────────────────────────
+
+const SB_URL   = 'https://ixuhhzdijvtlfdjtrnyi.supabase.co';
+const SB_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4dWhoemRpanZ0bGZkanRybnlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzNDkxOTIsImV4cCI6MjA5NzkyNTE5Mn0.rJi8w8ayIiB-m5v1Kn-f5Re-K2Z_Ke1v1IaJo1qGmSA';
+const ADMIN_PW = 'grf2024'; // TODO: durch serverseitigen Auth-Check ersetzen
+
+const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+const CR_LOCATIONS = [
+  'Monte Carlo','Sweden','Portugal','Greece','Kenya','Finland',
+  'Australia','Great Britain','Germany','New Zealand','Japan',
+  'France','Spain','Corsica','Ivory Coast'
+];
+const CR_CLASSES = ['Group B','Group A','WRC','R5','Group N','Group 4','Kit Car','Production'];
+
+const FONT_CARDS   = ['fc-mono','fc-rajdhani','fc-exo2','fc-orbitron','fc-space'];
+const FONT_RADIOS  = ['fr-mono','fr-rajdhani','fr-exo2','fr-orbitron','fr-space'];
+const FONT_CLASSES = ['','font-rajdhani','font-exo2','font-orbitron','font-space-grotesk'];
+
+const RELOAD_INTERVAL_MS = 60_000; // Auto-Reload aller Seiten
+
+
+// ── 2. SUPABASE HELPER ────────────────────────────────────────
+
+const sbHeaders = {
+  'apikey':        SB_KEY,
+  'Authorization': 'Bearer ' + SB_KEY,
+};
+
+/**
+ * Fetch-Wrapper für die Supabase REST API.
+ * @param {string} table  - Tabellenname
+ * @param {string} params - Query-String (z.B. 'select=*&order=elo.desc')
+ * @returns {Promise<Array>} - Array mit Zeilen, oder [] bei Fehler
+ */
+async function sb(table, params = '') {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: sbHeaders });
+    if (!res.ok) {
+      console.error(`[SB] ${table}: HTTP ${res.status}`);
+      return [];
+    }
+    return await res.json();
+  } catch (err) {
+    console.error(`[SB] ${table}:`, err);
+    return [];
+  }
+}
+
+
+// ── 3. UTILS ─────────────────────────────────────────────────
+
+/** Gibt el zurück (null-safe). */
+const $ = id => document.getElementById(id);
+
+/** Setzt textContent wenn Element vorhanden. */
+function setText(id, text) {
+  const el = $(id);
+  if (el) el.textContent = text;
+}
+
+/** Setzt innerHTML wenn Element vorhanden. */
+function setHTML(id, html) {
+  const el = $(id);
+  if (el) el.innerHTML = html;
+}
+
+/** Formatiert ein ISO-Datum als "JUN 20". */
+function fmtDate(str) {
+  if (!str) return '—';
+  const d = new Date(str);
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+/** Rang-CSS-Klasse für Podiumsfarben. */
+const rankClass = i => i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
+
+/** ELO-Delta als farbiges HTML-Span. */
+function deltaHTML(delta) {
+  if (delta > 0) return `<span class="eu">▲${delta}</span>`;
+  if (delta < 0) return `<span class="ed">▼${Math.abs(delta)}</span>`;
+  return `<span class="eq">—</span>`;
+}
+
+/** "Established / Provisional"-Badge für ELO-Tabelle. */
+function statusBadge(established) {
+  return established
+    ? `<span style="color:var(--green);font-size:11px;">✓ Established</span>`
+    : `<span style="color:#555;font-size:11px;">○ Provisional</span>`;
+}
+
+/** Leere-Tabelle-Platzhalter. */
+function emptyRow(cols, title, sub = '') {
+  return `<tr><td colspan="${cols}">
+    <div class="empty">
+      <div class="empty-title">${title}</div>
+      ${sub ? `<div class="empty-sub">${sub}</div>` : ''}
+    </div>
+  </td></tr>`;
+}
+
+
+// ── 4. NAVIGATION ─────────────────────────────────────────────
+
+/**
+ * Wechselt die aktive Hauptseite.
+ * Beim Wechsel zur "themed"-Seite werden die Live-Ergebnisse geladen.
+ * Beim Wechsel zur "elo"-Seite werden ELO-Daten geladen.
+ */
 function showPage(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
-  const page = document.getElementById('page-' + name);
+
+  const page = $('page-' + name);
   if (page) page.classList.add('active');
-  if (el) el.classList.add('active');
+  if (el)   el.classList.add('active');
+
   if (name === 'themed') loadThemedResults();
+  if (name === 'elo')    loadEloData();
 }
 
-// ── THEMED SUB TABS ──
+/**
+ * Wechselt den aktiven Sub-Tab auf der Themed-Seite.
+ * Beim Wechsel zu "standings" werden Gesamtwertungsdaten geladen.
+ */
 function showSubTab(name, el) {
   document.querySelectorAll('.themed-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-  const tab = document.getElementById('tab-' + name);
+
+  const tab = $('tab-' + name);
   if (tab) tab.classList.add('active');
-  if (el) el.classList.add('active');
+  if (el)  el.classList.add('active');
+
   if (name === 'standings') loadStandings();
 }
 
-// ── CLOCK ──
-const DAYS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
-const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+/**
+ * Wechselt den aktiven Tab im Admin-Panel.
+ */
+function showAdminTab(name, el) {
+  document.querySelectorAll('.admin-tab').forEach(t => {
+    t.style.display = 'none';
+    t.classList.remove('active');
+  });
+  document.querySelectorAll('#admin-panel .sub-tab').forEach(t => t.classList.remove('active'));
+
+  const tab = $('atab-' + name);
+  if (tab) { tab.style.display = 'block'; tab.classList.add('active'); }
+  if (el)  el.classList.add('active');
+}
+
+
+// ── 5. CLOCK & COUNTDOWN ──────────────────────────────────────
+
 function updateClock() {
-  const n = new Date();
-  const time = String(n.getHours()).padStart(2,'0') + ':' +
-    String(n.getMinutes()).padStart(2,'0') + ':' +
-    String(n.getSeconds()).padStart(2,'0');
-  const date = DAYS[n.getDay()] + ' ' + String(n.getDate()).padStart(2,'0') + ' ' + MONTHS[n.getMonth()];
-  const tEl = document.getElementById('clock-time');
-  const dEl = document.getElementById('clock-date');
-  if (tEl) tEl.textContent = time;
-  if (dEl) dEl.textContent = date;
-}
-setInterval(updateClock, 1000);
-updateClock();
-
-// ── COUNTDOWN ──
-let secs = 4*86400 + 12*3600 + 33*60;
-function tick() {
-  secs = Math.max(0, secs - 1);
-  const d = Math.floor(secs/86400);
-  const h = Math.floor((secs%86400)/3600);
-  const m = Math.floor((secs%3600)/60);
-  document.getElementById('countdown').textContent =
-    String(d).padStart(2,'0') + ':' +
-    String(h).padStart(2,'0') + ':' +
-    String(m).padStart(2,'0');
-}
-setInterval(tick, 1000);
-
-// ══════════════════════════════════════════
-// SUPABASE CONFIG
-// Tabellen-Struktur:
-//   championships  → id, club_id, name, start_date, end_date, vehicle_class, season, narrative
-//   events         → id, championship_id, club_id, name, location, start_date, end_date, status (0=planned,1=active,2=finished)
-//   event_results  → id, event_id, championship_id, driver_name, driver_id, position, time, vehicle,
-//                    points, is_dnf, platform, base_points, cr_multiplier, cr_points, bonus_points, bonus_detail, total_points
-//   drivers        → id, name, country, elo, starts, wins, club
-//   car_ratings    → Fahrzeug-CR-Werte pro Championship
-//   championship_rules → Regeln/Challenges pro Championship
-//   manual_bonuses → manuell vergebene Punkte (z.B. Livery Challenge)
-//   results        → LEGACY-Tabelle, nicht mehr verwenden
-// ══════════════════════════════════════════
-const SB_URL = 'https://ixuhhzdijvtlfdjtrnyi.supabase.co';
-const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4dWhoemRpanZ0bGZkanRybnlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzNDkxOTIsImV4cCI6MjA5NzkyNTE5Mn0.rJi8w8ayIiB-m5v1Kn-f5Re-K2Z_Ke1v1IaJo1qGmSA';
-// SICHERHEIT: SB_KEY ist der anon-key — öffentlich ok, SOLANGE RLS auf allen Tabellen aktiv ist.
-// Sicherstellen: jede Tabelle hat RLS enabled + SELECT policy für anon. Kein INSERT/UPDATE/DELETE für anon.
-const hdrs = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
-
-// Basis-Fetch-Wrapper für Supabase REST API
-async function sb(table, params='') {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: hdrs });
-  return r.ok ? r.json() : [];
+  const n    = new Date();
+  const time = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+  const date = `${DAYS[n.getDay()]} ${String(n.getDate()).padStart(2,'0')} ${MONTHS[n.getMonth()]}`;
+  setText('clock-time', time);
+  setText('clock-date', date);
 }
 
-// ══════════════════════════════════════════
-// HOME PAGE — KACHELN + ELO TOP 10 + MOST IMPROVED
-// Quellen: drivers, event_results
-// ══════════════════════════════════════════
+// Countdown-Sekunden — werden von loadNextEvent() mit dem echten Datum überschrieben
+let _countdownSecs = 0;
+
+function _tickCountdown() {
+  _countdownSecs = Math.max(0, _countdownSecs - 1);
+  const d = Math.floor(_countdownSecs / 86400);
+  const h = Math.floor((_countdownSecs % 86400) / 3600);
+  const m = Math.floor((_countdownSecs % 3600) / 60);
+  setText('countdown', `${String(d).padStart(2,'0')}:${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+}
+
+function _setCountdownTarget(isoDate) {
+  const target = new Date(isoDate).getTime();
+  _countdownSecs = Math.max(0, Math.floor((target - Date.now()) / 1000));
+}
+
+
+// ── 6. HOME PAGE ──────────────────────────────────────────────
+
 async function loadHome() {
   try {
-    // Fahrer nach ELO absteigend — für Top-10 und Kacheln
-    const drivers = await sb('drivers', 'select=*&order=elo.desc');
+    const [drivers, allER] = await Promise.all([
+      sb('drivers',       'select=*&order=elo.desc'),
+      sb('event_results', 'select=driver_name,event_id,created_at&order=created_at.desc'),
+    ]);
 
-    // Unique Fahrer aus event_results — für "GRF Members" Kachel
-    const allER = await sb('event_results', 'select=driver_name,event_id,created_at&order=created_at.desc');
+    // Kachel: GRF Members (unique Fahrer über alle event_results)
     const uniqueDrivers = new Set(allER.map(r => r.driver_name).filter(Boolean));
-    document.getElementById('k-members').textContent = uniqueDrivers.size || '—';
+    setText('k-members', uniqueDrivers.size || '—');
 
-    // Fahrer mit den meisten Events (distinct event_id)
+    // Kachel: Fahrer mit den meisten Events
     const evMap = {};
     allER.forEach(r => {
       if (!r.driver_name) return;
-      if (!evMap[r.driver_name]) evMap[r.driver_name] = new Set();
+      evMap[r.driver_name] = evMap[r.driver_name] || new Set();
       evMap[r.driver_name].add(r.event_id);
     });
     let mostName = '—', mostCount = 0;
     Object.entries(evMap).forEach(([name, evs]) => {
       if (evs.size > mostCount) { mostCount = evs.size; mostName = name; }
     });
-    document.getElementById('k-most-events-num').textContent = mostCount || '—';
-    document.getElementById('k-most-events-name').textContent = mostName;
+    setText('k-most-events-num',  mostCount || '—');
+    setText('k-most-events-name', mostName);
 
-    // Top ELO — nur "established" Fahrer (5+ starts)
-    const verified = drivers.filter(d => (d.starts||0) >= 5);
+    // Kachel: Top ELO (nur Established: 5+ Starts)
+    const verified = drivers.filter(d => (d.starts || 0) >= 5);
     if (verified.length) {
-      document.getElementById('k-top-elo').textContent = verified[0].elo;
-      document.getElementById('k-top-elo-name').textContent = verified[0].name;
+      setText('k-top-elo',      verified[0].elo);
+      setText('k-top-elo-name', verified[0].name);
     }
 
-    // ELO Top 10 Tabelle
+    // ELO Top-10-Tabelle
     const top10 = drivers.slice(0, 10);
-    const tbody = document.getElementById('home-elo-tbody');
-    if (top10.length) {
-      const pc = i => i===0?'p1':i===1?'p2':i===2?'p3':'';
-      tbody.innerHTML = top10.map((d,i) => `
-        <tr>
-          <td class="${pc(i)}">${String(i+1).padStart(2,'0')}</td>
-          <td>${d.country||''} ${d.name}</td>
-          <td class="ev">${d.elo||'—'}</td>
-          <td class="eq">—</td>
-          <td>${d.starts||0}</td>
-        </tr>`).join('');
+    const tbody = $('home-elo-tbody');
+    if (tbody) {
+      tbody.innerHTML = top10.length
+        ? top10.map((d, i) => `
+            <tr>
+              <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
+              <td>${d.country || ''} ${d.name}</td>
+              <td class="ev">${d.elo || '—'}</td>
+              <td class="eq">—</td>
+              <td>${d.starts || 0}</td>
+            </tr>`).join('')
+        : emptyRow(5, 'NO ELO DATA YET', 'ELO data will appear after the first events are processed.');
     }
 
-    // Most Improved: ELO-Änderung aus den letzten 7 Tagen
-    // event_results hat kein elo_change-Feld → aus drivers.elo_change_7d wenn vorhanden, sonst skip
-    // TODO: wenn drivers-Tabelle ein elo_history/elo_change Feld bekommt, hier einbauen
-    loadMostImprovedFromDrivers(drivers);
+    // Most Improved (aus drivers.elo_change — falls Spalte vorhanden)
+    renderMostImproved(drivers);
 
-    // Next Event aus events-Tabelle laden (status=1 = aktiv, sonst nächstes geplantes)
-    loadNextEvent();
+    // Nächstes Event
+    await loadNextEvent();
 
-  } catch(e) {
-    console.error('loadHome:', e);
+  } catch (err) {
+    console.error('[loadHome]', err);
   }
 }
 
-// Most Improved aus drivers-Tabelle
-// Erwartet ein Feld elo_change_7d oder ähnlich — falls nicht vorhanden, bleibt die Liste leer
-function loadMostImprovedFromDrivers(drivers) {
-  // Versuche elo_change (kurzfristig) aus drivers zu lesen
-  // Falls das Feld nicht existiert, passiert nichts
+/** Rendert die "Most Improved"-Liste aus drivers.elo_change (falls Spalte vorhanden). */
+function renderMostImproved(drivers) {
   const withChange = drivers
     .filter(d => d.elo_change && d.elo_change > 0)
-    .sort((a,b) => b.elo_change - a.elo_change)
+    .sort((a, b) => b.elo_change - a.elo_change)
     .slice(0, 5);
 
-  if (!withChange.length) return;
-  const maxVal = withChange[0].elo_change;
-  const container = document.getElementById('most-improved-list');
+  const container = $('most-improved-list');
   if (!container) return;
 
+  if (!withChange.length) {
+    // Kein elo_change-Feld in der DB — Liste leer lassen
+    return;
+  }
+
+  const maxVal = withChange[0].elo_change;
   container.innerHTML = withChange.map((d, i) => `
     <div class="improved-row">
-      <div class="improved-rank">${i+1}</div>
+      <div class="improved-rank">${i + 1}</div>
       <div class="improved-name">${d.name}</div>
       <div class="improved-bar-wrap">
         <div class="improved-bar-bg">
-          <div class="improved-bar-fg" style="width:${Math.round((d.elo_change/maxVal)*100)}%"></div>
+          <div class="improved-bar-fg" style="width:${Math.round((d.elo_change / maxVal) * 100)}%"></div>
         </div>
       </div>
       <div class="improved-delta">+${d.elo_change}</div>
     </div>`).join('');
 }
 
-// Next Event: aktives Event (status=1) oder nächstes geplantes (status=0, start_date >= heute)
+/** Lädt das nächste/aktive Event und befüllt den Hero-Bereich auf der Home-Seite. */
 async function loadNextEvent() {
   try {
     const today = new Date().toISOString().split('T')[0];
-    // Aktives Event zuerst
-    let evs = await sb('events', `select=*&status=eq.1&order=start_date.asc&limit=1`);
-    // Sonst nächstes geplantes
-    if (!evs || !evs.length) {
+    let evs = await sb('events', 'select=*&status=eq.1&order=start_date.asc&limit=1');
+    if (!evs.length) {
       evs = await sb('events', `select=*&status=eq.0&start_date=gte.${today}&order=start_date.asc&limit=1`);
     }
-    if (!evs || !evs.length) return;
+    if (!evs.length) return;
+
     const ev = evs[0];
+    setText('next-event-eyebrow', ev.location ? `// ${ev.location.toUpperCase()} //` : '—');
+    setText('next-event-name',    ev.name || '—');
 
-    // Eyebrow: "// LOCATION //"
-    const eyebrowEl = document.getElementById('next-event-eyebrow');
-    if (eyebrowEl) eyebrowEl.textContent = ev.location ? `// ${ev.location.toUpperCase()} //` : '—';
-
-    // Name
-    const nameEl = document.getElementById('next-event-name');
-    if (nameEl) nameEl.textContent = ev.name || '—';
-
-    // Datum formatieren: "JUN 20\n— JUN 27"
-    const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-    const fmtDate = (str) => {
-      if (!str) return '—';
-      const d = new Date(str);
-      return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
-    };
-    const datesEl = document.getElementById('next-event-dates');
+    const datesEl = $('next-event-dates');
     if (datesEl) datesEl.innerHTML = `${fmtDate(ev.start_date)}<br>— ${fmtDate(ev.end_date)}`;
-    const yearEl = document.getElementById('next-event-year');
-    if (yearEl && ev.start_date) yearEl.textContent = new Date(ev.start_date).getUTCFullYear();
 
-    // Countdown bis start_date starten
     if (ev.start_date) {
-      const target = new Date(ev.start_date).getTime();
-      secs = Math.max(0, Math.floor((target - Date.now()) / 1000));
+      setText('next-event-year', new Date(ev.start_date).getUTCFullYear());
+      _setCountdownTarget(ev.start_date);
     }
-  } catch(e) {
-    console.error('loadNextEvent:', e);
+  } catch (err) {
+    console.error('[loadNextEvent]', err);
   }
 }
 
-loadHome();
-setInterval(loadHome, 60000);
 
-// ══════════════════════════════════════════
-// ELO PAGE — FAHRER-RANKINGS
-// Quelle: drivers + event_results (für best position)
-// ══════════════════════════════════════════
-let eloData = [];
-let eloFilterMode = 'all';
-let eloClubFilter = 'all';
+// ── 7. THEMED PAGE ────────────────────────────────────────────
+
+// Welches Event ist im Event-Selector aktiv (ID)
+let _themedActiveEventId = null;
+
+/**
+ * Lädt Events für den Event-Selector und anschließend die Ergebnisse.
+ * Wird beim Wechsel zur Themed-Seite aufgerufen (showPage).
+ */
+async function loadThemedResults() {
+  try {
+    // Aktives oder letztes abgeschlossenes Event des GRF-Themed-Clubs laden
+    const today = new Date().toISOString().split('T')[0];
+    let evs = await sb('events', 'select=*&status=eq.1&order=start_date.desc&limit=10');
+    if (!evs.length) {
+      evs = await sb('events', `select=*&status=eq.2&order=end_date.desc&limit=10`);
+    }
+
+    const selectorEl = $('themed-event-selector');
+    if (selectorEl && evs.length) {
+      // Event-Buttons im Selector aufbauen
+      selectorEl.innerHTML =
+        `<span class="event-selector-lbl">EVENT:</span>` +
+        evs.map((ev, i) => `
+          <span class="ev-btn${i === 0 ? ' active' : ''}"
+                onclick="selectThemedEvent('${ev.id}', this)">
+            ${ev.name || `RD.${i + 1}`}
+          </span>`).join('');
+
+      if (!_themedActiveEventId) _themedActiveEventId = evs[0].id;
+    } else if (selectorEl) {
+      selectorEl.innerHTML = `<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">Keine Events gefunden</span>`;
+    }
+
+    await _fetchAndRenderResults(_themedActiveEventId || (evs[0] && evs[0].id));
+
+  } catch (err) {
+    console.error('[loadThemedResults]', err);
+  }
+}
+
+/** Wird geklickt, wenn ein anderes Event im Selector gewählt wird. */
+async function selectThemedEvent(eventId, el) {
+  _themedActiveEventId = eventId;
+  document.querySelectorAll('#themed-event-selector .ev-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  await _fetchAndRenderResults(eventId);
+}
+
+/** Lädt event_results für ein Event und rendert die Tabelle. */
+async function _fetchAndRenderResults(eventId) {
+  if (!eventId) return;
+
+  setText('themed-results-hdr', 'CURRENT RESULTS — LOADING…');
+  setHTML('themed-results-tbody', emptyRow(7, 'LOADING…'));
+
+  try {
+    const results = await sb(
+      'event_results',
+      `select=*&event_id=eq.${eventId}&order=position.asc`
+    );
+
+    const tbody = $('themed-results-tbody');
+    if (!tbody) return;
+
+    if (!results.length) {
+      tbody.innerHTML = emptyRow(7, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
+      setText('themed-results-hdr', 'CURRENT RESULTS — NO DATA');
+      return;
+    }
+
+    tbody.innerHTML = results.map((r, i) => `
+      <tr${r.is_dnf ? ' style="opacity:.5"' : ''}>
+        <td class="${rankClass(i)}">${r.is_dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0')}</td>
+        <td>${r.driver_name || '—'}</td>
+        <td style="font-size:12px;color:#aaa;">${r.vehicle || '—'}</td>
+        <td>${r.time || '—'}</td>
+        <td>${r.base_points ?? '—'}</td>
+        <td class="ev">${r.cr_multiplier ? r.cr_multiplier.toFixed(2) : '—'}</td>
+        <td class="ev">${r.total_points ?? r.points ?? '—'}</td>
+      </tr>`).join('');
+
+    setText('themed-results-hdr', `CURRENT RESULTS — ${results.length} ENTRIES`);
+
+  } catch (err) {
+    console.error('[_fetchAndRenderResults]', err);
+    setHTML('themed-results-tbody', emptyRow(7, 'FEHLER', 'Ergebnisse konnten nicht geladen werden.'));
+  }
+}
+
+/**
+ * Lädt die Championship-Gesamtwertung.
+ * Wird beim Wechsel zum "standings"-Tab aufgerufen (showSubTab).
+ */
+async function loadStandings() {
+  setHTML('standings-tbody', emptyRow(10, 'LOADING…'));
+
+  try {
+    // Alle Ergebnisse für aktive Championship (TODO: championship_id filtern sobald bekannt)
+    const results = await sb(
+      'event_results',
+      'select=driver_name,vehicle,total_points,points,event_id&order=total_points.desc'
+    );
+
+    if (!results.length) {
+      setHTML('standings-tbody', emptyRow(10, 'NO STANDINGS DATA', 'Gesamtwertung wird nach dem ersten Event befüllt.'));
+      return;
+    }
+
+    // Punkte pro Fahrer aggregieren
+    const driverMap = {};
+    results.forEach(r => {
+      const name = r.driver_name;
+      if (!name) return;
+      if (!driverMap[name]) {
+        driverMap[name] = { name, vehicle: r.vehicle || '—', total: 0, events: [] };
+      }
+      driverMap[name].total += r.total_points || r.points || 0;
+      driverMap[name].events.push(r.total_points || r.points || 0);
+    });
+
+    const sorted = Object.values(driverMap).sort((a, b) => b.total - a.total);
+    const maxRounds = Math.max(...sorted.map(d => d.events.length), 5);
+
+    const tbody = $('standings-tbody');
+    if (tbody) {
+      tbody.innerHTML = sorted.map((d, i) => {
+        const roundCells = Array.from({ length: maxRounds }, (_, ri) =>
+          `<td style="font-size:12px;color:#999;">${d.events[ri] ?? '—'}</td>`
+        ).join('');
+        return `
+          <tr>
+            <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
+            <td>${d.name}</td>
+            <td style="font-size:12px;color:#aaa;">${d.vehicle}</td>
+            ${roundCells}
+            <td class="ev">${d.total}</td>
+            <td class="eq">—</td>
+          </tr>`;
+      }).join('');
+    }
+
+  } catch (err) {
+    console.error('[loadStandings]', err);
+    setHTML('standings-tbody', emptyRow(10, 'FEHLER', 'Gesamtwertung konnte nicht geladen werden.'));
+  }
+}
+
+
+// ── 8. ELO PAGE ───────────────────────────────────────────────
+
+let _eloData       = [];
+let _eloFilterMode = 'all';
+let _eloClubFilter = 'all';
 
 async function loadEloData() {
   try {
-    // Alle Fahrer nach ELO absteigend
-    const drivers = await sb('drivers', 'select=*&order=elo.desc');
-    if (!drivers || !drivers.length) return;
+    const [drivers, allResults] = await Promise.all([
+      sb('drivers',       'select=*&order=elo.desc'),
+      sb('event_results', 'select=driver_name,position,is_dnf'),
+    ]);
 
-    // Beste Position pro Fahrer aus event_results
-    const allResults = await sb('event_results', 'select=driver_name,position,is_dnf,created_at&order=created_at.desc');
+    if (!drivers.length) return;
 
-    const driverStats = {};
+    // Beste Platzierung pro Fahrer
+    const bestPos = {};
     allResults.forEach(r => {
       const n = r.driver_name;
-      if (!n) return;
-      if (!driverStats[n]) driverStats[n] = { bestPos: 999 };
-      if (!r.is_dnf) {
-        const pos = parseInt(r.position) || 999;
-        if (pos < driverStats[n].bestPos) driverStats[n].bestPos = pos;
-      }
+      if (!n || r.is_dnf) return;
+      const pos = parseInt(r.position) || 999;
+      if (!bestPos[n] || pos < bestPos[n]) bestPos[n] = pos;
     });
 
-    // ELO-Änderung letzte 7 Tage — aus drivers.elo_change wenn vorhanden
-    // TODO: wenn drivers eine elo_history Tabelle bekommt, hier verfeinern
-    eloData = drivers.map(d => {
-      const stats = driverStats[d.name] || { bestPos: null };
-      const bestPos = stats.bestPos && stats.bestPos < 999 ? `P${stats.bestPos}` : '—';
-      return {
-        name: d.name,
-        country: d.country || '',
-        elo: d.elo || 1000,
-        delta: d.elo_change || 0,   // elo_change aus drivers-Tabelle (falls vorhanden)
-        starts: d.starts || 0,
-        wins: d.wins || 0,
-        best: bestPos,
-        club: d.club || '',
-        established: (d.starts || 0) >= 5,
-      };
-    });
+    _eloData = drivers.map(d => ({
+      name:        d.name,
+      country:     d.country || '',
+      elo:         d.elo || 1000,
+      delta:       d.elo_change || 0,
+      starts:      d.starts || 0,
+      wins:        d.wins || 0,
+      best:        bestPos[d.name] && bestPos[d.name] < 999 ? `P${bestPos[d.name]}` : '—',
+      club:        d.club || '',
+      established: (d.starts || 0) >= 5,
+    }));
 
     eloRender();
-    loadMostImprovedFromDrivers(drivers);
-  } catch(e) {
-    console.error('loadEloData:', e);
+    renderMostImproved(drivers);
+
+  } catch (err) {
+    console.error('[loadEloData]', err);
   }
 }
 
 function eloFilter(mode, el) {
-  eloFilterMode = mode;
-  document.querySelectorAll('#page-elo .ev-btn').forEach(b => {
-    if (b.onclick && b.onclick.toString().includes("eloFilter")) b.classList.remove('active');
-  });
-  el.classList.add('active');
+  _eloFilterMode = mode;
+  document.querySelectorAll('#page-elo .ev-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
   eloRender();
 }
 
 function eloClub(club, el) {
-  eloClubFilter = club;
-  ['elo-club-all','elo-club-themed','elo-club-teamed'].forEach(id => {
-    const b = document.getElementById(id);
+  _eloClubFilter = club;
+  ['elo-club-all', 'elo-club-themed', 'elo-club-teamed'].forEach(id => {
+    const b = $(id);
     if (b) b.classList.remove('active');
   });
-  el.classList.add('active');
+  if (el) el.classList.add('active');
   eloRender();
 }
 
 function eloRender() {
-  const search = (document.getElementById('elo-search')?.value||'').toLowerCase();
-  let data = [...eloData];
+  const search = ($('elo-search')?.value || '').toLowerCase();
+  let data = [..._eloData];
 
-  if (eloFilterMode === 'established') data = data.filter(d => d.established);
-  if (eloFilterMode === 'improved')    data = data.filter(d => d.delta > 0).sort((a,b) => b.delta - a.delta);
-  if (search) data = data.filter(d => d.name.toLowerCase().includes(search));
+  if (_eloFilterMode === 'established') data = data.filter(d => d.established);
+  if (_eloFilterMode === 'improved')    data = data.filter(d => d.delta > 0).sort((a, b) => b.delta - a.delta);
+  if (_eloClubFilter !== 'all')         data = data.filter(d => d.club.toLowerCase().includes(_eloClubFilter));
+  if (search)                           data = data.filter(d => d.name.toLowerCase().includes(search));
 
-  const pc = i => i===0?'p1':i===1?'p2':i===2?'p3':'';
-  const deltaStr = d => d.delta > 0
-    ? `<span class="eu">▲${d.delta}</span>`
-    : d.delta < 0
-    ? `<span class="ed">▼${Math.abs(d.delta)}</span>`
-    : `<span class="eq">—</span>`;
-  const statusBadge = d => d.established
-    ? `<span style="color:var(--green);font-size:11px;">✓ Established</span>`
-    : `<span style="color:#555;font-size:11px;">○ Provisional</span>`;
+  const tbody = $('elo-full-tbody');
+  if (!tbody) return;
 
-  const tbody = document.getElementById('elo-full-tbody');
-  if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-title">${eloData.length ? 'NO RESULTS' : 'LOADING…'}</div><div class="empty-sub">${eloData.length ? 'No drivers match the current filter.' : 'Fetching ELO data from Supabase…'}</div></div></td></tr>`;
-  } else {
-    tbody.innerHTML = data.map((d,i) => `
-      <tr>
-        <td class="${pc(i)}">${String(i+1).padStart(2,'0')}</td>
-        <td>${d.country} ${d.name}</td>
-        <td class="ev">${d.elo}</td>
-        <td>${deltaStr(d)}</td>
-        <td>${d.starts}</td>
-        <td>${d.wins}</td>
-        <td>${d.best}</td>
-        <td style="font-size:13px;color:#999;">—</td>
-        <td>${statusBadge(d)}</td>
-      </tr>`).join('');
-  }
+  tbody.innerHTML = data.length
+    ? data.map((d, i) => `
+        <tr>
+          <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
+          <td>${d.country} ${d.name}</td>
+          <td class="ev">${d.elo}</td>
+          <td>${deltaHTML(d.delta)}</td>
+          <td>${d.starts}</td>
+          <td>${d.wins}</td>
+          <td>${d.best}</td>
+          <td style="font-size:13px;color:#999;">—</td>
+          <td>${statusBadge(d.established)}</td>
+        </tr>`).join('')
+    : emptyRow(9,
+        _eloData.length ? 'NO RESULTS' : 'LOADING…',
+        _eloData.length ? 'No drivers match the current filter.' : 'Fetching ELO data from Supabase…'
+      );
 
-  const established = data.filter(d=>d.established);
-  document.getElementById('elo-result-count').textContent = `${data.length} driver${data.length!==1?'s':''} shown`;
-  if (eloData.length) {
-    document.getElementById('elo-count').textContent = eloData.length;
-    document.getElementById('elo-established-count').textContent = eloData.filter(d=>d.established).length;
-    if (eloData[0]) document.getElementById('elo-top').textContent = eloData[0].elo + ' — ' + eloData[0].name;
+  setText('elo-result-count', `${data.length} driver${data.length !== 1 ? 's' : ''} shown`);
+
+  if (_eloData.length) {
+    setText('elo-count',            _eloData.length);
+    setText('elo-established-count', _eloData.filter(d => d.established).length);
+    if (_eloData[0]) setText('elo-top', `${_eloData[0].elo} — ${_eloData[0].name}`);
   }
 }
 
-loadEloData();
-setInterval(loadEloData, 60000);
 
-// ══════════════════════════════════════════
-// ADMIN PAGE
-// ══════════════════════════════════════════
-const ADMIN_PW = 'grf2024'; // replace with actual password check
+// ── 9. ADMIN PAGE ─────────────────────────────────────────────
 
 function adminLogin() {
-  const pw = document.getElementById('admin-pw-input').value;
+  const pw = $('admin-pw-input')?.value || '';
   if (pw === ADMIN_PW) {
-    document.getElementById('admin-gate').style.display = 'none';
-    document.getElementById('admin-panel').style.display = 'block';
+    $('admin-gate').style.display  = 'none';
+    $('admin-panel').style.display = 'block';
     initAdminPanel();
   } else {
-    document.getElementById('admin-pw-error').textContent = '✗ Incorrect password';
-    document.getElementById('admin-pw-input').value = '';
-    setTimeout(() => document.getElementById('admin-pw-error').textContent = '', 2500);
+    setText('admin-pw-error', '✗ Incorrect password');
+    if ($('admin-pw-input')) $('admin-pw-input').value = '';
+    setTimeout(() => setText('admin-pw-error', ''), 2500);
   }
 }
 
 function adminLogout() {
-  document.getElementById('admin-gate').style.display = 'block';
-  document.getElementById('admin-panel').style.display = 'none';
-  document.getElementById('admin-pw-input').value = '';
+  $('admin-gate').style.display  = 'block';
+  $('admin-panel').style.display = 'none';
+  if ($('admin-pw-input')) $('admin-pw-input').value = '';
 }
-
-function showAdminTab(name, el) {
-  document.querySelectorAll('.admin-tab').forEach(t => { t.style.display = 'none'; t.classList.remove('active'); });
-  document.querySelectorAll('#admin-panel .sub-tab').forEach(t => t.classList.remove('active'));
-  const tab = document.getElementById('atab-' + name);
-  if (tab) { tab.style.display = 'block'; tab.classList.add('active'); }
-  if (el) el.classList.add('active');
-}
-
-// ── CAR RATING CALCULATOR ──
-const CR_LOCATIONS = ['Monte Carlo','Sweden','Portugal','Greece','Kenya','Finland','Australia','Great Britain','Germany','New Zealand','Japan','France','Spain','Corsica','Ivory Coast'];
-const CR_CLASSES   = ['Group B','Group A','WRC','R5','Group N','Group 4','Kit Car','Production'];
 
 function initAdminPanel() {
-  // Build location checkboxes
-  const locList = document.getElementById('cr-locations-list');
-  if (locList && !locList.dataset.built) {
-    locList.innerHTML = CR_LOCATIONS.map(l => `
-      <label class="cr-check-row">
-        <input type="checkbox" name="cr-loc" value="${l}" onchange="crUpdateCounts()">
-        ${l}
-      </label>`).join('');
-    locList.dataset.built = '1';
-  }
-  const clsList = document.getElementById('cr-classes-list');
-  if (clsList && !clsList.dataset.built) {
-    clsList.innerHTML = CR_CLASSES.map(c => `
-      <label class="cr-check-row">
-        <input type="checkbox" name="cr-cls" value="${c}" onchange="crUpdateCounts()">
-        ${c}
-      </label>`).join('');
-    clsList.dataset.built = '1';
-  }
-  // Build ELO club list
-  const eloClubList = document.getElementById('elo-club-list');
-  if (eloClubList && !eloClubList.dataset.built) {
-    const clubs = ['GRF Themed', 'GRF Teamed'];
-    eloClubList.innerHTML = clubs.map((c,i) => `
-      <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${i%2?'#050505':'#0a0a0a'};border:1px solid #1a1a1a;cursor:pointer;font-size:13px;color:var(--gray-light);">
-        <input type="checkbox" name="elo-club" value="${c}" style="accent-color:var(--red);width:15px;height:15px;">
-        <span style="flex:1;">${c}</span>
-        <span style="font-size:11px;color:#555;">${c==='GRF Themed'?'22 events processed':'8 events processed'}</span>
-      </label>`).join('');
-    eloClubList.dataset.built = '1';
-  }
+  _buildCheckboxList('cr-locations-list', 'cr-loc', CR_LOCATIONS, 'crUpdateCounts()');
+  _buildCheckboxList('cr-classes-list',   'cr-cls', CR_CLASSES,   'crUpdateCounts()');
+  _buildEloClubList();
 }
+
+function _buildCheckboxList(containerId, inputName, items, onchange) {
+  const el = $(containerId);
+  if (!el || el.dataset.built) return;
+  el.innerHTML = items.map(v => `
+    <label class="cr-check-row">
+      <input type="checkbox" name="${inputName}" value="${v}" onchange="${onchange}">
+      ${v}
+    </label>`).join('');
+  el.dataset.built = '1';
+}
+
+function _buildEloClubList() {
+  const el = $('elo-club-list');
+  if (!el || el.dataset.built) return;
+  const clubs = [
+    { name: 'GRF Themed', info: '22 events processed' },
+    { name: 'GRF Teamed', info: '8 events processed'  },
+  ];
+  el.innerHTML = clubs.map((c, i) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${i % 2 ? '#050505' : '#0a0a0a'};border:1px solid #1a1a1a;cursor:pointer;font-size:13px;color:var(--gray-light);">
+      <input type="checkbox" name="elo-club" value="${c.name}" style="accent-color:var(--red);width:15px;height:15px;">
+      <span style="flex:1;">${c.name}</span>
+      <span style="font-size:11px;color:#555;">${c.info}</span>
+    </label>`).join('');
+  el.dataset.built = '1';
+}
+
+
+// ── 10. ADMIN — CAR RATING CALCULATOR ────────────────────────
 
 function crUpdateCounts() {
   const locSel = document.querySelectorAll('input[name="cr-loc"]:checked').length;
   const clsSel = document.querySelectorAll('input[name="cr-cls"]:checked').length;
-  const lc = document.getElementById('cr-loc-count');
-  const cc = document.getElementById('cr-cls-count');
-  if (lc) lc.textContent = locSel + ' selected';
-  if (cc) cc.textContent = clsSel + ' selected';
+  setText('cr-loc-count', locSel + ' selected');
+  setText('cr-cls-count', clsSel + ' selected');
 }
 
 function crSelectAll(type) {
-  document.querySelectorAll(`input[name="cr-${type==='loc'?'loc':'cls'}"]`).forEach(cb => cb.checked = true);
+  document.querySelectorAll(`input[name="cr-${type}"]`).forEach(cb => cb.checked = true);
   crUpdateCounts();
 }
 
 function crClearAll(type) {
-  document.querySelectorAll(`input[name="cr-${type==='loc'?'loc':'cls'}"]`).forEach(cb => cb.checked = false);
+  document.querySelectorAll(`input[name="cr-${type}"]`).forEach(cb => cb.checked = false);
   crUpdateCounts();
 }
 
 function crCalculate() {
-  const locs = [...document.querySelectorAll('input[name="cr-loc"]:checked')].map(c=>c.value);
-  const clss = [...document.querySelectorAll('input[name="cr-cls"]:checked')].map(c=>c.value);
+  const locs = [...document.querySelectorAll('input[name="cr-loc"]:checked')].map(c => c.value);
+  const clss = [...document.querySelectorAll('input[name="cr-cls"]:checked')].map(c => c.value);
+
   if (!locs.length || !clss.length) {
-    document.getElementById('cr-status').textContent = '⚠ Select at least one location and one class.';
+    setText('cr-status', '⚠ Select at least one location and one class.');
     return;
   }
-  const topPct = parseFloat(document.getElementById('cr-top-pct').value)||25;
-  const minN   = parseInt(document.getElementById('cr-min-n').value)||10;
-  const exp    = parseFloat(document.getElementById('cr-exponent').value)||1.5;
-  document.getElementById('cr-status').textContent = `⏳ Calculating… (top ${topPct}%, minN=${minN}, exp=${exp})`;
 
-  // Dummy result rows
+  const topPct = parseFloat($('cr-top-pct')?.value) || 25;
+  const minN   = parseInt($('cr-min-n')?.value)     || 10;
+  const exp    = parseFloat($('cr-exponent')?.value) || 1.5;
+  setText('cr-status', `⏳ Calculating… (top ${topPct}%, minN=${minN}, exp=${exp})`);
+
+  // TODO: echte Berechnung aus Supabase — aktuell Dummy-Daten
   const vehicles = [
-    {v:'Peugeot 205 T16',cl:'Group B',loc:'Monte Carlo',n:48,cr:1.52},
-    {v:'Lancia Delta HF',cl:'Group A',loc:'Great Britain',n:61,cr:1.21},
-    {v:'Subaru Impreza 555',cl:'Group A',loc:'Finland',n:44,cr:1.11},
-    {v:'Ford Escort RS',cl:'Group A',loc:'Kenya',n:32,cr:1.00},
-    {v:'Mitsubishi Evo III',cl:'Group A',loc:'Sweden',n:29,cr:1.08},
+    { v: 'Peugeot 205 T16',     cl: 'Group B', loc: 'Monte Carlo',  n: 48, cr: 1.52 },
+    { v: 'Lancia Delta HF',     cl: 'Group A', loc: 'Great Britain', n: 61, cr: 1.21 },
+    { v: 'Subaru Impreza 555',  cl: 'Group A', loc: 'Finland',       n: 44, cr: 1.11 },
+    { v: 'Ford Escort RS',      cl: 'Group A', loc: 'Kenya',         n: 32, cr: 1.00 },
+    { v: 'Mitsubishi Evo III',  cl: 'Group A', loc: 'Sweden',        n: 29, cr: 1.08 },
   ].filter(r => clss.includes(r.cl));
 
-  const tbody = document.getElementById('cr-preview-tbody');
-  if (!vehicles.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No results for selected filters.</div></div></td></tr>`;
-  } else {
-    tbody.innerHTML = vehicles.map((r,i) => `
-      <tr>
-        <td>${i+1}</td>
-        <td>${r.v}</td>
-        <td>${r.cl}</td>
-        <td>${r.loc}</td>
-        <td>${r.n}</td>
-        <td class="ev">${r.cr.toFixed(2)}</td>
-        <td><span class="cr-badge ${r.cr>=1.4?'cr-s':r.cr>=1.1?'cr-a':'cr-b'}">${r.cr>=1.4?'S':r.cr>=1.1?'A':'B'}</span></td>
-      </tr>`).join('');
+  const tbody = $('cr-preview-tbody');
+  if (tbody) {
+    tbody.innerHTML = vehicles.length
+      ? vehicles.map((r, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${r.v}</td>
+            <td>${r.cl}</td>
+            <td>${r.loc}</td>
+            <td>${r.n}</td>
+            <td class="ev">${r.cr.toFixed(2)}</td>
+            <td><span class="cr-badge ${r.cr >= 1.4 ? 'cr-s' : r.cr >= 1.1 ? 'cr-a' : 'cr-b'}">${r.cr >= 1.4 ? 'S' : r.cr >= 1.1 ? 'A' : 'B'}</span></td>
+          </tr>`).join('')
+      : emptyRow(7, 'NO DATA', 'No results for selected filters.');
   }
-  setTimeout(() => { document.getElementById('cr-status').textContent = `✓ Done — ${vehicles.length} vehicles calculated`; }, 600);
+
+  setTimeout(() => setText('cr-status', `✓ Done — ${vehicles.length} vehicles calculated`), 600);
 }
 
-function crSave() {
-  document.getElementById('cr-status').textContent = 'Saved to database.';
-}
-function crExport() {
-  document.getElementById('cr-status').textContent = 'CSV export triggered.';
-}
+function crSave()   { setText('cr-status', 'Saved to database.'); }
+function crExport() { setText('cr-status', 'CSV export triggered.'); }
 
-// ── ELO UPDATE ──
+
+// ── 11. ADMIN — ELO UPDATE ────────────────────────────────────
+
 function eloStartUpdate() {
-  const clubs = [...document.querySelectorAll('input[name="elo-club"]:checked')].map(c=>c.value);
+  const clubs = [...document.querySelectorAll('input[name="elo-club"]:checked')].map(c => c.value);
   if (!clubs.length) {
-    document.getElementById('elo-update-status').textContent = '⚠ Select at least one club.';
+    setText('elo-update-status', '⚠ Select at least one club.');
     return;
   }
-  const log = document.getElementById('elo-log');
-  const status = document.getElementById('elo-update-status');
-  log.innerHTML = '';
+
+  const log    = $('elo-log');
+  const status = $('elo-update-status');
+  if (log)    log.innerHTML = '';
+  if (status) status.textContent = '⏳ Running…';
+
+  // TODO: echte ELO-Neuberechnung via Supabase Edge Function oder API
   const lines = [
     `<span style="color:#555;">[${new Date().toLocaleTimeString()}]</span> Starting ELO update for: <span style="color:var(--gray-light);">${clubs.join(', ')}</span>`,
     `<span style="color:#555;">[+0.1s]</span> Fetching event results from Supabase…`,
@@ -1829,76 +2072,85 @@ function eloStartUpdate() {
     `<span style="color:#555;">[+1.7s]</span> Writing updated ELO to database…`,
     `<span style="color:var(--green);">[+2.0s] ✓ ELO update complete.</span>`,
   ];
+
   let i = 0;
-  status.textContent = '⏳ Running…';
   const iv = setInterval(() => {
     if (i < lines.length) {
-      log.innerHTML += lines[i] + '<br>';
+      if (log) log.innerHTML += lines[i] + '<br>';
       i++;
     } else {
       clearInterval(iv);
-      status.textContent = '✓ Complete';
+      if (status) status.textContent = '✓ Complete';
     }
   }, 350);
 }
 
-// ── FONT SWITCHER ──
-const FONT_CARDS = ['fc-mono','fc-rajdhani','fc-exo2','fc-orbitron','fc-space'];
-const FONT_RADIOS = ['fr-mono','fr-rajdhani','fr-exo2','fr-orbitron','fr-space'];
-const FONT_CLASSES = ['','font-rajdhani','font-exo2','font-orbitron','font-space-grotesk'];
 
-function switchFont(cls, cardId) {
-  // Remove all font classes from body
-  FONT_CLASSES.forEach(c => { if(c) document.body.classList.remove(c); });
-  if (cls) document.body.classList.add(cls);
+// ── 12. ADMIN — EVENT CREATION ────────────────────────────────
 
-  // Update card borders + radio states
-  FONT_CARDS.forEach((id, i) => {
-    const card = document.getElementById(id);
-    const radio = document.getElementById(FONT_RADIOS[i]);
-    if (!card || !radio) return;
-    const isActive = (id === cardId);
-    card.style.borderColor = isActive ? 'var(--red)' : '#333';
-    radio.style.background = isActive ? 'var(--red)' : 'transparent';
-    radio.style.borderColor = isActive ? 'var(--red)' : '#555';
-  });
-}
-
-// init — mark mono as active on load
-document.addEventListener('DOMContentLoaded', () => {
-  // already styled inline as active
-});
 function ecTypeChange(sel) {
-  const teamSec = document.getElementById('ec-team-section');
+  const teamSec = $('ec-team-section');
   if (teamSec) teamSec.style.display = sel.value === 'team' ? 'block' : 'none';
 }
 
 function ecLoadCR() {
-  document.getElementById('ec-status').textContent = '✓ CR set loaded — 12 vehicles imported';
+  setText('ec-status', '✓ CR set loaded — 12 vehicles imported');
 }
 
 function ecCreate() {
-  const name = document.getElementById('ec-name').value.trim();
-  const club = document.getElementById('ec-club').value;
+  const name = $('ec-name')?.value.trim();
+  const club = $('ec-club')?.value;
   if (!name || !club) {
-    document.getElementById('ec-status').textContent = '⚠ Please fill in Club and Championship Name.';
+    setText('ec-status', '⚠ Please fill in Club and Championship Name.');
     return;
   }
-  document.getElementById('ec-status').textContent = '⏳ Creating championship in Racenet…';
-  setTimeout(() => {
-    document.getElementById('ec-status').textContent = '✓ Championship "' + name + '" created successfully.';
-  }, 1200);
+  setText('ec-status', '⏳ Creating championship in Racenet…');
+  // TODO: echte Racenet/Supabase-Integration
+  setTimeout(() => setText('ec-status', `✓ Championship "${name}" created successfully.`), 1200);
 }
 
 function ecReset() {
-  ['ec-club','ec-type','ec-name','ec-narrative','ec-cr-import','ec-team-id','ec-team-name','ec-team-members'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  document.getElementById('ec-team-section').style.display = 'none';
-  document.querySelectorAll('#ec-challenges input[type=checkbox]').forEach((cb,i) => cb.checked = i<3);
-  document.getElementById('ec-status').textContent = '';
+  ['ec-club','ec-type','ec-name','ec-narrative','ec-cr-import','ec-team-id','ec-team-name','ec-team-members']
+    .forEach(id => { const el = $(id); if (el) el.value = ''; });
+  const teamSec = $('ec-team-section');
+  if (teamSec) teamSec.style.display = 'none';
+  document.querySelectorAll('#ec-challenges input[type=checkbox]').forEach((cb, i) => cb.checked = i < 3);
+  setText('ec-status', '');
 }
+
+
+// ── 13. ADMIN — FONT SWITCHER ─────────────────────────────────
+
+function switchFont(cls, cardId) {
+  FONT_CLASSES.forEach(c => { if (c) document.body.classList.remove(c); });
+  if (cls) document.body.classList.add(cls);
+
+  FONT_CARDS.forEach((id, i) => {
+    const card  = $(id);
+    const radio = $(FONT_RADIOS[i]);
+    if (!card || !radio) return;
+    const active = (id === cardId);
+    card.style.borderColor  = active ? 'var(--red)' : '#333';
+    radio.style.background  = active ? 'var(--red)' : 'transparent';
+    radio.style.borderColor = active ? 'var(--red)' : '#555';
+  });
+}
+
+
+// ── 14. INIT ──────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Clock starten
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // Countdown starten
+  setInterval(_tickCountdown, 1000);
+
+  // Home-Seite initital laden + Auto-Reload
+  loadHome();
+  setInterval(loadHome, RELOAD_INTERVAL_MS);
+});
 </script>
 
 </body>
