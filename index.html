@@ -1,0 +1,1828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Rally Fans</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=VT323&family=Oswald:wght@400;600;700&display=swap');
+
+:root {
+  --red: #CC0000;
+  --red-dark: #8B0000;
+  --red-bright: #FF2222;
+  --black: #1e2124;        /* Discord-style anthracite, not pure black */
+  --black-deep: #141618;   /* slightly deeper for contrast layers */
+  --gray: #C0C0C0;
+  --gray-dark: #909090;
+  --gray-light: #E8E8E8;
+  --green: #3DDB6F;        /* softer, warmer green — still vivid but not neon */
+  --green-dim: #28A050;
+  --white: #FFFFFF;
+  --panel: #2a2d31;        /* anthracite panel */
+  --bl: #DFDFDF;
+  --bd: #707070;
+  --discord: #5865F2;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #2c2f33;
+  font-family: var(--ui-font, 'Share Tech Mono', monospace);
+  color: var(--gray-light);
+  min-height: 100vh;
+  font-size: 16px;
+}
+
+body::after {
+  content:'';
+  position:fixed; inset:0;
+  background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.06) 3px,rgba(0,0,0,0.06) 4px);
+  pointer-events:none; z-index:9999;
+}
+
+/* ── SHELL ── */
+.shell {
+  margin: 10px auto;
+  max-width: 1300px;
+  background: var(--gray);
+  border: 3px solid;
+  border-color: var(--bl) var(--bd) var(--bd) var(--bl);
+}
+
+/* ── TITLE BAR ── */
+.titlebar {
+  background: linear-gradient(90deg, var(--red-dark), var(--red) 45%, var(--red-dark));
+  padding: 4px 8px;
+  display: flex; align-items: center; gap: 8px;
+  user-select: none;
+}
+.titlebar-text {
+  font-family:'Oswald',sans-serif; font-weight:700;
+  font-size:14px; color:var(--white); letter-spacing:2px; flex:1;
+}
+.titlebar-sub { font-size:10px; color:rgba(255,255,255,0.5); letter-spacing:1px; }
+
+/* ── MENU BAR ── */
+.menubar {
+  background: var(--gray);
+  border-bottom: 2px solid var(--gray-dark);
+  padding: 2px 4px;
+  display: flex; align-items: center; gap:1px;
+}
+.menu-item {
+  padding: 5px 16px; font-size:14px; color:#111;
+  cursor:pointer; border:1px solid transparent;
+  font-family:var(--ui-font); white-space:nowrap;
+}
+.menu-item:hover, .menu-item.active {
+  background:var(--red); color:var(--white);
+  border-color: var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright);
+}
+.menu-sep { width:1px; height:20px; background:var(--gray-dark); margin:0 4px; border-right:1px solid var(--bl); }
+.menu-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.live-pill {
+  display:flex; align-items:center; gap:5px;
+  font-size:10px; letter-spacing:1px;
+  border:1px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  padding:1px 8px; background:var(--black); color:var(--green);
+}
+.live-dot { width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 4px var(--green); animation:blink 1.5s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* ── PAGES ── */
+.page { display:none; }
+.page.active { display:block; }
+
+/* ══════════════════════════════════════════
+   HOME PAGE
+══════════════════════════════════════════ */
+
+/* HERO */
+.hero {
+  background:var(--black);
+  border-bottom:3px solid var(--red-dark);
+  padding:28px 36px;
+  display:flex; align-items:center; gap:36px;
+  position:relative; overflow:hidden; min-height:190px;
+}
+.hero::before {
+  content:''; position:absolute; top:0; right:0;
+  width:55%; height:100%;
+  background-image: radial-gradient(circle,rgba(192,192,192,0.09) 1px,transparent 1px);
+  background-size:9px 9px; pointer-events:none;
+}
+.hero::after {
+  content:''; position:absolute; top:0; right:180px;
+  width:3px; height:100%; background:var(--red);
+  transform:skewX(-10deg);
+  box-shadow:-10px 0 0 rgba(204,0,0,0.12),10px 0 0 rgba(204,0,0,0.12);
+}
+.hero-logo {
+  width:110px; height:110px;
+  border:3px solid var(--red);
+  box-shadow:0 0 28px rgba(204,0,0,0.5),inset 0 0 20px rgba(204,0,0,0.07);
+  display:flex; align-items:center; justify-content:center;
+  font-size:58px; background:rgba(139,0,0,0.1);
+  flex-shrink:0; position:relative; z-index:1;
+  animation:idle 3s ease-in-out infinite;
+}
+@keyframes idle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+.hero-copy { flex:1; position:relative; z-index:1; }
+.hero-eyebrow { font-size:10px; color:var(--red); letter-spacing:4px; margin-bottom:6px; opacity:.8; }
+.hero-title {
+  font-family:'VT323',monospace; font-size:72px;
+  line-height:.85; color:var(--white);
+  text-shadow:4px 4px 0 var(--red-dark); letter-spacing:3px; margin-bottom:12px;
+}
+.hero-title .r { color:var(--red); }
+.hero-sub { font-size:14px; color:#bbb; line-height:1.6; max-width:400px; margin-bottom:16px; }
+.hero-sub em { color:var(--gray); font-style:normal; }
+
+.hero-discord {
+  display:inline-flex; align-items:center; gap:8px;
+  background:var(--discord); color:var(--white);
+  border:2px solid; border-color:#7289DA #3c4a9e #3c4a9e #7289DA;
+  padding:6px 18px;
+  font-family:'Oswald',sans-serif; font-weight:700; font-size:13px;
+  cursor:pointer; letter-spacing:1px;
+}
+.hero-discord:hover { background:#4752c4; }
+
+/* STATUS STRIP */
+.status-strip {
+  background:var(--black); border-bottom:1px solid #1a1a1a;
+  padding:6px 36px; display:flex; gap:24px; font-size:13px;
+}
+.ss-item { display:flex; align-items:center; gap:6px; color:#aaa; }
+.ss-dot { width:5px; height:5px; border-radius:50%; }
+.ss-green { background:var(--green); box-shadow:0 0 3px var(--green); animation:blink 2s infinite; }
+.ss-red   { background:var(--red); box-shadow:0 0 5px var(--red); }
+.ss-yellow{ background:#FFD700; box-shadow:0 0 5px #FFD700; }
+
+/* KACHELN */
+.kacheln {
+  display:grid; grid-template-columns:repeat(4,1fr);
+  border-bottom:2px solid var(--gray-dark);
+}
+.kachel {
+  background:var(--black); padding:14px 16px; text-align:center;
+  border-right:2px solid #111;
+  cursor:default;
+  transition:background .15s;
+}
+.kachel:last-child { border-right:none; }
+.kachel:hover { background:#251010; }
+.kachel-num {
+  font-family:'VT323',monospace; font-size:48px;
+  color:var(--red); line-height:1;
+  text-shadow:0 0 12px rgba(204,0,0,0.35);
+}
+.kachel-lbl { font-size:12px; color:#bbb; letter-spacing:2px; text-transform:uppercase; margin-top:3px; }
+.kachel-sub { font-size:12px; color:#666; margin-top:2px; }
+
+/* HOME GRID */
+.home-grid {
+  display:grid; grid-template-columns:1fr 1fr;
+  border-top:2px solid var(--gray-dark);
+}
+.home-col { border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
+.home-col:last-child { border-right:none; }
+
+/* COL HEADER */
+.col-hdr {
+  background:var(--red-dark); padding:5px 10px;
+  font-family:'Oswald',sans-serif; font-size:12px;
+  color:var(--white); letter-spacing:2px;
+  display:flex; align-items:center; gap:8px;
+  border-bottom:1px solid var(--red);
+}
+.col-hdr-right { margin-left:auto; font-size:11px; color:rgba(255,255,255,0.55); font-family:var(--ui-font); }
+
+/* ELO TABLE */
+.elo-wrap {
+  border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  margin:6px; background:var(--black);
+}
+.elo-table { width:100%; border-collapse:collapse; }
+.elo-table th {
+  background:#252729; color:#bbb;
+  padding:6px 8px; text-align:left; font-size:13px;
+  letter-spacing:1px; font-family:'Oswald',sans-serif; font-weight:400;
+  border-bottom:1px solid var(--red-dark);
+}
+.elo-table td {
+  padding:7px 8px; border-bottom:1px solid #2a2d31;
+  font-size:15px; color:var(--gray-light);
+}
+.elo-table tr:nth-child(even) td { background:#252729; }
+.elo-table tr:hover td { background:#2d1515; color:var(--white); }
+.p1{color:#FFD700!important;font-weight:bold;}
+.p2{color:#C0C0C0!important;}
+.p3{color:#CD7F32!important;}
+.ev{color:var(--red)!important;font-weight:bold;}
+.eu{color:var(--green)!important;font-size:10px;}
+.ed{color:#FF4444!important;font-size:10px;}
+.eq{color:#444!important;font-size:10px;}
+
+  background:var(--black); padding:4px 8px;
+  font-size:10px; color:var(--red); cursor:pointer;
+  border-top:1px solid #1a1a1a;
+}
+.see-more:hover { color:var(--red-bright); }
+
+/* MOST IMPROVED */
+.improved-row {
+  display:flex; align-items:center; gap:10px;
+  padding:6px 10px; background:var(--black);
+  border-bottom:1px solid #111; margin:0 6px;
+}
+.improved-row:first-child { margin-top:6px; }
+.improved-row:last-child { margin-bottom:6px; }
+.improved-rank { font-family:"VT323",monospace; font-size:22px; color:#444; width:20px; flex-shrink:0; }
+.improved-name { flex:1; font-size:14px; color:var(--gray-light); }
+.improved-delta { font-family:'VT323',monospace; font-size:22px; color:var(--green); }
+.improved-bar-wrap { width:60px; flex-shrink:0; }
+.improved-bar-bg { height:3px; background:#2a2d31; }
+.improved-bar-fg { height:3px; background:linear-gradient(90deg,var(--green-dim),var(--green)); }
+
+/* ══════════════════════════════════════════
+   THEMED PAGE
+══════════════════════════════════════════ */
+
+.themed-hero {
+  background:var(--black);
+  border-bottom:3px solid var(--red-dark);
+  padding:20px 28px;
+  position:relative; overflow:hidden;
+}
+.themed-hero::before {
+  content:''; position:absolute; top:0; right:0;
+  width:40%; height:100%;
+  background-image:radial-gradient(circle,rgba(192,192,192,0.08) 1px,transparent 1px);
+  background-size:9px 9px; pointer-events:none;
+}
+.themed-eyebrow { font-size:10px; color:var(--red); letter-spacing:4px; margin-bottom:4px; }
+.themed-champ-name {
+  font-family:'VT323',monospace; font-size:52px;
+  color:var(--white); line-height:1;
+  text-shadow:3px 3px 0 var(--red-dark); letter-spacing:2px;
+  margin-bottom:8px;
+}
+.themed-narrative {
+  border-left:3px solid var(--red-dark);
+  padding:6px 12px; background:rgba(139,0,0,0.06);
+  font-size:13px; color:#888; line-height:1.6; font-style:italic;
+  max-width:700px; margin-bottom:14px;
+}
+.themed-meta {
+  display:flex; gap:16px; flex-wrap:wrap;
+}
+.themed-meta-item {
+  background:#252729; border:1px solid #1a1a1a;
+  border-left:2px solid var(--red-dark);
+  padding:4px 10px;
+}
+.tm-lbl { font-size:10px; color:#666; letter-spacing:1px; }
+.tm-val { font-size:14px; color:var(--gray-light); }
+
+/* THEMED SUB NAV */
+.themed-subnav {
+  background:var(--gray);
+  border-bottom:2px solid var(--gray-dark);
+  padding:4px 8px 0;
+  display:flex; gap:2px;
+}
+.sub-tab {
+  padding:6px 20px; font-size:14px; cursor:pointer;
+  border:2px solid; border-bottom:none;
+  position:relative; top:2px;
+  font-family:var(--ui-font);
+}
+.sub-tab.active {
+  background:var(--red); color:var(--white);
+  border-color:var(--red-bright) var(--red-dark) var(--red) var(--red-bright);
+}
+.sub-tab:not(.active) {
+  background:var(--gray-dark); color:var(--black);
+  border-color:var(--bl) var(--bd) var(--bd) var(--bl);
+}
+
+/* THEMED CONTENT TABS */
+.themed-tab { display:none; }
+.themed-tab.active { display:block; }
+
+/* LIVE RESULTS */
+.live-grid {
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:0;
+}
+.live-col { border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
+.live-col:last-child { border-right:none; }
+
+/* STANDINGS TABLE */
+.standings-wrap { padding:6px; background:var(--gray); }
+.standings-table { width:100%; border-collapse:collapse; background:var(--black); }
+.standings-table th {
+  background:#252729; color:#bbb;
+  padding:6px 10px; text-align:left; font-size:13px;
+  letter-spacing:1px; font-family:'Oswald',sans-serif; font-weight:400;
+  border-bottom:1px solid var(--red-dark);
+}
+.standings-table td {
+  padding:7px 10px; border-bottom:1px solid #2a2d31;
+  font-size:15px; color:var(--gray-light);
+}
+.standings-table tr:nth-child(even) td { background:#252729; }
+.standings-table tr:hover td { background:#2d1515; color:var(--white); }
+
+/* EVENT SELECTOR */
+.event-selector {
+  background:var(--gray); padding:6px 8px;
+  border-bottom:2px solid var(--gray-dark);
+  display:flex; gap:4px; flex-wrap:wrap;
+  align-items:center;
+}
+.event-selector-lbl { font-size:13px; color:var(--gray-dark); margin-right:4px; }
+.ev-btn {
+  padding:3px 12px; font-size:13px;
+  border:2px solid; border-color:var(--bl) var(--bd) var(--bd) var(--bl);
+  background:var(--gray); color:var(--black); cursor:pointer;
+  font-family:var(--ui-font);
+}
+.ev-btn:hover { background:var(--red); color:var(--white); }
+.ev-btn.active { background:var(--red); color:var(--white); border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); }
+
+/* CAR RATING TABLE */
+.cr-wrap { padding:6px; background:var(--gray); }
+.cr-table { width:100%; border-collapse:collapse; background:var(--black); }
+.cr-table th {
+  background:#252729; color:#bbb;
+  padding:6px 10px; text-align:left; font-size:13px;
+  letter-spacing:1px; font-family:'Oswald',sans-serif; font-weight:400;
+  border-bottom:1px solid var(--red-dark);
+}
+.cr-table td { padding:7px 10px; border-bottom:1px solid #2a2d31; font-size:15px; color:var(--gray-light); }
+.cr-table tr:hover td { background:#2d1515; }
+.cr-badge {
+  display:inline-block; padding:1px 6px;
+  font-family:'VT323',monospace; font-size:18px;
+}
+.cr-s  { color:#FFD700; } .cr-a  { color:var(--red); } .cr-b  { color:var(--gray); }
+.cr-bar-bg { height:4px; background:#2a2d31; width:80px; display:inline-block; vertical-align:middle; }
+.cr-bar-fg { height:4px; background:linear-gradient(90deg,var(--red-dark),var(--red-bright)); }
+
+/* CHALLENGE BOX */
+.challenge-box {
+  margin:6px; background:var(--black);
+  border:1px solid #1a1a1a; padding:12px;
+}
+.challenge-item {
+  border:1px solid #222; border-left:3px solid var(--green-dim);
+  padding:8px 10px; margin-bottom:8px;
+  background:rgba(0,255,65,0.03);
+}
+.challenge-item.inactive { border-left-color:#333; opacity:.5; }
+.ch-name { font-family:'Oswald',sans-serif; font-size:15px; color:var(--white); margin-bottom:4px; }
+.ch-desc { font-size:13px; color:#999; line-height:1.5; }
+.ch-reward { color:var(--green); font-size:13px; margin-top:4px; }
+.ch-badge {
+  display:inline-block; padding:1px 6px; font-size:9px;
+  letter-spacing:1px; margin-left:8px;
+}
+.ch-auto { background:rgba(0,255,65,0.15); color:var(--green); }
+.ch-manual { background:rgba(204,0,0,0.15); color:var(--red); }
+
+/* ── STATUSBAR ── */
+.statusbar {
+  background:var(--black);
+  border-top:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  padding:4px 8px; display:flex; align-items:center; gap:10px; font-size:13px;
+}
+.sb-panel {
+  border:1px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  padding:2px 10px; color:var(--gray-light);
+  display:flex; align-items:center; gap:5px; font-size:12px;
+  background:rgba(0,0,0,0.2);
+}
+.led { width:6px; height:6px; border-radius:50%; }
+.lg { background:var(--green); box-shadow:0 0 3px var(--green); }
+.lr { background:var(--red); box-shadow:0 0 5px var(--red); animation:blink 1.5s infinite; }
+.ly { background:#FFD700; box-shadow:0 0 5px #FFD700; }
+.clock-box {
+  margin-left:auto;
+  border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  background:var(--black); padding:1px 10px;
+  font-family:'VT323',monospace; font-size:20px;
+  color:var(--green); text-shadow:0 0 5px var(--green); letter-spacing:2px;
+}
+
+/* ── FONT THEMES ── */
+body                              { --ui-font: 'Share Tech Mono', monospace; }
+body.font-rajdhani                { --ui-font: 'Rajdhani', sans-serif; }
+body.font-exo2                    { --ui-font: 'Exo 2', sans-serif; }
+body.font-orbitron                { --ui-font: 'Orbitron', sans-serif; }
+body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width:16px; }
+::-webkit-scrollbar-track { background:var(--gray-dark); }
+::-webkit-scrollbar-thumb { background:var(--gray); border:2px solid; border-color:var(--bl) var(--bd) var(--bd) var(--bl); }
+
+/* ADMIN */
+.admin-tab { display:none; }
+.admin-tab.active { display:block; }
+
+.ec-check-row {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 10px; border-bottom:1px solid #111;
+  cursor:pointer; font-size:14px; color:var(--gray-light);
+}
+.ec-check-row:hover { background:#251010; }
+.ec-check-row input[type=checkbox] { accent-color:var(--red); width:14px; height:14px; cursor:pointer; }
+
+/* CR / ELO checkbox rows in scrollable lists */
+.cr-check-row {
+  display:flex; align-items:center; gap:8px;
+  padding:6px 8px; border-bottom:1px solid #111;
+  cursor:pointer; font-size:12px; color:var(--gray-light);
+}
+.cr-check-row:hover { background:#251010; }
+.cr-check-row input[type=checkbox] { accent-color:var(--red); width:13px; height:13px; cursor:pointer; flex-shrink:0; }
+
+/* EMPTY STATE */
+.empty {
+  background:var(--black); padding:24px; text-align:center;
+  margin:6px;
+}
+.empty-title { font-family:'VT323',monospace; font-size:28px; color:#2a2a2a; margin-bottom:4px; }
+.empty-sub { font-size:11px; color:#333; }
+
+/* COUNTDOWN */
+.countdown-strip {
+  background:var(--black); border-top:1px solid var(--red-dark);
+  padding:6px 36px; display:flex; align-items:center; gap:24px;
+}
+.cd-label { font-size:10px; color:#444; letter-spacing:3px; }
+.cd-digits {
+  font-family:'VT323',monospace; font-size:36px;
+  color:var(--red); text-shadow:0 0 12px rgba(204,0,0,0.4);
+  letter-spacing:3px; line-height:1;
+}
+.cd-units { font-size:9px; color:#333; letter-spacing:1px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- TITLE BAR -->
+  <div class="titlebar">
+    <span style="font-size:16px">🏁</span>
+    <span class="titlebar-text">GLOBAL RALLY FANS</span>
+    <span class="titlebar-sub">GRF-SYSTEM v2.4 // EA WRC</span>
+  </div>
+
+  <!-- MENU BAR -->
+  <div class="menubar">
+    <div class="menu-item active" onclick="showPage('home',this)">Home</div>
+    <div class="menu-item" onclick="showPage('themed',this)">GRF Themed</div>
+    <div class="menu-item" onclick="showPage('teamed',this)">GRF Teamed</div>
+    <div class="menu-sep"></div>
+    <div class="menu-item" onclick="showPage('elo',this)">ELO Rankings</div>
+    <div class="menu-sep"></div>
+    <div class="menu-item" onclick="showPage('admin',this)">Admin</div>
+    <div class="menu-right">
+      <div class="live-pill"><div class="live-dot"></div> LIVE</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       HOME PAGE
+  ══════════════════════════════════════════ -->
+  <div class="page active" id="page-home">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-logo" style="overflow:hidden;padding:0;border-radius:2px;"><img src="data:image/png;base64,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" style="width:100%;height:100%;object-fit:cover;" alt="GRF Logo"></div>
+      <div class="hero-copy">
+        <div class="hero-eyebrow">// EST. WRC GOLDEN ERA — 80s · 90s //</div>
+        <div class="hero-title">GLOBAL<br><span class="r">RALLY</span><br>FANS</div>
+        <div class="hero-sub">The home of <em>classic rally simulation</em>.<br>Reliving the <em>80s and 90s</em> — one stage at a time.</div>
+        <button class="hero-discord">⚡ JOIN DISCORD</button>
+      </div>
+    </div>
+
+    <!-- STATUS STRIP -->
+    <div class="status-strip">
+      <div class="ss-item"><div class="ss-dot ss-green"></div> RaceNet Connected</div>
+      <div class="ss-item"><div class="ss-dot ss-green"></div> Supabase Live</div>
+      <div class="ss-item"><div class="ss-dot ss-red"></div> GRF Themed — Event Active</div>
+      <div class="ss-item"><div class="ss-dot ss-yellow"></div> Entries Open</div>
+      <div style="margin-left:auto;font-size:10px;color:#333;">Last sync: just now</div>
+    </div>
+
+    <!-- KACHELN -->
+    <div class="kacheln">
+      <div class="kachel">
+        <div class="kachel-num">2</div>
+        <div class="kachel-lbl">Active Clubs</div>
+        <div class="kachel-sub">Themed · Teamed</div>
+      </div>
+      <div class="kachel">
+        <div class="kachel-num" id="k-members">—</div>
+        <div class="kachel-lbl">GRF Members</div>
+        <div class="kachel-sub">Unique across all clubs</div>
+      </div>
+      <div class="kachel">
+        <div class="kachel-num" id="k-most-events-num">—</div>
+        <div class="kachel-lbl">Most Events</div>
+        <div class="kachel-sub" id="k-most-events-name">—</div>
+      </div>
+      <div class="kachel">
+        <div class="kachel-num" id="k-top-elo">—</div>
+        <div class="kachel-lbl">Top ELO — Verified</div>
+        <div class="kachel-sub" id="k-top-elo-name">—</div>
+      </div>
+    </div>
+
+    <!-- HOME GRID: ELO TOP 10 + MOST IMPROVED -->
+    <div class="home-grid">
+
+      <!-- LEFT: TOP 10 ELO -->
+      <div class="home-col">
+        <div class="col-hdr">🏆 ELO — TOP 10
+          <span class="col-hdr-right">OVERALL · ALL CLUBS</span>
+        </div>
+        <div class="elo-wrap">
+          <table class="elo-table">
+            <thead>
+              <tr><th>#</th><th>DRIVER</th><th>ELO</th><th>Δ</th><th>EVENTS</th></tr>
+            </thead>
+            <tbody id="home-elo-tbody">
+              <tr><td colspan="5"><div class="empty"><div class="empty-title">NO ELO DATA YET</div><div class="empty-sub">ELO data will appear after the first events are processed.</div></div></td></tr>
+            </tbody>
+          </table>
+          <div class="see-more" onclick="showPage('elo', document.querySelector('.menu-item:nth-child(5)'))">VIEW FULL ELO RANKINGS ›</div>
+        </div>
+      </div>
+
+      <!-- RIGHT: MOST IMPROVED -->
+      <div class="home-col">
+        <div class="col-hdr">📈 MOST IMPROVED — LAST 7 DAYS
+          <span class="col-hdr-right">ELO GAINS</span>
+        </div>
+        <!-- Populated from Supabase -->
+        <div id="most-improved-list">
+          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+        </div>
+
+        <!-- Mini next event teaser -->
+        <div class="col-hdr" style="margin-top:4px;">📅 NEXT EVENT — GRF THEMED</div>
+        <div style="background:var(--black);margin:6px;padding:12px;">
+          <div style="font-size:10px;color:var(--red);letter-spacing:3px;margin-bottom:4px;">// RAC RALLY 1993 //</div>
+          <div style="font-family:'VT323',monospace;font-size:28px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:8px;">NETWORK Q RAC RALLY</div>
+          <div class="countdown-strip" style="padding:0;background:transparent;border:none;gap:12px;">
+            <div>
+              <div class="cd-label">OPENS IN</div>
+              <div class="cd-digits" id="countdown">04:12:33</div>
+              <div class="cd-units">DAYS · HRS · MIN</div>
+            </div>
+            <div style="flex:1;"></div>
+            <button class="ev-btn active" onclick="showPage('themed', document.querySelectorAll('.menu-item')[1])">VIEW EVENT ›</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       THEMED PAGE
+  ══════════════════════════════════════════ -->
+  <div class="page" id="page-themed">
+
+    <!-- CHAMPIONSHIP HERO -->
+    <div class="themed-hero">
+      <div class="themed-eyebrow">// GRF THEMED — SEASON 4 //</div>
+      <div class="themed-champ-name">CHAMPIONSHIP 2024</div>
+      <div class="themed-narrative">
+        "Twelve rounds across the golden era of rally. From the frozen mountain passes of Monte Carlo to the red dust of Kenya — this championship covers every surface, every decade, every legend. Survive them all."
+      </div>
+      <div class="themed-meta">
+        <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val">GRF Themed</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val">4</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val">12</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Active Drivers</div><div class="tm-val">23</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Current Round</div><div class="tm-val">13 — Wales</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" style="color:var(--green)">● LIVE</div></div>
+      </div>
+    </div>
+
+    <!-- SUB NAV -->
+    <div class="themed-subnav">
+      <div class="sub-tab active" onclick="showSubTab('results',this)">Live Results</div>
+      <div class="sub-tab" onclick="showSubTab('standings',this)">Championship Standings</div>
+      <div class="sub-tab" onclick="showSubTab('carratings',this)">Car Ratings</div>
+      <div class="sub-tab" onclick="showSubTab('challenges',this)">Challenges</div>
+    </div>
+
+    <!-- TAB: LIVE RESULTS -->
+    <div class="themed-tab active" id="tab-results">
+      <div class="event-selector" id="themed-event-selector">
+        <span class="event-selector-lbl">EVENT:</span>
+        <span style="color:#555;font-size:12px;">Loading events…</span>
+      </div>
+      <div class="live-grid">
+        <div class="live-col">
+          <div class="col-hdr" id="themed-results-hdr">🏁 CURRENT RESULTS — LOADING…
+            <span class="col-hdr-right" style="color:var(--green)">● LIVE</span>
+          </div>
+          <div class="elo-wrap">
+            <table class="elo-table">
+              <thead>
+                <tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th><th>BASE</th><th>×CR</th><th>PTS</th></tr>
+              </thead>
+              <tbody id="themed-results-tbody">
+                <tr><td colspan="7"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="live-col">
+          <div class="col-hdr">📋 EVENT INFO — RD.13 WALES</div>
+          <div style="background:var(--black);margin:6px;padding:12px;">
+            <div style="font-size:11px;color:var(--red);letter-spacing:3px;margin-bottom:6px;">// RAC RALLY 1993 //</div>
+            <div style="font-family:'VT323',monospace;font-size:32px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;">NETWORK Q<br>RAC RALLY</div>
+            <div style="border-left:3px solid var(--red-dark);padding:6px 10px;background:rgba(139,0,0,0.06);font-size:13px;color:#999;line-height:1.5;font-style:italic;margin-bottom:12px;">
+              "The forests of Great Britain call. Mud, mist, and the roar of 300bhp through the Welsh night."
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              <div class="themed-meta-item"><div class="tm-lbl">Surface</div><div class="tm-val">🌲 Gravel</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Location</div><div class="tm-val">🇬🇧 Wales</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Entries</div><div class="tm-val">18 / 24</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" style="color:var(--green)">● Live</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val">Jun 20</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val">Jun 27</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CHAMPIONSHIP STANDINGS -->
+    <div class="themed-tab" id="tab-standings">
+      <div class="standings-wrap">
+        <div class="col-hdr" style="margin-bottom:6px;">🏆 CHAMPIONSHIP STANDINGS — SEASON 4
+          <span class="col-hdr-right">AFTER RD.12 · RD.13 IN PROGRESS</span>
+        </div>
+        <table class="standings-table">
+          <thead>
+            <tr>
+              <th>#</th><th>DRIVER</th><th>VEHICLE</th>
+              <th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>R5</th>
+              <th>TOTAL PTS</th><th>LOYALTY</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="p1">01</td><td>🇩🇪 Loeb_GRF</td><td>Delta HF</td>
+              <td>60</td><td>44</td><td>60</td><td>48</td><td>52</td>
+              <td class="ev">264</td><td style="color:var(--green)">✓ +50</td>
+            </tr>
+            <tr>
+              <td class="p2">02</td><td>🏴󠁧󠁢󠁳󠁣󠁴󠁿 McRae_WRC</td><td>Impreza 555</td>
+              <td>48</td><td>52</td><td>44</td><td>60</td><td>38</td>
+              <td class="ev">242</td><td style="color:var(--green)">✓ +50</td>
+            </tr>
+            <tr>
+              <td class="p3">03</td><td>🇫🇮 Makinen99</td><td>Evo III / Delta HF</td>
+              <td>44</td><td>48</td><td>52</td><td>38</td><td>44</td>
+              <td class="ev">226</td><td style="color:#444">—</td>
+            </tr>
+            <tr>
+              <td>04</td><td>🏴󠁧󠁢󠁷󠁬󠁳󠁿 BurnsRally</td><td>Impreza 555</td>
+              <td>38</td><td>60</td><td>38</td><td>44</td><td>40</td>
+              <td class="ev">220</td><td style="color:var(--green)">✓ +50</td>
+            </tr>
+            <tr>
+              <td>05</td><td>🇫🇷 Auriol_Fan</td><td>Delta HF</td>
+              <td>2</td><td>40</td><td>48</td><td>52</td><td>48</td>
+              <td class="ev">190</td><td style="color:var(--green)">✓ +50</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: CAR RATINGS -->
+    <div class="themed-tab" id="tab-carratings">
+      <div class="cr-wrap">
+        <div class="col-hdr" style="margin-bottom:6px;">🚗 CAR RATINGS — SEASON 4
+          <span class="col-hdr-right">SET BEFORE SEASON · ADMIN ONLY</span>
+        </div>
+        <table class="cr-table">
+          <thead>
+            <tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>ERA</th><th>CR</th><th>RATING</th><th>STRENGTH</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="p1">1</td>
+              <td>Peugeot 205 T16</td><td>Group B</td><td>1985</td>
+              <td class="ev">1.50</td>
+              <td><span class="cr-badge cr-s">S+</span></td>
+              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:100%"></div></div></td>
+            </tr>
+            <tr>
+              <td class="p2">2</td>
+              <td>Lancia Delta HF Integrale</td><td>Group A</td><td>1989</td>
+              <td class="ev">1.20</td>
+              <td><span class="cr-badge cr-s">S</span></td>
+              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:80%"></div></div></td>
+            </tr>
+            <tr>
+              <td class="p3">3</td>
+              <td>Subaru Impreza 555</td><td>Group A</td><td>1995</td>
+              <td class="ev">1.10</td>
+              <td><span class="cr-badge cr-a">A+</span></td>
+              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:73%"></div></div></td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>Mitsubishi Lancer Evo III</td><td>Group A</td><td>1995</td>
+              <td class="ev">1.10</td>
+              <td><span class="cr-badge cr-a">A+</span></td>
+              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:73%"></div></div></td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>Ford Escort RS Cosworth</td><td>Group A</td><td>1993</td>
+              <td class="ev">1.00</td>
+              <td><span class="cr-badge cr-a">A</span></td>
+              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:67%"></div></div></td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td>Lancia Stratos HF</td><td>Group 4</td><td>1977</td>
+              <td class="ev">0.90</td>
+              <td><span class="cr-badge cr-b">B+</span></td>
+              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:60%"></div></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: CHALLENGES -->
+    <div class="themed-tab" id="tab-challenges">
+      <div class="challenge-box">
+        <div class="col-hdr" style="margin-bottom:10px;">⚡ ACTIVE CHALLENGES — SEASON 4</div>
+
+        <div class="challenge-item">
+          <div class="ch-name">Loyalty Bonus <span class="ch-badge ch-auto">AUTO</span></div>
+          <div class="ch-desc">Use the same vehicle in every event of the championship. Checked automatically at season end.</div>
+          <div class="ch-reward">+50 points — applied to final standings</div>
+        </div>
+
+        <div class="challenge-item">
+          <div class="ch-name">Stage Improvement <span class="ch-badge ch-auto">AUTO</span></div>
+          <div class="ch-desc">Post a faster time in your second attempt than your first on any stage. Bonus applied per event.</div>
+          <div class="ch-reward">+10 points per event where improvement is recorded</div>
+        </div>
+
+        <div class="challenge-item">
+          <div class="ch-name">Penalty Challenge <span class="ch-badge ch-auto">AUTO</span></div>
+          <div class="ch-desc">Finish an event despite receiving a time penalty of 60 seconds or more. Points awarded to all qualifying finishers.</div>
+          <div class="ch-reward">+25 points</div>
+        </div>
+
+        <div class="challenge-item">
+          <div class="ch-name">Livery Challenge <span class="ch-badge ch-manual">MANUAL</span></div>
+          <div class="ch-desc">Submit a screenshot of a historically accurate livery for the event's era. Judged by admin after each round.</div>
+          <div class="ch-reward">+15 points — manually awarded</div>
+        </div>
+
+        <div class="challenge-item inactive">
+          <div class="ch-name">Survivor Bonus <span class="ch-badge ch-auto">AUTO</span> <span style="font-size:10px;color:#444;margin-left:8px;">— NOT ACTIVE THIS SEASON</span></div>
+          <div class="ch-desc">Last non-DNF finisher receives a survivor bonus.</div>
+          <div class="ch-reward">+30 points</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       ELO PAGE
+  ══════════════════════════════════════════ -->
+  <div class="page" id="page-elo">
+
+    <!-- ELO HERO -->
+    <div class="themed-hero">
+      <div class="themed-eyebrow">// GRF — ELO RATING SYSTEM //</div>
+      <div class="themed-champ-name">ELO RANKINGS</div>
+      <div class="themed-narrative">
+        "The ELO system rates every GRF driver based on head-to-head performance across all events. Established drivers (5+ starts) carry the most weight. Ratings update automatically after each event is processed."
+      </div>
+      <div class="themed-meta">
+        <div class="themed-meta-item"><div class="tm-lbl">Rated Drivers</div><div class="tm-val" id="elo-count">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Established (5+ starts)</div><div class="tm-val" id="elo-established-count">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Top ELO</div><div class="tm-val" id="elo-top">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Last Updated</div><div class="tm-val">just now</div></div>
+      </div>
+    </div>
+
+    <!-- FILTER BAR -->
+    <div class="event-selector" style="flex-wrap:wrap; gap:8px; padding:8px 12px; align-items:center;">
+      <span class="event-selector-lbl" style="font-size:12px;">FILTER:</span>
+      <button class="ev-btn active" onclick="eloFilter('all',this)">All Drivers</button>
+      <button class="ev-btn" onclick="eloFilter('established',this)">Established Only (5+ starts)</button>
+      <button class="ev-btn" onclick="eloFilter('improved',this)">Recent Gainers</button>
+      <div class="menu-sep" style="height:20px; margin:0 4px;"></div>
+      <span class="event-selector-lbl" style="font-size:12px;">CLUB:</span>
+      <button class="ev-btn active" id="elo-club-all" onclick="eloClub('all',this)">All Clubs</button>
+      <button class="ev-btn" id="elo-club-themed" onclick="eloClub('GRF Themed',this)">GRF Themed</button>
+      <button class="ev-btn" id="elo-club-teamed" onclick="eloClub('GRF Teamed',this)">GRF Teamed</button>
+      <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+        <span class="event-selector-lbl" style="font-size:12px;">SEARCH:</span>
+        <input id="elo-search" type="text" placeholder="driver name..." oninput="eloRender()"
+          style="background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 8px; width:150px; outline:none;">
+      </div>
+    </div>
+
+    <!-- ELO TABLE -->
+    <div style="padding:6px; background:var(--gray);">
+      <div class="elo-wrap" style="margin:0;">
+        <table class="elo-table" style="font-size:13px;">
+          <thead>
+            <tr>
+              <th style="width:40px;">#</th>
+              <th>DRIVER</th>
+              <th>ELO</th>
+              <th>Δ 7D</th>
+              <th>STARTS</th>
+              <th>WINS</th>
+              <th>BEST</th>
+              <th>CLUB(S)</th>
+              <th>STATUS</th>
+            </tr>
+          </thead>
+          <tbody id="elo-full-tbody">
+            <tr><td colspan="9"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:6px 8px; font-size:11px; color:#555; background:var(--black); border-top:1px solid #1a1a1a;">
+        <span id="elo-result-count">— drivers shown</span> &nbsp;·&nbsp; ELO base: 1000 &nbsp;·&nbsp; Established threshold: 5 starts
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       TEAMED PAGE (placeholder)
+  ══════════════════════════════════════════ -->
+  <div class="page" id="page-teamed">
+    <div style="background:var(--black);padding:40px;text-align:center;">
+      <div style="font-family:'VT323',monospace;font-size:48px;color:var(--red);margin-bottom:8px;">GRF TEAMED</div>
+      <div style="font-size:12px;color:#444;">Team events coming soon. Team Builder will open when GRF Teamed Season 1 is announced.</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       ADMIN PAGE
+  ══════════════════════════════════════════ -->
+  <div class="page" id="page-admin">
+
+    <!-- PASSWORD GATE -->
+    <div id="admin-gate" style="background:var(--black); padding:60px; text-align:center;">
+      <div style="font-family:'VT323',monospace; font-size:56px; color:var(--red); margin-bottom:8px; text-shadow:3px 3px 0 var(--red-dark);">ADMIN ACCESS</div>
+      <div style="font-size:12px; color:#555; margin-bottom:28px; letter-spacing:2px;">// RESTRICTED — AUTHORISED PERSONNEL ONLY //</div>
+      <div style="display:inline-flex; flex-direction:column; gap:10px; align-items:center;">
+        <input id="admin-pw-input" type="password" placeholder="enter password…"
+          style="background:#252729; border:2px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:15px; padding:8px 18px; width:260px; outline:none; text-align:center; letter-spacing:4px;"
+          onkeydown="if(event.key==='Enter') adminLogin()">
+        <button onclick="adminLogin()"
+          style="background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:2px; padding:7px 32px; cursor:pointer; width:260px;">
+          ⚡ AUTHENTICATE
+        </button>
+        <div id="admin-pw-error" style="color:var(--red); font-size:12px; min-height:18px;"></div>
+      </div>
+    </div>
+
+    <!-- ADMIN PANEL (hidden until login) -->
+    <div id="admin-panel" style="display:none;">
+
+      <!-- ADMIN HERO -->
+      <div class="themed-hero">
+        <div class="themed-eyebrow">// GRF ADMIN PANEL — RESTRICTED ACCESS //</div>
+        <div class="themed-champ-name">CONTROL PANEL</div>
+        <div class="themed-meta" style="margin-top:8px;">
+          <div class="themed-meta-item"><div class="tm-lbl">Session</div><div class="tm-val" style="color:var(--green)">● Active</div></div>
+          <div class="themed-meta-item"><div class="tm-lbl">User</div><div class="tm-val">GRF Admin</div></div>
+          <div class="themed-meta-item" style="margin-left:auto; cursor:pointer;" onclick="adminLogout()">
+            <div class="tm-lbl">Action</div><div class="tm-val" style="color:var(--red); cursor:pointer;">⏏ Logout</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN SUB NAV -->
+      <div class="themed-subnav">
+        <div class="sub-tab active" onclick="showAdminTab('car-rating',this)">Car Rating Calc</div>
+        <div class="sub-tab" onclick="showAdminTab('elo-update',this)">ELO Update</div>
+        <div class="sub-tab" onclick="showAdminTab('event-create',this)">Event Creation</div>
+        <div class="sub-tab" onclick="showAdminTab('font-switcher',this)">🔤 Font Switcher</div>
+      </div>
+
+      <!-- ── TAB: CAR RATING CALCULATOR ── -->
+      <div class="admin-tab active" id="atab-car-rating">
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:0;">🚗 CAR RATING CALCULATOR</div>
+        </div>
+        <div style="display:grid; grid-template-columns:220px 1fr 1fr; gap:0; background:var(--gray);">
+
+          <!-- LEFT: PARAMETERS -->
+          <div style="background:var(--black); border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); padding:14px 12px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:12px; border-bottom:1px solid #1a1a1a; padding-bottom:6px;">PARAMETERS</div>
+
+            <div style="margin-bottom:12px;">
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">TOP % THRESHOLD</label>
+              <input type="text" value="25" id="cr-top-pct"
+                style="background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; width:100%; outline:none;">
+              <div style="font-size:10px; color:#444; margin-top:3px;">Percentile cutoff for top rating</div>
+            </div>
+
+            <div style="margin-bottom:12px;">
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">MIN N PER CAR</label>
+              <input type="text" value="10" id="cr-min-n"
+                style="background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; width:100%; outline:none;">
+              <div style="font-size:10px; color:#444; margin-top:3px;">Minimum data points required</div>
+            </div>
+
+            <div style="margin-bottom:20px;">
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">EXPONENT</label>
+              <input type="text" value="1.5" id="cr-exponent"
+                style="background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; width:100%; outline:none;">
+              <div style="font-size:10px; color:#444; margin-top:3px;">Rating curve exponent</div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <button onclick="crCalculate()"
+                style="background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
+                ▶ CALCULATE
+              </button>
+              <button onclick="crSave()"
+                style="background:#252729; color:var(--green); border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
+                💾 SAVE TO DB
+              </button>
+              <button onclick="crExport()"
+                style="background:#252729; color:#aaa; border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
+                ⬇ EXPORT CSV
+              </button>
+            </div>
+            <div id="cr-status" style="margin-top:10px; font-size:11px; color:#555; min-height:16px;"></div>
+          </div>
+
+          <!-- MIDDLE: LOCATIONS -->
+          <div style="background:var(--black); border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); padding:10px 12px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:8px; border-bottom:1px solid #1a1a1a; padding-bottom:6px; display:flex; align-items:center; gap:8px;">
+              LOCATIONS
+              <span style="font-size:10px; color:#555; margin-left:auto; font-family:var(--ui-font);" id="cr-loc-count">0 selected</span>
+            </div>
+            <div style="height:320px; overflow-y:auto;" id="cr-locations-list">
+              <!-- populated by JS -->
+            </div>
+            <div style="margin-top:8px; display:flex; gap:6px;">
+              <button onclick="crSelectAll('loc')" style="flex:1; background:#252729; color:#888; border:1px solid #333; font-family:var(--ui-font); font-size:11px; padding:4px; cursor:pointer;">Select All</button>
+              <button onclick="crClearAll('loc')" style="flex:1; background:#252729; color:#888; border:1px solid #333; font-family:var(--ui-font); font-size:11px; padding:4px; cursor:pointer;">Clear</button>
+            </div>
+          </div>
+
+          <!-- RIGHT: VEHICLE CLASSES -->
+          <div style="background:var(--black); padding:10px 12px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:8px; border-bottom:1px solid #1a1a1a; padding-bottom:6px; display:flex; align-items:center; gap:8px;">
+              VEHICLE CLASSES
+              <span style="font-size:10px; color:#555; margin-left:auto; font-family:var(--ui-font);" id="cr-cls-count">0 selected</span>
+            </div>
+            <div style="height:320px; overflow-y:auto;" id="cr-classes-list">
+              <!-- populated by JS -->
+            </div>
+            <div style="margin-top:8px; display:flex; gap:6px;">
+              <button onclick="crSelectAll('cls')" style="flex:1; background:#252729; color:#888; border:1px solid #333; font-family:var(--ui-font); font-size:11px; padding:4px; cursor:pointer;">Select All</button>
+              <button onclick="crClearAll('cls')" style="flex:1; background:#252729; color:#888; border:1px solid #333; font-family:var(--ui-font); font-size:11px; padding:4px; cursor:pointer;">Clear</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RESULT PREVIEW -->
+        <div style="padding:8px; background:var(--gray);">
+          <div class="col-hdr" style="margin-bottom:6px;">📊 CALCULATION PREVIEW</div>
+          <div class="elo-wrap" style="margin:0;">
+            <table class="cr-table">
+              <thead><tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>LOCATION</th><th>N</th><th>CR SCORE</th><th>RATING</th></tr></thead>
+              <tbody id="cr-preview-tbody">
+                <tr><td colspan="7"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select locations and classes, then click Calculate.</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: ELO UPDATE ── -->
+      <div class="admin-tab" id="atab-elo-update" style="display:none;">
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:0;">📈 ELO UPDATE — SELECT CLUBS TO PROCESS</div>
+        </div>
+        <div style="display:grid; grid-template-columns:320px 1fr; gap:0; background:var(--gray);">
+
+          <!-- CLUB SELECTOR -->
+          <div style="background:var(--black); border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); padding:14px 12px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:12px; border-bottom:1px solid #1a1a1a; padding-bottom:6px;">SELECT CLUBS</div>
+
+            <div id="elo-club-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:16px;">
+              <!-- clubs populated by JS dummy data -->
+            </div>
+
+            <div style="margin-bottom:14px; padding:10px; background:#222527; border:1px solid #1a1a1a; border-left:2px solid var(--red-dark);">
+              <div style="font-size:11px; color:#888; margin-bottom:4px;">⚠ ELO update will recalculate ratings for all processed events in the selected clubs. This cannot be undone.</div>
+            </div>
+
+            <button onclick="eloStartUpdate()"
+              style="width:100%; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:2px; padding:9px 12px; cursor:pointer;">
+              ▶ START ELO UPDATE
+            </button>
+            <div id="elo-update-status" style="margin-top:10px; font-size:12px; color:#555; min-height:20px;"></div>
+          </div>
+
+          <!-- LOG OUTPUT -->
+          <div style="background:#1e2124; padding:12px; font-family:var(--ui-font); font-size:12px; color:#666; min-height:300px;">
+            <div style="color:var(--red); letter-spacing:2px; margin-bottom:10px; font-family:'Oswald',sans-serif; font-size:11px;">// PROCESS LOG //</div>
+            <div id="elo-log" style="line-height:1.7;">
+              <span style="color:#333;">Awaiting start command…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: EVENT CREATION ── -->
+      <div class="admin-tab" id="atab-event-create" style="display:none;">
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:0;">⚙ EVENT CREATION — NEW CHAMPIONSHIP</div>
+        </div>
+        <div style="background:var(--black); padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
+          <!-- LEFT COLUMN -->
+          <div style="display:flex; flex-direction:column; gap:14px;">
+
+            <!-- Club -->
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">RACENET CLUB</label>
+              <select id="ec-club" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+                <option value="">— select club —</option>
+                <option value="themed">GRF Themed</option>
+                <option value="teamed">GRF Teamed</option>
+              </select>
+            </div>
+
+            <!-- Championship Type -->
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CHAMPIONSHIP TYPE</label>
+              <select id="ec-type" onchange="ecTypeChange(this)"
+                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+                <option value="themed">Themed</option>
+                <option value="team">Team</option>
+                <option value="open">Open</option>
+                <option value="historic">Historic</option>
+              </select>
+            </div>
+
+            <!-- Championship Name -->
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CHAMPIONSHIP NAME</label>
+              <input id="ec-name" type="text" placeholder="e.g. GRF Themed Season 5 — Golden Era"
+                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+            </div>
+
+            <!-- Narrative -->
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">NARRATIVE / DESCRIPTION</label>
+              <textarea id="ec-narrative" rows="4" placeholder="Championship flavour text shown to participants…"
+                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; resize:vertical;"></textarea>
+            </div>
+
+            <!-- CR Import -->
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CR IMPORT (JSON or CSV)</label>
+              <div style="display:flex; gap:6px;">
+                <input id="ec-cr-import" type="text" placeholder="paste JSON or select saved CR set…"
+                  style="flex:1; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+                <button onclick="ecLoadCR()"
+                  style="background:#252729; color:#aaa; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:var(--ui-font); font-size:12px; padding:6px 12px; cursor:pointer; white-space:nowrap;">
+                  📂 LOAD
+                </button>
+              </div>
+              <div style="font-size:10px; color:#444; margin-top:3px;">Loaded from Car Rating Calculator — vehicle class multipliers applied automatically.</div>
+            </div>
+
+          </div>
+
+          <!-- RIGHT COLUMN -->
+          <div style="display:flex; flex-direction:column; gap:14px;">
+
+            <!-- TEAM BUILDING (only when type=team) -->
+            <div id="ec-team-section" style="display:none; background:#222527; border:1px solid #1a1a1a; border-left:3px solid var(--red-dark); padding:12px;">
+              <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:10px;">TEAM BUILDER</div>
+              <div style="margin-bottom:8px;">
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">TEAM ID</label>
+                <input type="text" id="ec-team-id" placeholder="team_001"
+                  style="width:100%; background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+              </div>
+              <div style="margin-bottom:8px;">
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">TEAM NAME</label>
+                <input type="text" id="ec-team-name" placeholder="e.g. Subaru Works Team"
+                  style="width:100%; background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+              </div>
+              <div>
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">MEMBERS (one per line)</label>
+                <textarea id="ec-team-members" rows="3" placeholder="McRae_WRC&#10;BurnsRally&#10;Vatanen85"
+                  style="width:100%; background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none; resize:vertical;"></textarea>
+              </div>
+            </div>
+
+            <!-- CHALLENGES -->
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CHALLENGES</label>
+              <div style="background:#252729; border:1px solid #1a1a1a; max-height:180px; overflow-y:auto;" id="ec-challenges">
+                <label class="ec-check-row"><input type="checkbox" checked> <span>Loyalty Bonus</span> <span class="ch-badge ch-auto">AUTO</span></label>
+                <label class="ec-check-row"><input type="checkbox" checked> <span>Stage Improvement</span> <span class="ch-badge ch-auto">AUTO</span></label>
+                <label class="ec-check-row"><input type="checkbox" checked> <span>Penalty Challenge</span> <span class="ch-badge ch-auto">AUTO</span></label>
+                <label class="ec-check-row"><input type="checkbox"> <span>Livery Challenge</span> <span class="ch-badge ch-manual">MANUAL</span></label>
+                <label class="ec-check-row"><input type="checkbox"> <span>Survivor Bonus</span> <span class="ch-badge ch-auto">AUTO</span></label>
+              </div>
+            </div>
+
+            <!-- AUTO-IMPORTED FROM RACENET NOTE -->
+            <div style="background:#222527; border:1px solid #1a1a1a; border-left:3px solid var(--green-dim); padding:10px 12px;">
+              <div style="font-family:'Oswald',sans-serif; font-size:11px; color:var(--green); letter-spacing:1px; margin-bottom:6px;">AUTO-IMPORTED FROM RACENET</div>
+              <div style="font-size:11px; color:#555; line-height:1.6;">
+                The following fields are read automatically once the championship is created in Racenet:<br>
+                <span style="color:#777;">Locations · Stage dates · Start/End dates · Vehicle class · Entry list</span>
+              </div>
+            </div>
+
+            <!-- ACTIONS -->
+            <div style="display:flex; gap:8px; margin-top:auto;">
+              <button onclick="ecCreate()"
+                style="flex:1; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:1px; padding:9px; cursor:pointer;">
+                ⚡ CREATE CHAMPIONSHIP
+              </button>
+              <button onclick="ecReset()"
+                style="background:#252729; color:#888; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:9px 16px; cursor:pointer;">
+                RESET
+              </button>
+            </div>
+            <div id="ec-status" style="font-size:12px; color:#555; min-height:18px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: FONT SWITCHER ── -->
+      <div class="admin-tab" id="atab-font-switcher" style="display:none;">
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:0;">🔤 FONT SWITCHER — LIVE PREVIEW</div>
+        </div>
+        <div style="background:var(--black); padding:24px 28px; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
+
+          <!-- Option 0: Share Tech Mono (default) -->
+          <div class="font-card" id="fc-mono" onclick="switchFont('','fc-mono')" style="cursor:pointer; border:2px solid var(--red); background:#252729; padding:18px 16px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+              <div class="font-radio active" id="fr-mono" style="width:14px;height:14px;border-radius:50%;border:2px solid var(--red);background:var(--red);flex-shrink:0;"></div>
+              <div style="font-family:'Oswald',sans-serif;font-size:13px;color:var(--red);letter-spacing:2px;">SHARE TECH MONO</div>
+              <div style="margin-left:auto;font-size:11px;color:#555;font-family:'Share Tech Mono',monospace;">DEFAULT</div>
+            </div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:17px;color:var(--gray-light);line-height:1.5;margin-bottom:8px;">GRF THEMED — SEASON 4<br>ELO RANKINGS · CAR RATING</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:13px;color:#888;line-height:1.6;">The quick brown fox — 0123456789<br>Retro terminal style, original look</div>
+          </div>
+
+          <!-- Option 1: Rajdhani -->
+          <div class="font-card" id="fc-rajdhani" onclick="switchFont('font-rajdhani','fc-rajdhani')" style="cursor:pointer; border:2px solid #333; background:#252729; padding:18px 16px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+              <div class="font-radio" id="fr-rajdhani" style="width:14px;height:14px;border-radius:50%;border:2px solid #555;background:transparent;flex-shrink:0;"></div>
+              <div style="font-family:'Oswald',sans-serif;font-size:13px;color:#aaa;letter-spacing:2px;">RAJDHANI</div>
+              <div style="margin-left:auto;font-size:11px;color:#555;font-family:'Share Tech Mono',monospace;">COMPACT · TECHNICAL</div>
+            </div>
+            <div style="font-family:'Rajdhani',sans-serif;font-size:19px;color:var(--gray-light);line-height:1.4;margin-bottom:8px;font-weight:600;">GRF THEMED — SEASON 4<br>ELO RANKINGS · CAR RATING</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-size:14px;color:#888;line-height:1.6;">The quick brown fox — 0123456789<br>Compact, technical, racing-inspired</div>
+          </div>
+
+          <!-- Option 2: Exo 2 -->
+          <div class="font-card" id="fc-exo2" onclick="switchFont('font-exo2','fc-exo2')" style="cursor:pointer; border:2px solid #333; background:#252729; padding:18px 16px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+              <div class="font-radio" id="fr-exo2" style="width:14px;height:14px;border-radius:50%;border:2px solid #555;background:transparent;flex-shrink:0;"></div>
+              <div style="font-family:'Oswald',sans-serif;font-size:13px;color:#aaa;letter-spacing:2px;">EXO 2</div>
+              <div style="margin-left:auto;font-size:11px;color:#555;font-family:'Share Tech Mono',monospace;">RACING · CLEAR</div>
+            </div>
+            <div style="font-family:'Exo 2',sans-serif;font-size:19px;color:var(--gray-light);line-height:1.4;margin-bottom:8px;font-weight:600;">GRF Themed — Season 4<br>ELO Rankings · Car Rating</div>
+            <div style="font-family:'Exo 2',sans-serif;font-size:14px;color:#888;line-height:1.6;">The quick brown fox — 0123456789<br>Sci-fi racing feel, excellent legibility</div>
+          </div>
+
+          <!-- Option 3: Orbitron -->
+          <div class="font-card" id="fc-orbitron" onclick="switchFont('font-orbitron','fc-orbitron')" style="cursor:pointer; border:2px solid #333; background:#252729; padding:18px 16px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+              <div class="font-radio" id="fr-orbitron" style="width:14px;height:14px;border-radius:50%;border:2px solid #555;background:transparent;flex-shrink:0;"></div>
+              <div style="font-family:'Oswald',sans-serif;font-size:13px;color:#aaa;letter-spacing:2px;">ORBITRON</div>
+              <div style="margin-left:auto;font-size:11px;color:#555;font-family:'Share Tech Mono',monospace;">RETRO-FUTURE · BOLD</div>
+            </div>
+            <div style="font-family:'Orbitron',sans-serif;font-size:16px;color:var(--gray-light);line-height:1.5;margin-bottom:8px;font-weight:600;">GRF THEMED — SEASON 4<br>ELO RANKINGS · CAR RATING</div>
+            <div style="font-family:'Orbitron',sans-serif;font-size:12px;color:#888;line-height:1.7;">The quick brown fox — 0123456789<br>Classic retro-future, very distinctive</div>
+          </div>
+
+          <!-- Option 4: Space Grotesk -->
+          <div class="font-card" id="fc-space" onclick="switchFont('font-space-grotesk','fc-space')" style="cursor:pointer; border:2px solid #333; background:#252729; padding:18px 16px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+              <div class="font-radio" id="fr-space" style="width:14px;height:14px;border-radius:50%;border:2px solid #555;background:transparent;flex-shrink:0;"></div>
+              <div style="font-family:'Oswald',sans-serif;font-size:13px;color:#aaa;letter-spacing:2px;">SPACE GROTESK</div>
+              <div style="margin-left:auto;font-size:11px;color:#555;font-family:'Share Tech Mono',monospace;">MODERN · MOST LEGIBLE</div>
+            </div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:19px;color:var(--gray-light);line-height:1.4;margin-bottom:8px;font-weight:600;">GRF Themed — Season 4<br>ELO Rankings · Car Rating</div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;color:#888;line-height:1.6;">The quick brown fox — 0123456789<br>Modern tech look, best on HiDPI</div>
+          </div>
+
+        </div>
+
+        <!-- Live preview note -->
+        <div style="background:#1e2124; padding:10px 20px; font-size:13px; color:#666; border-top:1px solid #2a2d31;">
+          ● Click any font card above — the entire site switches instantly. Navigate to other pages to see how it looks throughout the UI. Your choice is not saved between sessions.
+        </div>
+      </div>
+
+    </div><!-- end admin-panel -->
+  </div>
+
+  <!-- STATUS BAR -->
+  <div class="statusbar">
+    <div class="sb-panel"><div class="led lg"></div> Supabase: OK</div>
+    <div class="sb-panel"><div class="led lg"></div> RaceNet: OK</div>
+    <div class="sb-panel"><div class="led lr"></div> Event Active</div>
+    <div class="sb-panel"><div class="led ly"></div> Entries Open</div>
+    <div class="clock-box" id="clock">00:00:00</div>
+  </div>
+
+</div>
+
+<script>
+// ── PAGE NAVIGATION ──
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+  const page = document.getElementById('page-' + name);
+  if (page) page.classList.add('active');
+  if (el) el.classList.add('active');
+  if (name === 'themed') loadThemedResults();
+}
+
+// ── THEMED SUB TABS ──
+function showSubTab(name, el) {
+  document.querySelectorAll('.themed-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  const tab = document.getElementById('tab-' + name);
+  if (tab) tab.classList.add('active');
+  if (el) el.classList.add('active');
+}
+
+// ── CLOCK ──
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    String(n.getHours()).padStart(2,'0') + ':' +
+    String(n.getMinutes()).padStart(2,'0') + ':' +
+    String(n.getSeconds()).padStart(2,'0');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── COUNTDOWN ──
+let secs = 4*86400 + 12*3600 + 33*60;
+function tick() {
+  secs = Math.max(0, secs - 1);
+  const d = Math.floor(secs/86400);
+  const h = Math.floor((secs%86400)/3600);
+  const m = Math.floor((secs%3600)/60);
+  document.getElementById('countdown').textContent =
+    String(d).padStart(2,'0') + ':' +
+    String(h).padStart(2,'0') + ':' +
+    String(m).padStart(2,'0');
+}
+setInterval(tick, 1000);
+
+// ── SUPABASE ──
+const SB_URL = 'https://ixuhhzdijvtlfdjtrnyi.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4dWhoemRpanZ0bGZkanRybnlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzNDkxOTIsImV4cCI6MjA5NzkyNTE5Mn0.rJi8w8ayIiB-m5v1Kn-f5Re-K2Z_Ke1v1IaJo1qGmSA';
+const hdrs = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+
+async function sb(table, params='') {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: hdrs });
+  return r.ok ? r.json() : [];
+}
+
+async function loadHome() {
+  try {
+    // Drivers
+    const drivers = await sb('drivers', 'select=*&order=elo.desc');
+    // Members = unique driver names across event_results
+    const members = await sb('event_results', 'select=driver_name');
+    const unique = new Set(members.map(r => r.driver_name).filter(Boolean));
+
+    document.getElementById('k-members').textContent = unique.size || '—';
+
+    // Most events
+    const starts = {};
+    members.forEach(r => {
+      if (r.driver_name) starts[r.driver_name] = (starts[r.driver_name]||0) + 1;
+    });
+    // Count per driver per event (distinct events)
+    const eventCounts = await sb('event_results', 'select=driver_name,event_id');
+    const evMap = {};
+    eventCounts.forEach(r => {
+      if (!r.driver_name) return;
+      if (!evMap[r.driver_name]) evMap[r.driver_name] = new Set();
+      evMap[r.driver_name].add(r.event_id);
+    });
+    let mostName = '—', mostCount = 0;
+    Object.entries(evMap).forEach(([name, evs]) => {
+      if (evs.size > mostCount) { mostCount = evs.size; mostName = name; }
+    });
+    document.getElementById('k-most-events-num').textContent = mostCount || '—';
+    document.getElementById('k-most-events-name').textContent = mostName;
+
+    // Top ELO — verified (starts >= 5)
+    const verified = drivers.filter(d => (d.starts||0) >= 5);
+    if (verified.length) {
+      document.getElementById('k-top-elo').textContent = verified[0].elo;
+      document.getElementById('k-top-elo-name').textContent = verified[0].name;
+    }
+
+    // ELO top 10
+    const top10 = drivers.slice(0, 10);
+    const tbody = document.getElementById('home-elo-tbody');
+    if (top10.length) {
+      const pc = i => i===0?'p1':i===1?'p2':i===2?'p3':'';
+      tbody.innerHTML = top10.map((d,i) => `
+        <tr>
+          <td class="${pc(i)}">${String(i+1).padStart(2,'0')}</td>
+          <td>${d.country||''} ${d.name}</td>
+          <td class="ev">${d.elo||'—'}</td>
+          <td class="eq">—</td>
+          <td>${d.starts||0}</td>
+        </tr>`).join('');
+    }
+  } catch(e) {
+    console.error('loadHome:', e);
+  }
+}
+
+loadHome();
+setInterval(loadHome, 60000);
+
+// ══════════════════════════════════════════
+// ELO PAGE — LIVE SUPABASE DATA
+// ══════════════════════════════════════════
+let eloData = [];
+let eloFilterMode = 'all';
+let eloClubFilter = 'all';
+
+async function loadEloData() {
+  try {
+    const drivers = await sb('drivers', 'select=*&order=elo.desc');
+    if (!drivers || !drivers.length) return;
+
+    // For each driver, compute their best position and elo_change from results
+    const allResults = await sb('results', 'select=driver_name,position,elo_change,date&order=date.desc');
+
+    // Build per-driver stats from results
+    const driverStats = {};
+    allResults.forEach(r => {
+      const n = r.driver_name;
+      if (!n) return;
+      if (!driverStats[n]) driverStats[n] = { bestPos: 999, recentEloChange: 0, counted: false };
+      const pos = parseInt(r.position) || 999;
+      if (pos < driverStats[n].bestPos) driverStats[n].bestPos = pos;
+    });
+
+    // Recent elo change: sum of elo_change from last 7 days
+    const cutoff = new Date(Date.now() - 7*24*60*60*1000).toISOString().split('T')[0];
+    const recentResults = allResults.filter(r => r.date && r.date >= cutoff);
+    const recentChange = {};
+    recentResults.forEach(r => {
+      if (r.driver_name) recentChange[r.driver_name] = (recentChange[r.driver_name]||0) + (r.elo_change||0);
+    });
+
+    // Map to display objects
+    eloData = drivers.map(d => {
+      const stats = driverStats[d.name] || { bestPos: null };
+      const bestPos = stats.bestPos && stats.bestPos < 999 ? `P${stats.bestPos}` : '—';
+      const delta = Math.round(recentChange[d.name] || 0);
+      return {
+        name: d.name,
+        country: d.country || '',
+        elo: d.elo || 1000,
+        delta,
+        starts: d.starts || 0,
+        wins: d.wins || 0,
+        best: bestPos,
+        established: (d.starts || 0) >= 5,
+      };
+    });
+
+    eloRender();
+    loadMostImproved(recentChange);
+  } catch(e) {
+    console.error('loadEloData:', e);
+  }
+}
+
+function loadMostImproved(recentChange) {
+  // Sort by recent elo change descending, only positive
+  const improved = Object.entries(recentChange)
+    .filter(([,v]) => v > 0)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0,5);
+
+  if (!improved.length) return;
+  const maxVal = improved[0][1];
+  const container = document.getElementById('most-improved-list');
+  if (!container) return;
+
+  container.innerHTML = improved.map(([name, delta], i) => `
+    <div class="improved-row">
+      <div class="improved-rank">${i+1}</div>
+      <div class="improved-name">${name}</div>
+      <div class="improved-bar-wrap">
+        <div class="improved-bar-bg">
+          <div class="improved-bar-fg" style="width:${Math.round((delta/maxVal)*100)}%"></div>
+        </div>
+      </div>
+      <div class="improved-delta">+${delta}</div>
+    </div>`).join('');
+}
+
+function eloFilter(mode, el) {
+  eloFilterMode = mode;
+  document.querySelectorAll('#page-elo .ev-btn').forEach(b => {
+    if (b.onclick && b.onclick.toString().includes("eloFilter")) b.classList.remove('active');
+  });
+  el.classList.add('active');
+  eloRender();
+}
+
+function eloClub(club, el) {
+  eloClubFilter = club;
+  ['elo-club-all','elo-club-themed','elo-club-teamed'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.classList.remove('active');
+  });
+  el.classList.add('active');
+  eloRender();
+}
+
+function eloRender() {
+  const search = (document.getElementById('elo-search')?.value||'').toLowerCase();
+  let data = [...eloData];
+
+  if (eloFilterMode === 'established') data = data.filter(d => d.established);
+  if (eloFilterMode === 'improved')    data = data.filter(d => d.delta > 0).sort((a,b) => b.delta - a.delta);
+  if (search) data = data.filter(d => d.name.toLowerCase().includes(search));
+
+  const pc = i => i===0?'p1':i===1?'p2':i===2?'p3':'';
+  const deltaStr = d => d.delta > 0
+    ? `<span class="eu">▲${d.delta}</span>`
+    : d.delta < 0
+    ? `<span class="ed">▼${Math.abs(d.delta)}</span>`
+    : `<span class="eq">—</span>`;
+  const statusBadge = d => d.established
+    ? `<span style="color:var(--green);font-size:11px;">✓ Established</span>`
+    : `<span style="color:#555;font-size:11px;">○ Provisional</span>`;
+
+  const tbody = document.getElementById('elo-full-tbody');
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-title">${eloData.length ? 'NO RESULTS' : 'LOADING…'}</div><div class="empty-sub">${eloData.length ? 'No drivers match the current filter.' : 'Fetching ELO data from Supabase…'}</div></div></td></tr>`;
+  } else {
+    tbody.innerHTML = data.map((d,i) => `
+      <tr>
+        <td class="${pc(i)}">${String(i+1).padStart(2,'0')}</td>
+        <td>${d.country} ${d.name}</td>
+        <td class="ev">${d.elo}</td>
+        <td>${deltaStr(d)}</td>
+        <td>${d.starts}</td>
+        <td>${d.wins}</td>
+        <td>${d.best}</td>
+        <td style="font-size:13px;color:#999;">—</td>
+        <td>${statusBadge(d)}</td>
+      </tr>`).join('');
+  }
+
+  const established = data.filter(d=>d.established);
+  document.getElementById('elo-result-count').textContent = `${data.length} driver${data.length!==1?'s':''} shown`;
+  if (eloData.length) {
+    document.getElementById('elo-count').textContent = eloData.length;
+    document.getElementById('elo-established-count').textContent = eloData.filter(d=>d.established).length;
+    if (eloData[0]) document.getElementById('elo-top').textContent = eloData[0].elo + ' — ' + eloData[0].name;
+  }
+}
+
+loadEloData();
+setInterval(loadEloData, 60000);
+
+// ══════════════════════════════════════════
+// THEMED PAGE — LIVE RESULTS FROM SUPABASE
+// ══════════════════════════════════════════
+let themedEvents = [];
+let themedActiveEvent = null;
+
+async function loadThemedResults() {
+  try {
+    const results = await sb('results', 'select=*&order=date.desc,position.asc');
+    if (!results || !results.length) return;
+    const seen = new Set();
+    themedEvents = [];
+    results.forEach(r => {
+      if (r.event_name && !seen.has(r.event_name)) {
+        seen.add(r.event_name);
+        themedEvents.push({ name: r.event_name, date: r.date });
+      }
+    });
+    const sel = document.getElementById('themed-event-selector');
+    if (sel) {
+      sel.innerHTML = '<span class="event-selector-lbl">EVENT:</span>' +
+        themedEvents.slice(0,5).map((ev,i) =>
+          `<button class="ev-btn${i===0?' active':''}" onclick="themedSelectEvent('${ev.name}',this)">${ev.name}</button>`
+        ).join('');
+    }
+    if (themedEvents.length) renderThemedEvent(themedEvents[0].name, results);
+    themedActiveEvent = themedEvents[0]?.name;
+    window._themedResults = results;
+  } catch(e) { console.error('loadThemedResults:', e); }
+}
+
+function themedSelectEvent(eventName, el) {
+  document.querySelectorAll('#themed-event-selector .ev-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderThemedEvent(eventName, window._themedResults || []);
+}
+
+function renderThemedEvent(eventName, results) {
+  const rows = results.filter(r => r.event_name === eventName).sort((a,b) => (a.position||99)-(b.position||99));
+  const pc = i => i===0?'p1':i===1?'p2':i===2?'p3':'';
+  const tbody = document.getElementById('themed-results-tbody');
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-title">NO RESULTS</div><div class="empty-sub">No data for this event yet.</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((r,i) => {
+    const isDNF = !r.position || r.position > 900;
+    const posStr = isDNF
+      ? `<td style="color:var(--red)">DNF</td>`
+      : `<td class="${pc(i)}">${String(r.position).padStart(2,'0')}</td>`;
+    const eloStr = r.elo_change
+      ? (r.elo_change > 0
+          ? `<span class="eu">▲${r.elo_change}</span>`
+          : `<span class="ed">▼${Math.abs(r.elo_change)}</span>`)
+      : '<span class="eq">—</span>';
+    return `<tr>${posStr}<td>${r.driver_name||'—'}</td><td>—</td><td>${r.time||'—'}</td><td>—</td><td>—</td><td>${eloStr}</td></tr>`;
+  }).join('');
+  const hdr = document.getElementById('themed-results-hdr');
+  if (hdr) hdr.textContent = `🏁 RESULTS — ${eventName}`;
+}
+
+
+// ══════════════════════════════════════════
+// ADMIN PAGE
+// ══════════════════════════════════════════
+const ADMIN_PW = 'grf2024'; // replace with actual password check
+
+function adminLogin() {
+  const pw = document.getElementById('admin-pw-input').value;
+  if (pw === ADMIN_PW) {
+    document.getElementById('admin-gate').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    initAdminPanel();
+  } else {
+    document.getElementById('admin-pw-error').textContent = '✗ Incorrect password';
+    document.getElementById('admin-pw-input').value = '';
+    setTimeout(() => document.getElementById('admin-pw-error').textContent = '', 2500);
+  }
+}
+
+function adminLogout() {
+  document.getElementById('admin-gate').style.display = 'block';
+  document.getElementById('admin-panel').style.display = 'none';
+  document.getElementById('admin-pw-input').value = '';
+}
+
+function showAdminTab(name, el) {
+  document.querySelectorAll('.admin-tab').forEach(t => { t.style.display = 'none'; t.classList.remove('active'); });
+  document.querySelectorAll('#admin-panel .sub-tab').forEach(t => t.classList.remove('active'));
+  const tab = document.getElementById('atab-' + name);
+  if (tab) { tab.style.display = 'block'; tab.classList.add('active'); }
+  if (el) el.classList.add('active');
+}
+
+// ── CAR RATING CALCULATOR ──
+const CR_LOCATIONS = ['Monte Carlo','Sweden','Portugal','Greece','Kenya','Finland','Australia','Great Britain','Germany','New Zealand','Japan','France','Spain','Corsica','Ivory Coast'];
+const CR_CLASSES   = ['Group B','Group A','WRC','R5','Group N','Group 4','Kit Car','Production'];
+
+function initAdminPanel() {
+  // Build location checkboxes
+  const locList = document.getElementById('cr-locations-list');
+  if (locList && !locList.dataset.built) {
+    locList.innerHTML = CR_LOCATIONS.map(l => `
+      <label class="cr-check-row">
+        <input type="checkbox" name="cr-loc" value="${l}" onchange="crUpdateCounts()">
+        ${l}
+      </label>`).join('');
+    locList.dataset.built = '1';
+  }
+  const clsList = document.getElementById('cr-classes-list');
+  if (clsList && !clsList.dataset.built) {
+    clsList.innerHTML = CR_CLASSES.map(c => `
+      <label class="cr-check-row">
+        <input type="checkbox" name="cr-cls" value="${c}" onchange="crUpdateCounts()">
+        ${c}
+      </label>`).join('');
+    clsList.dataset.built = '1';
+  }
+  // Build ELO club list
+  const eloClubList = document.getElementById('elo-club-list');
+  if (eloClubList && !eloClubList.dataset.built) {
+    const clubs = ['GRF Themed', 'GRF Teamed'];
+    eloClubList.innerHTML = clubs.map((c,i) => `
+      <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${i%2?'#050505':'#0a0a0a'};border:1px solid #1a1a1a;cursor:pointer;font-size:13px;color:var(--gray-light);">
+        <input type="checkbox" name="elo-club" value="${c}" style="accent-color:var(--red);width:15px;height:15px;">
+        <span style="flex:1;">${c}</span>
+        <span style="font-size:11px;color:#555;">${c==='GRF Themed'?'22 events processed':'8 events processed'}</span>
+      </label>`).join('');
+    eloClubList.dataset.built = '1';
+  }
+}
+
+function crUpdateCounts() {
+  const locSel = document.querySelectorAll('input[name="cr-loc"]:checked').length;
+  const clsSel = document.querySelectorAll('input[name="cr-cls"]:checked').length;
+  const lc = document.getElementById('cr-loc-count');
+  const cc = document.getElementById('cr-cls-count');
+  if (lc) lc.textContent = locSel + ' selected';
+  if (cc) cc.textContent = clsSel + ' selected';
+}
+
+function crSelectAll(type) {
+  document.querySelectorAll(`input[name="cr-${type==='loc'?'loc':'cls'}"]`).forEach(cb => cb.checked = true);
+  crUpdateCounts();
+}
+
+function crClearAll(type) {
+  document.querySelectorAll(`input[name="cr-${type==='loc'?'loc':'cls'}"]`).forEach(cb => cb.checked = false);
+  crUpdateCounts();
+}
+
+function crCalculate() {
+  const locs = [...document.querySelectorAll('input[name="cr-loc"]:checked')].map(c=>c.value);
+  const clss = [...document.querySelectorAll('input[name="cr-cls"]:checked')].map(c=>c.value);
+  if (!locs.length || !clss.length) {
+    document.getElementById('cr-status').textContent = '⚠ Select at least one location and one class.';
+    return;
+  }
+  const topPct = parseFloat(document.getElementById('cr-top-pct').value)||25;
+  const minN   = parseInt(document.getElementById('cr-min-n').value)||10;
+  const exp    = parseFloat(document.getElementById('cr-exponent').value)||1.5;
+  document.getElementById('cr-status').textContent = `⏳ Calculating… (top ${topPct}%, minN=${minN}, exp=${exp})`;
+
+  // Dummy result rows
+  const vehicles = [
+    {v:'Peugeot 205 T16',cl:'Group B',loc:'Monte Carlo',n:48,cr:1.52},
+    {v:'Lancia Delta HF',cl:'Group A',loc:'Great Britain',n:61,cr:1.21},
+    {v:'Subaru Impreza 555',cl:'Group A',loc:'Finland',n:44,cr:1.11},
+    {v:'Ford Escort RS',cl:'Group A',loc:'Kenya',n:32,cr:1.00},
+    {v:'Mitsubishi Evo III',cl:'Group A',loc:'Sweden',n:29,cr:1.08},
+  ].filter(r => clss.includes(r.cl));
+
+  const tbody = document.getElementById('cr-preview-tbody');
+  if (!vehicles.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No results for selected filters.</div></div></td></tr>`;
+  } else {
+    tbody.innerHTML = vehicles.map((r,i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td>${r.v}</td>
+        <td>${r.cl}</td>
+        <td>${r.loc}</td>
+        <td>${r.n}</td>
+        <td class="ev">${r.cr.toFixed(2)}</td>
+        <td><span class="cr-badge ${r.cr>=1.4?'cr-s':r.cr>=1.1?'cr-a':'cr-b'}">${r.cr>=1.4?'S':r.cr>=1.1?'A':'B'}</span></td>
+      </tr>`).join('');
+  }
+  setTimeout(() => { document.getElementById('cr-status').textContent = `✓ Done — ${vehicles.length} vehicles calculated`; }, 600);
+}
+
+function crSave() {
+  document.getElementById('cr-status').textContent = '💾 Saved to database.';
+}
+function crExport() {
+  document.getElementById('cr-status').textContent = '⬇ CSV export triggered.';
+}
+
+// ── ELO UPDATE ──
+function eloStartUpdate() {
+  const clubs = [...document.querySelectorAll('input[name="elo-club"]:checked')].map(c=>c.value);
+  if (!clubs.length) {
+    document.getElementById('elo-update-status').textContent = '⚠ Select at least one club.';
+    return;
+  }
+  const log = document.getElementById('elo-log');
+  const status = document.getElementById('elo-update-status');
+  log.innerHTML = '';
+  const lines = [
+    `<span style="color:#555;">[${new Date().toLocaleTimeString()}]</span> Starting ELO update for: <span style="color:var(--gray-light);">${clubs.join(', ')}</span>`,
+    `<span style="color:#555;">[+0.1s]</span> Fetching event results from Supabase…`,
+    `<span style="color:#555;">[+0.4s]</span> Found <span style="color:var(--green);">127 results</span> across ${clubs.length} club(s)`,
+    `<span style="color:#555;">[+0.8s]</span> Running ELO algorithm (K=32, base=1000)…`,
+    `<span style="color:#555;">[+1.2s]</span> Processed <span style="color:var(--green);">13 drivers</span>`,
+    `<span style="color:#555;">[+1.5s]</span> Largest gain: <span style="color:var(--green);">BurnsRally +47</span>`,
+    `<span style="color:#555;">[+1.7s]</span> Writing updated ELO to database…`,
+    `<span style="color:var(--green);">[+2.0s] ✓ ELO update complete.</span>`,
+  ];
+  let i = 0;
+  status.textContent = '⏳ Running…';
+  const iv = setInterval(() => {
+    if (i < lines.length) {
+      log.innerHTML += lines[i] + '<br>';
+      i++;
+    } else {
+      clearInterval(iv);
+      status.textContent = '✓ Complete';
+    }
+  }, 350);
+}
+
+// ── FONT SWITCHER ──
+const FONT_CARDS = ['fc-mono','fc-rajdhani','fc-exo2','fc-orbitron','fc-space'];
+const FONT_RADIOS = ['fr-mono','fr-rajdhani','fr-exo2','fr-orbitron','fr-space'];
+const FONT_CLASSES = ['','font-rajdhani','font-exo2','font-orbitron','font-space-grotesk'];
+
+function switchFont(cls, cardId) {
+  // Remove all font classes from body
+  FONT_CLASSES.forEach(c => { if(c) document.body.classList.remove(c); });
+  if (cls) document.body.classList.add(cls);
+
+  // Update card borders + radio states
+  FONT_CARDS.forEach((id, i) => {
+    const card = document.getElementById(id);
+    const radio = document.getElementById(FONT_RADIOS[i]);
+    if (!card || !radio) return;
+    const isActive = (id === cardId);
+    card.style.borderColor = isActive ? 'var(--red)' : '#333';
+    radio.style.background = isActive ? 'var(--red)' : 'transparent';
+    radio.style.borderColor = isActive ? 'var(--red)' : '#555';
+  });
+}
+
+// init — mark mono as active on load
+document.addEventListener('DOMContentLoaded', () => {
+  // already styled inline as active
+});
+function ecTypeChange(sel) {
+  const teamSec = document.getElementById('ec-team-section');
+  if (teamSec) teamSec.style.display = sel.value === 'team' ? 'block' : 'none';
+}
+
+function ecLoadCR() {
+  document.getElementById('ec-status').textContent = '✓ CR set loaded — 12 vehicles imported';
+}
+
+function ecCreate() {
+  const name = document.getElementById('ec-name').value.trim();
+  const club = document.getElementById('ec-club').value;
+  if (!name || !club) {
+    document.getElementById('ec-status').textContent = '⚠ Please fill in Club and Championship Name.';
+    return;
+  }
+  document.getElementById('ec-status').textContent = '⏳ Creating championship in Racenet…';
+  setTimeout(() => {
+    document.getElementById('ec-status').textContent = '✓ Championship "' + name + '" created successfully.';
+  }, 1200);
+}
+
+function ecReset() {
+  ['ec-club','ec-type','ec-name','ec-narrative','ec-cr-import','ec-team-id','ec-team-name','ec-team-members'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('ec-team-section').style.display = 'none';
+  document.querySelectorAll('#ec-challenges input[type=checkbox]').forEach((cb,i) => cb.checked = i<3);
+  document.getElementById('ec-status').textContent = '';
+}
+</script>
+
+</body>
+</html>
