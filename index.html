@@ -1308,7 +1308,7 @@ async function loadHome() {
     // Drivers
     const drivers = await sb('drivers', 'select=*&order=elo.desc');
     // Members = unique driver names across event_results
-    const members = await sb('event_results', 'select=driver_name');
+    const members = await sb('results', 'select=driver_name');
     const unique = new Set(members.map(r => r.driver_name).filter(Boolean));
 
     document.getElementById('k-members').textContent = unique.size || '—';
@@ -1319,12 +1319,12 @@ async function loadHome() {
       if (r.driver_name) starts[r.driver_name] = (starts[r.driver_name]||0) + 1;
     });
     // Count per driver per event (distinct events)
-    const eventCounts = await sb('event_results', 'select=driver_name,event_id');
+    const eventCounts = await sb('results', 'select=driver_name,event_name');
     const evMap = {};
     eventCounts.forEach(r => {
       if (!r.driver_name) return;
       if (!evMap[r.driver_name]) evMap[r.driver_name] = new Set();
-      evMap[r.driver_name].add(r.event_id);
+      evMap[r.driver_name].add(r.event_name);
     });
     let mostName = '—', mostCount = 0;
     Object.entries(evMap).forEach(([name, evs]) => {
