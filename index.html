@@ -130,6 +130,7 @@ body::after {
 }
 @keyframes idle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
 .hero-copy { flex:1; position:relative; z-index:1; }
+.hero-top-row { display:contents; } /* transparent on desktop */
 .hero-eyebrow { font-size:10px; color:var(--red); letter-spacing:4px; margin-bottom:6px; opacity:.8; }
 .hero-title {
   font-family:'VT323',monospace; font-size:72px;
@@ -142,13 +143,14 @@ body::after {
 
 .hero-discord {
   display:inline-flex; align-items:center; gap:8px;
-  background:var(--discord); color:var(--white);
-  border:2px solid; border-color:#7289DA #3c4a9e #3c4a9e #7289DA;
+  background:transparent; color:var(--discord);
+  border:2px solid var(--discord);
   padding:6px 18px;
   font-family:'Oswald',sans-serif; font-weight:700; font-size:13px;
   cursor:pointer; letter-spacing:1px;
+  transition: background .15s, color .15s;
 }
-.hero-discord:hover { background:#4752c4; }
+.hero-discord:hover { background:var(--discord); color:var(--white); }
 
 /* STATUS STRIP */
 .status-strip {
@@ -416,7 +418,9 @@ body::after {
   background:var(--black); padding:1px 10px;
   font-family:'VT323',monospace; font-size:20px;
   color:var(--green); text-shadow:0 0 5px var(--green); letter-spacing:2px;
+  display:flex; align-items:center; gap:12px;
 }
+#clock-date { font-size:14px; color:#3a8a50; letter-spacing:1px; }
 
 /* ── FONT THEMES ── */
 body                              { --ui-font: 'Share Tech Mono', monospace; }
@@ -471,6 +475,109 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
   letter-spacing:3px; line-height:1;
 }
 .cd-units { font-size:9px; color:#333; letter-spacing:1px; }
+
+/* ══════════════════════════════════════════
+   MOBILE RESPONSIVE
+══════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* SHELL */
+  .shell { margin:0; border-width:0; }
+
+  /* TITLE BAR */
+  .titlebar-sub { display:none; }
+  .titlebar-text { font-size:12px; letter-spacing:1px; }
+
+  /* MENU BAR — horizontal scroll */
+  .menubar { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+  .menubar::-webkit-scrollbar { display:none; }
+  .menu-item { padding:5px 10px; font-size:12px; white-space:nowrap; flex-shrink:0; }
+  .menu-right { flex-shrink:0; }
+
+  /* HERO */
+  .hero { padding:12px 14px; gap:6px; min-height:auto; flex-direction:column; align-items:stretch; }
+  .hero::after { display:none; }
+  .hero-eyebrow { font-size:9px; letter-spacing:2px; margin-bottom:0; text-align:center; }
+  .hero-top-row { display:flex; flex-direction:row; align-items:flex-start; gap:12px; }
+  .hero-logo { flex-shrink:0; width:107px; height:107px; font-size:50px; animation:none; }
+  .hero-title { font-size:42px; }
+  .hero-copy { flex:none; }
+  .hero-sub { font-size:11px; max-width:100%; margin-bottom:10px; text-align:justify; }
+  .hero-discord { display:block; }
+
+  /* STATUS STRIP */
+  .status-strip { padding:4px 10px; gap:10px; flex-wrap:wrap; font-size:11px; }
+
+  /* KACHELN — 2x2 */
+  .kacheln { grid-template-columns:1fr 1fr; }
+  .kachel { border-right:2px solid #111; border-bottom:2px solid #111; }
+  .kachel-num { font-size:36px; }
+
+  /* HOME GRID — stack vertically, Next Event first, Most Improved second, ELO third */
+  .home-grid { grid-template-columns:1fr; display:flex; flex-direction:column; }
+  .home-col:last-child { order:1; border-right:none; border-bottom:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
+  .home-col:first-child { order:2; border-right:none; }
+
+  /* ELO TABLE — horizontal scroll */
+  .elo-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .elo-table { min-width:400px; }
+  .elo-table th, .elo-table td { padding:5px 6px; font-size:12px; }
+
+  /* THEMED HERO */
+  .themed-hero { padding:14px 16px; }
+  .themed-champ-name { font-size:36px; }
+  .themed-narrative { font-size:12px; }
+  .themed-meta { gap:6px; }
+  .themed-meta-item { padding:3px 8px; }
+  .tm-val { font-size:13px; }
+
+  /* THEMED SUBNAV — scroll */
+  .themed-subnav { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+  .themed-subnav::-webkit-scrollbar { display:none; }
+  .sub-tab { padding:6px 12px; font-size:12px; white-space:nowrap; flex-shrink:0; }
+
+  /* EVENT SELECTOR — scroll */
+  .event-selector { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; padding:6px 8px; }
+  .event-selector::-webkit-scrollbar { display:none; }
+  .ev-btn { white-space:nowrap; flex-shrink:0; font-size:12px; padding:3px 8px; }
+
+  /* LIVE GRID — stack, Event Info first on mobile */
+  .live-grid { grid-template-columns:1fr; display:flex; flex-direction:column; }
+  .live-col { border-right:none; border-bottom:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
+  .live-col:last-child { border-bottom:none; order:-1; }
+  .live-col:first-child { order:1; }
+
+  /* RESULTS + STANDINGS — horizontal scroll */
+  .live-col .elo-wrap, .standings-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .standings-table { min-width:420px; }
+  .standings-table th, .standings-table td { padding:5px 6px; font-size:12px; }
+
+  /* CR TABLE */
+  .cr-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .cr-table { min-width:340px; }
+  .cr-table th, .cr-table td { padding:5px 6px; font-size:12px; }
+
+  /* ELO PAGE */
+  #page-elo .event-selector { overflow-x:auto; flex-wrap:nowrap; }
+  #page-elo .elo-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  #page-elo .elo-table { min-width:560px; }
+
+  /* ADMIN — stack columns */
+  #admin-panel > div[style*="grid-template-columns:220px"] { display:flex !important; flex-direction:column !important; }
+  #admin-panel > div[style*="grid-template-columns:320px"] { display:flex !important; flex-direction:column !important; }
+
+  /* STATUSBAR — 2x2 panels + clock right */
+  .statusbar { flex-wrap:wrap; gap:4px; padding:4px 6px; align-items:stretch; }
+  .sb-panel { font-size:11px; padding:2px 6px; flex:1 1 calc(50% - 8px); }
+  .clock-box { width:100%; margin-left:0; font-size:28px; display:flex; align-items:center; justify-content:center; gap:16px; padding:6px 10px; }
+
+  /* COUNTDOWN */
+  .cd-digits { font-size:28px; }
+
+  /* IMPROVED ROWS */
+  .improved-row { padding:5px 8px; gap:6px; }
+  .improved-bar-wrap { width:40px; }
+}
 </style>
 </head>
 <body>
@@ -479,7 +586,6 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 
   <!-- TITLE BAR -->
   <div class="titlebar">
-    <span style="font-size:16px">🏁</span>
     <span class="titlebar-text">GLOBAL RALLY FANS</span>
     <span class="titlebar-sub">GRF-SYSTEM v2.4 // EA WRC</span>
   </div>
@@ -505,22 +611,15 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 
     <!-- HERO -->
     <div class="hero">
+      <div class="hero-eyebrow">// THE RALLY SIM COMMUNITY //</div>
+      <div class="hero-top-row">
       <div class="hero-logo" style="overflow:hidden;padding:0;border-radius:2px;"><img src="data:image/png;base64,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" style="width:100%;height:100%;object-fit:cover;" alt="GRF Logo"></div>
       <div class="hero-copy">
-        <div class="hero-eyebrow">// EST. WRC GOLDEN ERA — 80s · 90s //</div>
         <div class="hero-title">GLOBAL<br><span class="r">RALLY</span><br>FANS</div>
-        <div class="hero-sub">The home of <em>classic rally simulation</em>.<br>Reliving the <em>80s and 90s</em> — one stage at a time.</div>
-        <button class="hero-discord">⚡ JOIN DISCORD</button>
       </div>
-    </div>
-
-    <!-- STATUS STRIP -->
-    <div class="status-strip">
-      <div class="ss-item"><div class="ss-dot ss-green"></div> RaceNet Connected</div>
-      <div class="ss-item"><div class="ss-dot ss-green"></div> Supabase Live</div>
-      <div class="ss-item"><div class="ss-dot ss-red"></div> GRF Themed — Event Active</div>
-      <div class="ss-item"><div class="ss-dot ss-yellow"></div> Entries Open</div>
-      <div style="margin-left:auto;font-size:10px;color:#333;">Last sync: just now</div>
+      </div>
+      <div class="hero-sub">The Home For All Rally Sim Racers. With More Than 2000 Discord Members And Over Ten WRC Clubs. A Friendly Community Of Enthusiasts Of The Sport And Beyond.<br><em>This Page Is Dedicated Mainly For The GRF-Themed Club.</em></div>
+      <button class="hero-discord">JOIN DISCORD</button>
     </div>
 
     <!-- KACHELN -->
@@ -552,7 +651,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 
       <!-- LEFT: TOP 10 ELO -->
       <div class="home-col">
-        <div class="col-hdr">🏆 ELO — TOP 10
+        <div class="col-hdr">ELO — TOP 10
           <span class="col-hdr-right">OVERALL · ALL CLUBS</span>
         </div>
         <div class="elo-wrap">
@@ -568,9 +667,36 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
         </div>
       </div>
 
-      <!-- RIGHT: MOST IMPROVED -->
+      <!-- RIGHT: NEXT EVENT + MOST IMPROVED -->
       <div class="home-col">
-        <div class="col-hdr">📈 MOST IMPROVED — LAST 7 DAYS
+
+        <!-- Next Event teaser — sits above Most Improved on both desktop and mobile -->
+        <div class="col-hdr">NEXT EVENT — GRF THEMED</div>
+        <div style="background:var(--black);margin:6px;padding:12px;">
+          <div style="font-size:10px;color:var(--red);letter-spacing:3px;margin-bottom:4px;">// RAC RALLY 1993 //</div>
+          <div style="font-family:'VT323',monospace;font-size:28px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;">NETWORK Q RAC RALLY</div>
+          <div style="display:flex;align-items:stretch;gap:0;border:1px solid #1a1a1a;">
+            <!-- Countdown block -->
+            <div style="flex:1;background:#0d0f10;padding:10px 14px;border-right:1px solid #1a1a1a;">
+              <div class="cd-label" style="margin-bottom:2px;">OPENS IN</div>
+              <div class="cd-digits" id="countdown" style="font-size:40px;">04:12:33</div>
+              <div class="cd-units">DAYS · HRS · MIN</div>
+            </div>
+            <!-- Date block -->
+            <div style="flex:1;background:#0d0f10;padding:10px 14px;border-right:1px solid #1a1a1a;">
+              <div class="cd-label" style="margin-bottom:2px;">EVENT WINDOW</div>
+              <div style="font-family:'VT323',monospace;font-size:22px;color:var(--gray-light);line-height:1.2;margin-top:4px;">JUN 20<br>— JUN 27</div>
+              <div class="cd-units">2025</div>
+            </div>
+            <!-- CTA block -->
+            <div style="background:#0d0f10;padding:10px 14px;display:flex;align-items:center;justify-content:center;">
+              <button class="ev-btn active" onclick="showPage('themed', document.querySelectorAll('.menu-item')[1])" style="white-space:nowrap;">VIEW ›</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Most Improved — below Next Event -->
+        <div class="col-hdr" style="margin-top:4px;">MOST IMPROVED — LAST 7 DAYS
           <span class="col-hdr-right">ELO GAINS</span>
         </div>
         <!-- Populated from Supabase -->
@@ -578,21 +704,6 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
           <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
         </div>
 
-        <!-- Mini next event teaser -->
-        <div class="col-hdr" style="margin-top:4px;">📅 NEXT EVENT — GRF THEMED</div>
-        <div style="background:var(--black);margin:6px;padding:12px;">
-          <div style="font-size:10px;color:var(--red);letter-spacing:3px;margin-bottom:4px;">// RAC RALLY 1993 //</div>
-          <div style="font-family:'VT323',monospace;font-size:28px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:8px;">NETWORK Q RAC RALLY</div>
-          <div class="countdown-strip" style="padding:0;background:transparent;border:none;gap:12px;">
-            <div>
-              <div class="cd-label">OPENS IN</div>
-              <div class="cd-digits" id="countdown">04:12:33</div>
-              <div class="cd-units">DAYS · HRS · MIN</div>
-            </div>
-            <div style="flex:1;"></div>
-            <button class="ev-btn active" onclick="showPage('themed', document.querySelectorAll('.menu-item')[1])">VIEW EVENT ›</button>
-          </div>
-        </div>
       </div>
 
     </div>
@@ -605,10 +716,10 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 
     <!-- CHAMPIONSHIP HERO -->
     <div class="themed-hero">
-      <div class="themed-eyebrow">// GRF THEMED — SEASON 4 //</div>
-      <div class="themed-champ-name">CHAMPIONSHIP 2024</div>
-      <div class="themed-narrative">
-        "Twelve rounds across the golden era of rally. From the frozen mountain passes of Monte Carlo to the red dust of Kenya — this championship covers every surface, every decade, every legend. Survive them all."
+      <div class="themed-eyebrow">// GRF THEMED — SEASON <span id="champ-season">—</span> //</div>
+      <div class="themed-champ-name" id="champ-name">—</div>
+      <div class="themed-narrative" id="champ-narrative">
+        —
       </div>
       <div class="themed-meta">
         <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val">GRF Themed</div></div>
@@ -636,7 +747,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
       </div>
       <div class="live-grid">
         <div class="live-col">
-          <div class="col-hdr" id="themed-results-hdr">🏁 CURRENT RESULTS — LOADING…
+          <div class="col-hdr" id="themed-results-hdr">CURRENT RESULTS — LOADING…
             <span class="col-hdr-right" style="color:var(--green)">● LIVE</span>
           </div>
           <div class="elo-wrap">
@@ -651,7 +762,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
           </div>
         </div>
         <div class="live-col">
-          <div class="col-hdr">📋 EVENT INFO — RD.13 WALES</div>
+          <div class="col-hdr">EVENT INFO — RD.13 WALES</div>
           <div style="background:var(--black);margin:6px;padding:12px;">
             <div style="font-size:11px;color:var(--red);letter-spacing:3px;margin-bottom:6px;">// RAC RALLY 1993 //</div>
             <div style="font-family:'VT323',monospace;font-size:32px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;">NETWORK Q<br>RAC RALLY</div>
@@ -659,8 +770,8 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
               "The forests of Great Britain call. Mud, mist, and the roar of 300bhp through the Welsh night."
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-              <div class="themed-meta-item"><div class="tm-lbl">Surface</div><div class="tm-val">🌲 Gravel</div></div>
-              <div class="themed-meta-item"><div class="tm-lbl">Location</div><div class="tm-val">🇬🇧 Wales</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Surface</div><div class="tm-val">Gravel</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Location</div><div class="tm-val">Wales</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Entries</div><div class="tm-val">18 / 24</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" style="color:var(--green)">● Live</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val">Jun 20</div></div>
@@ -674,7 +785,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
     <!-- TAB: CHAMPIONSHIP STANDINGS -->
     <div class="themed-tab" id="tab-standings">
       <div class="standings-wrap">
-        <div class="col-hdr" style="margin-bottom:6px;">🏆 CHAMPIONSHIP STANDINGS — SEASON 4
+        <div class="col-hdr" style="margin-bottom:6px;">CHAMPIONSHIP STANDINGS — SEASON 4
           <span class="col-hdr-right">AFTER RD.12 · RD.13 IN PROGRESS</span>
         </div>
         <table class="standings-table">
@@ -695,56 +806,38 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
     <!-- TAB: CAR RATINGS -->
     <div class="themed-tab" id="tab-carratings">
       <div class="cr-wrap">
-        <div class="col-hdr" style="margin-bottom:6px;">🚗 CAR RATINGS — SEASON 4
+        <div class="col-hdr" style="margin-bottom:6px;">CAR RATINGS — SEASON 4
           <span class="col-hdr-right">SET BEFORE SEASON · ADMIN ONLY</span>
         </div>
         <table class="cr-table">
           <thead>
-            <tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>ERA</th><th>CR</th><th>RATING</th><th>STRENGTH</th></tr>
+            <tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>CR</th></tr>
           </thead>
           <tbody>
             <tr>
               <td class="p1">1</td>
-              <td>Peugeot 205 T16</td><td>Group B</td><td>1985</td>
-              <td class="ev">1.50</td>
-              <td><span class="cr-badge cr-s">S+</span></td>
-              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:100%"></div></div></td>
-            </tr>
+              <td>Peugeot 205 T16</td><td>Group B</td><td class="ev">1.50</td>
+              </tr>
             <tr>
               <td class="p2">2</td>
-              <td>Lancia Delta HF Integrale</td><td>Group A</td><td>1989</td>
-              <td class="ev">1.20</td>
-              <td><span class="cr-badge cr-s">S</span></td>
-              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:80%"></div></div></td>
-            </tr>
+              <td>Lancia Delta HF Integrale</td><td>Group A</td><td class="ev">1.20</td>
+              </tr>
             <tr>
               <td class="p3">3</td>
-              <td>Subaru Impreza 555</td><td>Group A</td><td>1995</td>
-              <td class="ev">1.10</td>
-              <td><span class="cr-badge cr-a">A+</span></td>
-              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:73%"></div></div></td>
-            </tr>
+              <td>Subaru Impreza 555</td><td>Group A</td><td class="ev">1.10</td>
+              </tr>
             <tr>
               <td>4</td>
-              <td>Mitsubishi Lancer Evo III</td><td>Group A</td><td>1995</td>
-              <td class="ev">1.10</td>
-              <td><span class="cr-badge cr-a">A+</span></td>
-              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:73%"></div></div></td>
-            </tr>
+              <td>Mitsubishi Lancer Evo III</td><td>Group A</td><td class="ev">1.10</td>
+              </tr>
             <tr>
               <td>5</td>
-              <td>Ford Escort RS Cosworth</td><td>Group A</td><td>1993</td>
-              <td class="ev">1.00</td>
-              <td><span class="cr-badge cr-a">A</span></td>
-              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:67%"></div></div></td>
-            </tr>
+              <td>Ford Escort RS Cosworth</td><td>Group A</td><td class="ev">1.00</td>
+              </tr>
             <tr>
               <td>6</td>
-              <td>Lancia Stratos HF</td><td>Group 4</td><td>1977</td>
-              <td class="ev">0.90</td>
-              <td><span class="cr-badge cr-b">B+</span></td>
-              <td><div class="cr-bar-bg"><div class="cr-bar-fg" style="width:60%"></div></div></td>
-            </tr>
+              <td>Lancia Stratos HF</td><td>Group 4</td><td class="ev">0.90</td>
+              </tr>
           </tbody>
         </table>
       </div>
@@ -753,7 +846,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
     <!-- TAB: CHALLENGES -->
     <div class="themed-tab" id="tab-challenges">
       <div class="challenge-box">
-        <div class="col-hdr" style="margin-bottom:10px;">⚡ ACTIVE CHALLENGES — SEASON 4</div>
+        <div class="col-hdr" style="margin-bottom:10px;">ACTIVE CHALLENGES — SEASON 4</div>
 
         <div class="challenge-item">
           <div class="ch-name">Loyalty Bonus <span class="ch-badge ch-auto">AUTO</span></div>
@@ -881,7 +974,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
           onkeydown="if(event.key==='Enter') adminLogin()">
         <button onclick="adminLogin()"
           style="background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:2px; padding:7px 32px; cursor:pointer; width:260px;">
-          ⚡ AUTHENTICATE
+          AUTHENTICATE
         </button>
         <div id="admin-pw-error" style="color:var(--red); font-size:12px; min-height:18px;"></div>
       </div>
@@ -908,13 +1001,13 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
         <div class="sub-tab active" onclick="showAdminTab('car-rating',this)">Car Rating Calc</div>
         <div class="sub-tab" onclick="showAdminTab('elo-update',this)">ELO Update</div>
         <div class="sub-tab" onclick="showAdminTab('event-create',this)">Event Creation</div>
-        <div class="sub-tab" onclick="showAdminTab('font-switcher',this)">🔤 Font Switcher</div>
+        <div class="sub-tab" onclick="showAdminTab('font-switcher',this)">Font Switcher</div>
       </div>
 
       <!-- ── TAB: CAR RATING CALCULATOR ── -->
       <div class="admin-tab active" id="atab-car-rating">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
-          <div class="col-hdr" style="margin-bottom:0;">🚗 CAR RATING CALCULATOR</div>
+          <div class="col-hdr" style="margin-bottom:0;">CAR RATING CALCULATOR</div>
         </div>
         <div style="display:grid; grid-template-columns:220px 1fr 1fr; gap:0; background:var(--gray);">
 
@@ -950,11 +1043,11 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
               </button>
               <button onclick="crSave()"
                 style="background:#252729; color:var(--green); border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
-                💾 SAVE TO DB
+                SAVE TO DB
               </button>
               <button onclick="crExport()"
                 style="background:#252729; color:#aaa; border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
-                ⬇ EXPORT CSV
+                EXPORT CSV
               </button>
             </div>
             <div id="cr-status" style="margin-top:10px; font-size:11px; color:#555; min-height:16px;"></div>
@@ -993,7 +1086,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 
         <!-- RESULT PREVIEW -->
         <div style="padding:8px; background:var(--gray);">
-          <div class="col-hdr" style="margin-bottom:6px;">📊 CALCULATION PREVIEW</div>
+          <div class="col-hdr" style="margin-bottom:6px;">CALCULATION PREVIEW</div>
           <div class="elo-wrap" style="margin:0;">
             <table class="cr-table">
               <thead><tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>LOCATION</th><th>N</th><th>CR SCORE</th><th>RATING</th></tr></thead>
@@ -1008,7 +1101,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
       <!-- ── TAB: ELO UPDATE ── -->
       <div class="admin-tab" id="atab-elo-update" style="display:none;">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
-          <div class="col-hdr" style="margin-bottom:0;">📈 ELO UPDATE — SELECT CLUBS TO PROCESS</div>
+          <div class="col-hdr" style="margin-bottom:0;">ELO UPDATE — SELECT CLUBS TO PROCESS</div>
         </div>
         <div style="display:grid; grid-template-columns:320px 1fr; gap:0; background:var(--gray);">
 
@@ -1044,7 +1137,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
       <!-- ── TAB: EVENT CREATION ── -->
       <div class="admin-tab" id="atab-event-create" style="display:none;">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
-          <div class="col-hdr" style="margin-bottom:0;">⚙ EVENT CREATION — NEW CHAMPIONSHIP</div>
+          <div class="col-hdr" style="margin-bottom:0;">EVENT CREATION — NEW CHAMPIONSHIP</div>
         </div>
         <div style="background:var(--black); padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
 
@@ -1095,7 +1188,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
                   style="flex:1; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
                 <button onclick="ecLoadCR()"
                   style="background:#252729; color:#aaa; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:var(--ui-font); font-size:12px; padding:6px 12px; cursor:pointer; white-space:nowrap;">
-                  📂 LOAD
+                  LOAD
                 </button>
               </div>
               <div style="font-size:10px; color:#444; margin-top:3px;">Loaded from Car Rating Calculator — vehicle class multipliers applied automatically.</div>
@@ -1151,7 +1244,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
             <div style="display:flex; gap:8px; margin-top:auto;">
               <button onclick="ecCreate()"
                 style="flex:1; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:1px; padding:9px; cursor:pointer;">
-                ⚡ CREATE CHAMPIONSHIP
+                CREATE CHAMPIONSHIP
               </button>
               <button onclick="ecReset()"
                 style="background:#252729; color:#888; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:9px 16px; cursor:pointer;">
@@ -1166,7 +1259,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
       <!-- ── TAB: FONT SWITCHER ── -->
       <div class="admin-tab" id="atab-font-switcher" style="display:none;">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
-          <div class="col-hdr" style="margin-bottom:0;">🔤 FONT SWITCHER — LIVE PREVIEW</div>
+          <div class="col-hdr" style="margin-bottom:0;">FONT SWITCHER — LIVE PREVIEW</div>
         </div>
         <div style="background:var(--black); padding:24px 28px; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
 
@@ -1242,7 +1335,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
     <div class="sb-panel"><div class="led lg"></div> RaceNet: OK</div>
     <div class="sb-panel"><div class="led lr"></div> Event Active</div>
     <div class="sb-panel"><div class="led ly"></div> Entries Open</div>
-    <div class="clock-box" id="clock">00:00:00</div>
+    <div class="clock-box" id="clock"><span id="clock-date"></span><span id="clock-time">00:00:00</span></div>
   </div>
 
 </div>
@@ -1269,12 +1362,18 @@ function showSubTab(name, el) {
 }
 
 // ── CLOCK ──
+const DAYS = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function updateClock() {
   const n = new Date();
-  document.getElementById('clock').textContent =
-    String(n.getHours()).padStart(2,'0') + ':' +
+  const time = String(n.getHours()).padStart(2,'0') + ':' +
     String(n.getMinutes()).padStart(2,'0') + ':' +
     String(n.getSeconds()).padStart(2,'0');
+  const date = DAYS[n.getDay()] + ' ' + String(n.getDate()).padStart(2,'0') + ' ' + MONTHS[n.getMonth()];
+  const tEl = document.getElementById('clock-time');
+  const dEl = document.getElementById('clock-date');
+  if (tEl) tEl.textContent = time;
+  if (dEl) dEl.textContent = date;
 }
 setInterval(updateClock, 1000);
 updateClock();
@@ -1293,38 +1392,51 @@ function tick() {
 }
 setInterval(tick, 1000);
 
-// ── SUPABASE ──
+// ══════════════════════════════════════════
+// SUPABASE CONFIG
+// Tabellen-Struktur:
+//   championships  → id, club_id, name, start_date, end_date, vehicle_class, season, narrative
+//   events         → id, championship_id, club_id, name, location, start_date, end_date, status (0=planned,1=active,2=finished)
+//   event_results  → id, event_id, championship_id, driver_name, driver_id, position, time, vehicle,
+//                    points, is_dnf, platform, base_points, cr_multiplier, cr_points, bonus_points, bonus_detail, total_points
+//   drivers        → id, name, country, elo, starts, wins, club
+//   car_ratings    → Fahrzeug-CR-Werte pro Championship
+//   championship_rules → Regeln/Challenges pro Championship
+//   manual_bonuses → manuell vergebene Punkte (z.B. Livery Challenge)
+//   results        → LEGACY-Tabelle, nicht mehr verwenden
+// ══════════════════════════════════════════
 const SB_URL = 'https://ixuhhzdijvtlfdjtrnyi.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4dWhoemRpanZ0bGZkanRybnlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzNDkxOTIsImV4cCI6MjA5NzkyNTE5Mn0.rJi8w8ayIiB-m5v1Kn-f5Re-K2Z_Ke1v1IaJo1qGmSA';
+// SICHERHEIT: SB_KEY ist der anon-key — öffentlich ok, SOLANGE RLS auf allen Tabellen aktiv ist.
+// Sicherstellen: jede Tabelle hat RLS enabled + SELECT policy für anon. Kein INSERT/UPDATE/DELETE für anon.
 const hdrs = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
 
+// Basis-Fetch-Wrapper für Supabase REST API
 async function sb(table, params='') {
   const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: hdrs });
   return r.ok ? r.json() : [];
 }
 
+// ══════════════════════════════════════════
+// HOME PAGE — KACHELN + ELO TOP 10 + MOST IMPROVED
+// Quellen: drivers, event_results
+// ══════════════════════════════════════════
 async function loadHome() {
   try {
-    // Drivers
+    // Fahrer nach ELO absteigend — für Top-10 und Kacheln
     const drivers = await sb('drivers', 'select=*&order=elo.desc');
-    // Members = unique driver names across event_results
-    const members = await sb('results', 'select=driver_name');
-    const unique = new Set(members.map(r => r.driver_name).filter(Boolean));
 
-    document.getElementById('k-members').textContent = unique.size || '—';
+    // Unique Fahrer aus event_results — für "GRF Members" Kachel
+    const allER = await sb('event_results', 'select=driver_name,event_id,created_at&order=created_at.desc');
+    const uniqueDrivers = new Set(allER.map(r => r.driver_name).filter(Boolean));
+    document.getElementById('k-members').textContent = uniqueDrivers.size || '—';
 
-    // Most events
-    const starts = {};
-    members.forEach(r => {
-      if (r.driver_name) starts[r.driver_name] = (starts[r.driver_name]||0) + 1;
-    });
-    // Count per driver per event (distinct events)
-    const eventCounts = await sb('results', 'select=driver_name,event_name');
+    // Fahrer mit den meisten Events (distinct event_id)
     const evMap = {};
-    eventCounts.forEach(r => {
+    allER.forEach(r => {
       if (!r.driver_name) return;
       if (!evMap[r.driver_name]) evMap[r.driver_name] = new Set();
-      evMap[r.driver_name].add(r.event_name);
+      evMap[r.driver_name].add(r.event_id);
     });
     let mostName = '—', mostCount = 0;
     Object.entries(evMap).forEach(([name, evs]) => {
@@ -1333,14 +1445,14 @@ async function loadHome() {
     document.getElementById('k-most-events-num').textContent = mostCount || '—';
     document.getElementById('k-most-events-name').textContent = mostName;
 
-    // Top ELO — verified (starts >= 5)
+    // Top ELO — nur "established" Fahrer (5+ starts)
     const verified = drivers.filter(d => (d.starts||0) >= 5);
     if (verified.length) {
       document.getElementById('k-top-elo').textContent = verified[0].elo;
       document.getElementById('k-top-elo-name').textContent = verified[0].name;
     }
 
-    // ELO top 10
+    // ELO Top 10 Tabelle
     const top10 = drivers.slice(0, 10);
     const tbody = document.getElementById('home-elo-tbody');
     if (top10.length) {
@@ -1354,8 +1466,73 @@ async function loadHome() {
           <td>${d.starts||0}</td>
         </tr>`).join('');
     }
+
+    // Most Improved: ELO-Änderung aus den letzten 7 Tagen
+    // event_results hat kein elo_change-Feld → aus drivers.elo_change_7d wenn vorhanden, sonst skip
+    // TODO: wenn drivers-Tabelle ein elo_history/elo_change Feld bekommt, hier einbauen
+    loadMostImprovedFromDrivers(drivers);
+
+    // Next Event aus events-Tabelle laden (status=1 = aktiv, sonst nächstes geplantes)
+    loadNextEvent();
+
   } catch(e) {
     console.error('loadHome:', e);
+  }
+}
+
+// Most Improved aus drivers-Tabelle
+// Erwartet ein Feld elo_change_7d oder ähnlich — falls nicht vorhanden, bleibt die Liste leer
+function loadMostImprovedFromDrivers(drivers) {
+  // Versuche elo_change (kurzfristig) aus drivers zu lesen
+  // Falls das Feld nicht existiert, passiert nichts
+  const withChange = drivers
+    .filter(d => d.elo_change && d.elo_change > 0)
+    .sort((a,b) => b.elo_change - a.elo_change)
+    .slice(0, 5);
+
+  if (!withChange.length) return;
+  const maxVal = withChange[0].elo_change;
+  const container = document.getElementById('most-improved-list');
+  if (!container) return;
+
+  container.innerHTML = withChange.map((d, i) => `
+    <div class="improved-row">
+      <div class="improved-rank">${i+1}</div>
+      <div class="improved-name">${d.name}</div>
+      <div class="improved-bar-wrap">
+        <div class="improved-bar-bg">
+          <div class="improved-bar-fg" style="width:${Math.round((d.elo_change/maxVal)*100)}%"></div>
+        </div>
+      </div>
+      <div class="improved-delta">+${d.elo_change}</div>
+    </div>`).join('');
+}
+
+// Next Event: aktives Event (status=1) oder nächstes geplantes (status=0, start_date >= heute)
+async function loadNextEvent() {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    // Zuerst aktive Events suchen
+    let evs = await sb('events', `select=*&status=eq.1&order=start_date.asc&limit=1`);
+    // Wenn kein aktives, nächstes geplantes
+    if (!evs || !evs.length) {
+      evs = await sb('events', `select=*&status=eq.0&start_date=gte.${today}&order=start_date.asc&limit=1`);
+    }
+    if (!evs || !evs.length) return;
+
+    const ev = evs[0];
+    // Event-Name und "Countdown bis Start" ins Home-Teaser schreiben
+    // IDs: countdown (Uhr), next-event-name, next-event-date (falls vorhanden)
+    const nameEl = document.querySelector('.col-hdr + div [style*="VT323"]');
+    if (nameEl) nameEl.textContent = ev.name || '—';
+
+    // Countdown neu starten auf start_date
+    if (ev.start_date) {
+      const diff = Math.max(0, Math.floor((new Date(ev.start_date) - new Date()) / 1000));
+      secs = diff;
+    }
+  } catch(e) {
+    console.error('loadNextEvent:', e);
   }
 }
 
@@ -1363,7 +1540,8 @@ loadHome();
 setInterval(loadHome, 60000);
 
 // ══════════════════════════════════════════
-// ELO PAGE — LIVE SUPABASE DATA
+// ELO PAGE — FAHRER-RANKINGS
+// Quelle: drivers + event_results (für best position)
 // ══════════════════════════════════════════
 let eloData = [];
 let eloFilterMode = 'all';
@@ -1371,77 +1549,47 @@ let eloClubFilter = 'all';
 
 async function loadEloData() {
   try {
+    // Alle Fahrer nach ELO absteigend
     const drivers = await sb('drivers', 'select=*&order=elo.desc');
     if (!drivers || !drivers.length) return;
 
-    // For each driver, compute their best position and elo_change from results
-    const allResults = await sb('results', 'select=driver_name,position,elo_change,date&order=date.desc');
+    // Beste Position pro Fahrer aus event_results
+    const allResults = await sb('event_results', 'select=driver_name,position,is_dnf,created_at&order=created_at.desc');
 
-    // Build per-driver stats from results
     const driverStats = {};
     allResults.forEach(r => {
       const n = r.driver_name;
       if (!n) return;
-      if (!driverStats[n]) driverStats[n] = { bestPos: 999, recentEloChange: 0, counted: false };
-      const pos = parseInt(r.position) || 999;
-      if (pos < driverStats[n].bestPos) driverStats[n].bestPos = pos;
+      if (!driverStats[n]) driverStats[n] = { bestPos: 999 };
+      if (!r.is_dnf) {
+        const pos = parseInt(r.position) || 999;
+        if (pos < driverStats[n].bestPos) driverStats[n].bestPos = pos;
+      }
     });
 
-    // Recent elo change: sum of elo_change from last 7 days
-    const cutoff = new Date(Date.now() - 7*24*60*60*1000).toISOString().split('T')[0];
-    const recentResults = allResults.filter(r => r.date && r.date >= cutoff);
-    const recentChange = {};
-    recentResults.forEach(r => {
-      if (r.driver_name) recentChange[r.driver_name] = (recentChange[r.driver_name]||0) + (r.elo_change||0);
-    });
-
-    // Map to display objects
+    // ELO-Änderung letzte 7 Tage — aus drivers.elo_change wenn vorhanden
+    // TODO: wenn drivers eine elo_history Tabelle bekommt, hier verfeinern
     eloData = drivers.map(d => {
       const stats = driverStats[d.name] || { bestPos: null };
       const bestPos = stats.bestPos && stats.bestPos < 999 ? `P${stats.bestPos}` : '—';
-      const delta = Math.round(recentChange[d.name] || 0);
       return {
         name: d.name,
         country: d.country || '',
         elo: d.elo || 1000,
-        delta,
+        delta: d.elo_change || 0,   // elo_change aus drivers-Tabelle (falls vorhanden)
         starts: d.starts || 0,
         wins: d.wins || 0,
         best: bestPos,
+        club: d.club || '',
         established: (d.starts || 0) >= 5,
       };
     });
 
     eloRender();
-    loadMostImproved(recentChange);
+    loadMostImprovedFromDrivers(drivers);
   } catch(e) {
     console.error('loadEloData:', e);
   }
-}
-
-function loadMostImproved(recentChange) {
-  // Sort by recent elo change descending, only positive
-  const improved = Object.entries(recentChange)
-    .filter(([,v]) => v > 0)
-    .sort((a,b) => b[1]-a[1])
-    .slice(0,5);
-
-  if (!improved.length) return;
-  const maxVal = improved[0][1];
-  const container = document.getElementById('most-improved-list');
-  if (!container) return;
-
-  container.innerHTML = improved.map(([name, delta], i) => `
-    <div class="improved-row">
-      <div class="improved-rank">${i+1}</div>
-      <div class="improved-name">${name}</div>
-      <div class="improved-bar-wrap">
-        <div class="improved-bar-bg">
-          <div class="improved-bar-fg" style="width:${Math.round((delta/maxVal)*100)}%"></div>
-        </div>
-      </div>
-      <div class="improved-delta">+${delta}</div>
-    </div>`).join('');
 }
 
 function eloFilter(mode, el) {
@@ -1570,7 +1718,7 @@ function renderThemedEvent(eventName, results) {
     return `<tr>${posStr}<td>${r.driver_name||'—'}</td><td>—</td><td>${r.time||'—'}</td><td>—</td><td>—</td><td>${eloStr}</td></tr>`;
   }).join('');
   const hdr = document.getElementById('themed-results-hdr');
-  if (hdr) hdr.textContent = `🏁 RESULTS — ${eventName}`;
+  if (hdr) hdr.textContent = `RESULTS — ${eventName}`;
 }
 
 
@@ -1744,10 +1892,10 @@ function crCalculate() {
 }
 
 function crSave() {
-  document.getElementById('cr-status').textContent = '💾 Saved to database.';
+  document.getElementById('cr-status').textContent = 'Saved to database.';
 }
 function crExport() {
-  document.getElementById('cr-status').textContent = '⬇ CSV export triggered.';
+  document.getElementById('cr-status').textContent = 'CSV export triggered.';
 }
 
 // ── ELO UPDATE ──
