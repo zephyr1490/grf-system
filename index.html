@@ -685,32 +685,8 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
               <th>TOTAL PTS</th><th>LOYALTY</th>
             </tr>
           </thead>
-          <tbody>
-            <tr>
-              <td class="p1">01</td><td>🇩🇪 Loeb_GRF</td><td>Delta HF</td>
-              <td>60</td><td>44</td><td>60</td><td>48</td><td>52</td>
-              <td class="ev">264</td><td style="color:var(--green)">✓ +50</td>
-            </tr>
-            <tr>
-              <td class="p2">02</td><td>🏴󠁧󠁢󠁳󠁣󠁴󠁿 McRae_WRC</td><td>Impreza 555</td>
-              <td>48</td><td>52</td><td>44</td><td>60</td><td>38</td>
-              <td class="ev">242</td><td style="color:var(--green)">✓ +50</td>
-            </tr>
-            <tr>
-              <td class="p3">03</td><td>🇫🇮 Makinen99</td><td>Evo III / Delta HF</td>
-              <td>44</td><td>48</td><td>52</td><td>38</td><td>44</td>
-              <td class="ev">226</td><td style="color:#444">—</td>
-            </tr>
-            <tr>
-              <td>04</td><td>🏴󠁧󠁢󠁷󠁬󠁳󠁿 BurnsRally</td><td>Impreza 555</td>
-              <td>38</td><td>60</td><td>38</td><td>44</td><td>40</td>
-              <td class="ev">220</td><td style="color:var(--green)">✓ +50</td>
-            </tr>
-            <tr>
-              <td>05</td><td>🇫🇷 Auriol_Fan</td><td>Delta HF</td>
-              <td>2</td><td>40</td><td>48</td><td>52</td><td>48</td>
-              <td class="ev">190</td><td style="color:var(--green)">✓ +50</td>
-            </tr>
+          <tbody id="standings-tbody">
+            <tr><td colspan="10"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -1289,6 +1265,7 @@ function showSubTab(name, el) {
   const tab = document.getElementById('tab-' + name);
   if (tab) tab.classList.add('active');
   if (el) el.classList.add('active');
+  if (name === 'standings') loadStandings();
 }
 
 // ── CLOCK ──
@@ -1596,6 +1573,47 @@ function renderThemedEvent(eventName, results) {
   if (hdr) hdr.textContent = `🏁 RESULTS — ${eventName}`;
 }
 
+
+
+// ══════════════════════════════════════════
+// STANDINGS — LIVE FROM SUPABASE
+// ══════════════════════════════════════════
+async function loadStandings() {
+  try {
+    const results = await sb('results', 'select=driver_name,position,elo_change,event_name&order=date.asc');
+    if (!results || !results.length) return;
+
+    // Sum points per driver: 1st=25, 2nd=18, 3rd=15, 4th=12, 5th=10, 6th=8, 7th=6, 8th=4, 9th=2, 10th=1
+    const pts = [25,18,15,12,10,8,6,4,2,1];
+    const totals = {};
+    results.forEach(r => {
+      const n = r.driver_name;
+      if (!n) return;
+      if (!totals[n]) totals[n] = 0;
+      const p = parseInt(r.position) || 0;
+      if (p >= 1 && p <= 10) totals[n] += pts[p-1];
+    });
+
+    const sorted = Object.entries(totals).sort((a,b) => b[1]-a[1]);
+    const pc = i => i===0?'p1':i===1?'p2':i===2?'p3':'';
+    const tbody = document.getElementById('standings-tbody');
+    if (!tbody) return;
+
+    if (!sorted.length) {
+      tbody.innerHTML = `<tr><td colspan="10"><div class="empty"><div class="empty-title">NO STANDINGS YET</div></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = sorted.map(([name, total], i) => `
+      <tr>
+        <td class="${pc(i)}">${String(i+1).padStart(2,'0')}</td>
+        <td>${name}</td>
+        <td>—</td>
+        <td colspan="5" style="color:#555;font-size:12px;">— event breakdown not available —</td>
+        <td class="ev">${total}</td>
+        <td style="color:#444">—</td>
+      </tr>`).join('');
+  } catch(e) { console.error('loadStandings:', e); }
+}
 
 // ══════════════════════════════════════════
 // ADMIN PAGE
