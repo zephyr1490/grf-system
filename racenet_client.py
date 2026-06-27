@@ -166,25 +166,34 @@ def _save_json(filepath: str, data: dict):
 
 def _bootstrap_from_env():
     """
-    Railway/Cloud: RACENET_REFRESH_TOKEN env var hat immer Vorrang.
-    Überschreibt den gespeicherten Token — so funktioniert auch ein
-    Reset wenn der alte Token abgelaufen ist.
+    Railway/Cloud: Schreibt RACENET_REFRESH_TOKEN aus der Env-Variable
+    in die Token-Datei — aber NUR wenn dort noch kein Refresh Token steht.
+
+    RaceNet rotiert den Refresh Token bei jedem Refresh-Call. Nach dem
+    ersten erfolgreichen Refresh steht in der Datei bereits ein neuer,
+    gültiger Token. Den dürfen wir nicht mit dem alten aus der Env-Variable
+    überschreiben.
+
+    Für einen manuellen Reset (z.B. nach Token-Ablauf): RACENET_TOKEN_RESET=1
+    in Railway Variables setzen → Bootstrap überschreibt erzwungen.
+    Danach RACENET_TOKEN_RESET wieder entfernen.
     """
     rt = os.environ.get("RACENET_REFRESH_TOKEN", "").strip()
     if not rt:
         return  # lokale Entwicklung — normale Datei-basierte Logik
 
     existing = _load_json(TOKEN_FILE)
-    if existing.get("refresh_token") == rt:
-        return  # bereits aktuell
+    force_reset = os.environ.get("RACENET_TOKEN_RESET", "").strip() == "1"
 
-    print("  🌐 Railway: Setze Refresh Token aus Environment Variable...")
+    if existing.get("refresh_token") and not force_reset:
+        return  # Token-Datei hat bereits einen Refresh Token → nicht anfassen
+
+    print("  🌐 Railway: Schreibe Refresh Token aus Env-Variable in Token-Datei...")
     existing["refresh_token"] = rt
-    # Access Token löschen damit sofort ein Refresh erzwungen wird
     existing.pop("access_token", None)
     existing.pop("token_expiry", None)
     _save_json(TOKEN_FILE, existing)
-    print("  ✅ Refresh Token gesetzt.")
+    print("  ✅ Refresh Token geschrieben.")
 
 
 class _TokenManager:
