@@ -140,7 +140,19 @@ def parse_date(s: str | None) -> str | None:
 
 
 def extract_dates(obj: dict) -> tuple[str | None, str | None]:
-    """Extract start/end dates from any RaceNet object (event, championship, etc.)"""
+    """Extract start/end dates from any RaceNet object (event, championship, etc.)
+    RaceNet stores dates in two ways:
+      - Nested in eventSettings/settings/championshipSettings as startDate/endDate
+      - Directly on the object as absoluteOpenDate/absoluteCloseDate (events)
+    We check both, preferring the direct fields as they are more reliable.
+    """
+    # Direct fields on the object (events use these)
+    direct_start = parse_date(obj.get("absoluteOpenDate"))
+    direct_end   = parse_date(obj.get("absoluteCloseDate"))
+    if direct_start or direct_end:
+        return direct_start, direct_end
+
+    # Nested in settings sub-object (championships may use these)
     s = (obj.get("eventSettings")
          or obj.get("settings")
          or obj.get("championshipSettings")
@@ -497,6 +509,16 @@ def sync_championship(db: SupabaseClient, client,
     veh_class  = settings.get("vehicleClass") or ""
     start, end = extract_dates(champ)
 
+    # If championship itself has no dates, derive from its events:
+    # start = absoluteOpenDate of first event, end = absoluteCloseDate of last event
+    events = champ.get("events", [])
+    if not start and events:
+        start, _ = extract_dates(events[0])
+    if not end and events:
+        _, end = extract_dates(events[-1])
+    if start:
+        log(f"    📅 Championship dates: {start} → {end or '?'}")
+
     log(f"  📋 {champ_name} ({champ_id})")
 
     if not test:
@@ -608,37 +630,14 @@ def main():
             continue
 
         log(f"  {club.get('clubName', club_id)}")
+        current = club.get("currentChampionship", {})
 
-        # Build list of championships to process
-        championships_to_sync = []
-
-        if force_full:
-            # --full: sync ALL championships (current + all historical)
-            all_ids = client.get_all_championship_ids(club_id)
-            log(f"  📚 Full sync: {len(all_ids)} championship ID(s) found")
-
-            for champ_id in all_ids:
-                try:
-                    champ = client.get_championship(club_id, champ_id)
-                    if champ and champ.get("id"):
-                        championships_to_sync.append(champ)
-                    time.sleep(0.3)
-                except Exception as ex:
-                    log(f"  ⚠ Could not load championship {champ_id}: {ex}")
-        else:
-            # Smart mode: only current championship
-            current = club.get("currentChampionship", {})
-            if current and current.get("id"):
-                championships_to_sync.append(current)
-
-        if not championships_to_sync:
-            log("  ℹ No championships to sync.")
+        if not current or not current.get("id"):
+            log("  ℹ No active championship.")
             continue
 
-        for champ in championships_to_sync:
-            sync_championship(db, client, club_id, champ,
-                              test=test_mode, force_full=force_full)
-            time.sleep(0.5)
+        sync_championship(db, client, club_id, current,
+                          test=test_mode, force_full=force_full)
 
     print()
     print("=" * 60)

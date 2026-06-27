@@ -1688,14 +1688,29 @@ let _themedEvents        = [];    // alle Events der Championship (sortiert nach
  */
 async function loadThemedResults() {
   try {
-    // 1. Aktuelle Championship für Club 23799 laden (neueste nach start_date)
-    const champs = await sb('championships', 'select=*&club_id=eq.23799&order=start_date.desc&limit=1');
-    if (!champs.length) {
+    // 1. Aktuelle Championship für Club 23799 laden.
+    // Strategie: Championship mit aktivem Event (status=1) bevorzugen,
+    // dann neueste nach start_date, dann erste verfügbare.
+    let champ = null;
+
+    const activeEvs0 = await sb('events', 'select=championship_id&club_id=eq.23799&status=eq.1&limit=1');
+    if (activeEvs0.length) {
+      const found = await sb('championships', `select=*&id=eq.${activeEvs0[0].championship_id}&limit=1`);
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      const found = await sb('championships', 'select=*&club_id=eq.23799&order=start_date.desc&limit=1');
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      const found = await sb('championships', 'select=*&club_id=eq.23799&limit=1');
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
       setHTML('themed-event-selector', '<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">No championship found</span>');
       return;
     }
 
-    const champ = champs[0];
     _themedChampId = champ.id;
 
     // 2. Championship Hero befüllen
