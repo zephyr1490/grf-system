@@ -166,22 +166,25 @@ def _save_json(filepath: str, data: dict):
 
 def _bootstrap_from_env():
     """
-    Railway/Cloud bootstrap: if RACENET_REFRESH_TOKEN env var is set AND
-    the token file doesn't have a refresh_token yet, write it to the file.
-    This runs once on startup so the normal auto-refresh mechanism takes over.
+    Railway/Cloud: RACENET_REFRESH_TOKEN env var hat immer Vorrang.
+    Überschreibt den gespeicherten Token — so funktioniert auch ein
+    Reset wenn der alte Token abgelaufen ist.
     """
     rt = os.environ.get("RACENET_REFRESH_TOKEN", "").strip()
     if not rt:
-        return  # local dev — no env var, normal file-based flow
+        return  # lokale Entwicklung — normale Datei-basierte Logik
 
     existing = _load_json(TOKEN_FILE)
-    if existing.get("refresh_token"):
-        return  # already have a token on disk (persisted from last refresh)
+    if existing.get("refresh_token") == rt:
+        return  # bereits aktuell
 
-    print("  🌐 Railway: bootstrapping refresh token from environment variable...")
+    print("  🌐 Railway: Setze Refresh Token aus Environment Variable...")
     existing["refresh_token"] = rt
+    # Access Token löschen damit sofort ein Refresh erzwungen wird
+    existing.pop("access_token", None)
+    existing.pop("token_expiry", None)
     _save_json(TOKEN_FILE, existing)
-    print("  ✅ Refresh token written to token file.")
+    print("  ✅ Refresh Token gesetzt.")
 
 
 class _TokenManager:
@@ -207,9 +210,7 @@ class _TokenManager:
         self._load_tokens()
 
     def _load_tokens(self):
-        # Railway / Cloud: bootstrap from environment variable if token file missing or empty
-        _bootstrap_from_env()
-
+        _bootstrap_from_env()  # Env-Variable immer zuerst prüfen
         data = _load_json(TOKEN_FILE)
         self.access_token  = data.get("access_token")
         self.refresh_token = data.get("refresh_token", "")
