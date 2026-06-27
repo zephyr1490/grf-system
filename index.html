@@ -723,11 +723,11 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
       </div>
       <div class="themed-meta">
         <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val">GRF Themed</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val">4</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val">12</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Active Drivers</div><div class="tm-val">23</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Current Round</div><div class="tm-val">13 — Wales</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" style="color:var(--green)">● LIVE</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val" id="champ-season-val">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val" id="champ-rounds">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Active Drivers</div><div class="tm-val" id="champ-drivers">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Current Round</div><div class="tm-val" id="champ-current-round">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="champ-status">—</div></div>
       </div>
     </div>
 
@@ -753,7 +753,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
           <div class="elo-wrap">
             <table class="elo-table">
               <thead>
-                <tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th><th>BASE</th><th>×CR</th><th>PTS</th></tr>
+                <tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th><th>BASE</th><th>×CR</th><th>CR PTS</th><th>TOTAL</th></tr>
               </thead>
               <tbody id="themed-results-tbody">
                 <tr><td colspan="7"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
@@ -762,20 +762,17 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
           </div>
         </div>
         <div class="live-col">
-          <div class="col-hdr">EVENT INFO — RD.13 WALES</div>
-          <div style="background:var(--black);margin:6px;padding:12px;">
-            <div style="font-size:11px;color:var(--red);letter-spacing:3px;margin-bottom:6px;">// RAC RALLY 1993 //</div>
-            <div style="font-family:'VT323',monospace;font-size:32px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;">NETWORK Q<br>RAC RALLY</div>
-            <div style="border-left:3px solid var(--red-dark);padding:6px 10px;background:rgba(139,0,0,0.06);font-size:13px;color:#999;line-height:1.5;font-style:italic;margin-bottom:12px;">
-              "The forests of Great Britain call. Mud, mist, and the roar of 300bhp through the Welsh night."
-            </div>
+          <div class="col-hdr" id="ev-info-hdr">EVENT INFO</div>
+          <div style="background:var(--black);margin:6px;padding:12px;" id="ev-info-panel">
+            <div style="font-size:11px;color:var(--red);letter-spacing:3px;margin-bottom:6px;" id="ev-info-eyebrow">—</div>
+            <div style="font-family:'VT323',monospace;font-size:32px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;" id="ev-info-name">—</div>
+            <div style="border-left:3px solid var(--red-dark);padding:6px 10px;background:rgba(139,0,0,0.06);font-size:13px;color:#999;line-height:1.5;font-style:italic;margin-bottom:12px;" id="ev-info-narrative"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-              <div class="themed-meta-item"><div class="tm-lbl">Surface</div><div class="tm-val">Gravel</div></div>
-              <div class="themed-meta-item"><div class="tm-lbl">Location</div><div class="tm-val">Wales</div></div>
-              <div class="themed-meta-item"><div class="tm-lbl">Entries</div><div class="tm-val">18 / 24</div></div>
-              <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" style="color:var(--green)">● Live</div></div>
-              <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val">Jun 20</div></div>
-              <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val">Jun 27</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Location</div><div class="tm-val" id="ev-info-location">—</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Entries</div><div class="tm-val" id="ev-info-entries">—</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="ev-info-status">—</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val" id="ev-info-start">—</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val" id="ev-info-end">—</div></div>
             </div>
           </div>
         </div>
@@ -785,8 +782,8 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
     <!-- TAB: CHAMPIONSHIP STANDINGS -->
     <div class="themed-tab" id="tab-standings">
       <div class="standings-wrap">
-        <div class="col-hdr" style="margin-bottom:6px;">CHAMPIONSHIP STANDINGS — SEASON 4
-          <span class="col-hdr-right">AFTER RD.12 · RD.13 IN PROGRESS</span>
+        <div class="col-hdr" style="margin-bottom:6px;" id="standings-hdr">CHAMPIONSHIP STANDINGS — LOADING…
+          <span class="col-hdr-right" id="standings-hdr-right"></span>
         </div>
         <table class="standings-table">
           <thead>
@@ -806,7 +803,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
     <!-- TAB: CAR RATINGS -->
     <div class="themed-tab" id="tab-carratings">
       <div class="cr-wrap">
-        <div class="col-hdr" style="margin-bottom:6px;">CAR RATINGS — SEASON 4
+        <div class="col-hdr" style="margin-bottom:6px;" id="cr-hdr">CAR RATINGS
           <span class="col-hdr-right">SET BEFORE SEASON · ADMIN ONLY</span>
         </div>
         <table class="cr-table">
@@ -1514,7 +1511,8 @@ function showSubTab(name, el) {
   if (tab) tab.classList.add('active');
   if (el)  el.classList.add('active');
 
-  if (name === 'standings') loadStandings();
+  if (name === 'standings')  loadStandings();
+  if (name === 'carratings') loadCarRatings();
 }
 
 /**
@@ -1679,46 +1677,86 @@ async function loadNextEvent() {
 
 // ── 7. THEMED PAGE ────────────────────────────────────────────
 
-// Welches Event ist im Event-Selector aktiv (ID)
-let _themedActiveEventId = null;
+// State
+let _themedChampId       = null;  // aktuelle championship_id (club 23799)
+let _themedActiveEventId = null;  // aktives Event im Selector
+let _themedEvents        = [];    // alle Events der Championship (sortiert nach round_number)
 
 /**
- * Lädt Events für den Event-Selector und anschließend die Ergebnisse.
- * Wird beim Wechsel zur Themed-Seite aufgerufen (showPage).
+ * Einstiegspunkt: wird bei showPage('themed') aufgerufen.
+ * Lädt Championship + Events, baut Selector, rendert Ergebnis.
  */
 async function loadThemedResults() {
   try {
-    // Aktives oder letztes abgeschlossenes Event des GRF-Themed-Clubs laden
-    const today = new Date().toISOString().split('T')[0];
-    let evs = await sb('events', 'select=*&status=eq.1&order=start_date.desc&limit=10');
-    if (!evs.length) {
-      evs = await sb('events', `select=*&status=eq.2&order=end_date.desc&limit=10`);
+    // 1. Aktuelle Championship für Club 23799 laden (neueste nach start_date)
+    const champs = await sb('championships', 'select=*&club_id=eq.23799&order=start_date.desc&limit=1');
+    if (!champs.length) {
+      setHTML('themed-event-selector', '<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">No championship found</span>');
+      return;
     }
 
+    const champ = champs[0];
+    _themedChampId = champ.id;
+
+    // 2. Championship Hero befüllen
+    setText('champ-name',     champ.name || '—');
+    setText('champ-season',   champ.season_number || '—');
+    setText('champ-season-val', champ.season_number || '—');
+    const narEl = $('champ-narrative');
+    if (narEl) narEl.textContent = champ.narrative || '';
+
+    // 3. Alle Events dieser Championship laden, sortiert nach round_number
+    const evs = await sb('events',
+      `select=*&championship_id=eq.${_themedChampId}&order=round_number.asc`
+    );
+    _themedEvents = evs;
+
+    // Hero Meta: Rounds, Status
+    setText('champ-rounds', evs.length || '—');
+
+    const activeEvs    = evs.filter(e => e.status === 1);
+    const hasActive    = activeEvs.length > 0;
+    const statusEl     = $('champ-status');
+    if (statusEl) {
+      statusEl.textContent  = hasActive ? '● LIVE' : 'FINISHED';
+      statusEl.style.color  = hasActive ? 'var(--green)' : '#999';
+    }
+
+    // Aktuelle Runde
+    const currentRound = activeEvs[0] || evs[evs.length - 1];
+    if (currentRound) {
+      setText('champ-current-round',
+        `RD.${currentRound.round_number || '?'} — ${currentRound.location || currentRound.name || '—'}`
+      );
+    }
+
+    // 4. Event-Selector aufbauen (neuestes/aktives zuerst aktiv)
     const selectorEl = $('themed-event-selector');
     if (selectorEl && evs.length) {
-      // Event-Buttons im Selector aufbauen
+      // Aktives Event bevorzugen, sonst letztes
+      const defaultEv = activeEvs[0] || evs[evs.length - 1];
+      if (!_themedActiveEventId) _themedActiveEventId = defaultEv.id;
+
       selectorEl.innerHTML =
         `<span class="event-selector-lbl">EVENT:</span>` +
-        evs.map((ev, i) => `
-          <span class="ev-btn${i === 0 ? ' active' : ''}"
+        evs.map(ev => `
+          <span class="ev-btn${ev.id === _themedActiveEventId ? ' active' : ''}"
                 onclick="selectThemedEvent('${ev.id}', this)">
-            ${ev.name || `RD.${i + 1}`}
+            RD.${ev.round_number || '?'} ${ev.location || ev.name || ''}
           </span>`).join('');
-
-      if (!_themedActiveEventId) _themedActiveEventId = evs[0].id;
     } else if (selectorEl) {
-      selectorEl.innerHTML = `<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">Keine Events gefunden</span>`;
+      selectorEl.innerHTML = `<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">No events found</span>`;
     }
 
-    await _fetchAndRenderResults(_themedActiveEventId || (evs[0] && evs[0].id));
+    // 5. Ergebnisse für aktives Event laden
+    await _fetchAndRenderResults(_themedActiveEventId);
 
   } catch (err) {
     console.error('[loadThemedResults]', err);
   }
 }
 
-/** Wird geklickt, wenn ein anderes Event im Selector gewählt wird. */
+/** Klick auf Event-Button im Selector. */
 async function selectThemedEvent(eventId, el) {
   _themedActiveEventId = eventId;
   document.querySelectorAll('#themed-event-selector .ev-btn').forEach(b => b.classList.remove('active'));
@@ -1726,102 +1764,258 @@ async function selectThemedEvent(eventId, el) {
   await _fetchAndRenderResults(eventId);
 }
 
-/** Lädt event_results für ein Event und rendert die Tabelle. */
+/** Lädt event_results für ein Event, rendert Tabelle + Event-Info-Panel. */
 async function _fetchAndRenderResults(eventId) {
   if (!eventId) return;
 
-  setText('themed-results-hdr', 'CURRENT RESULTS — LOADING…');
-  setHTML('themed-results-tbody', emptyRow(7, 'LOADING…'));
+  setText('themed-results-hdr', 'RESULTS — LOADING…');
+  setHTML('themed-results-tbody', emptyRow(8, 'LOADING…'));
+
+  // Event-Objekt aus Cache holen
+  const ev = _themedEvents.find(e => e.id === eventId) || {};
+  const rdLabel = ev.round_number ? `RD.${ev.round_number}` : '';
+  const evLabel = ev.location || ev.name || eventId;
+
+  // Event Info Panel befüllen
+  setText('ev-info-hdr',       `EVENT INFO — ${rdLabel} ${evLabel}`.trim());
+  setText('ev-info-eyebrow',   ev.location ? `// ${ev.location.toUpperCase()} //` : '—');
+  setText('ev-info-name',      ev.name || '—');
+  const narEl = $('ev-info-narrative');
+  if (narEl) narEl.textContent = ev.narrative || '';
+  setText('ev-info-location',  ev.location || '—');
+  setText('ev-info-start',     fmtDate(ev.start_date));
+  setText('ev-info-end',       fmtDate(ev.end_date));
+
+  const evStatusMap = { 0: 'Upcoming', 1: '● Live', 2: 'Finished' };
+  const evStatusEl  = $('ev-info-status');
+  if (evStatusEl) {
+    evStatusEl.textContent = evStatusMap[ev.status] ?? '—';
+    evStatusEl.style.color = ev.status === 1 ? 'var(--green)' : '';
+  }
 
   try {
-    const results = await sb(
-      'event_results',
-      `select=*&event_id=eq.${eventId}&order=position.asc`
-    );
+    // Results + Stage-Results parallel laden
+    const [results, stages, stageResults] = await Promise.all([
+      sb('event_results',  `select=*&event_id=eq.${eventId}&order=is_dnf.asc,position.asc`),
+      sb('stages',         `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`),
+      sb('stage_results',  `select=driver_name,stage_id,time_str,stage_position,is_dnf&event_id=eq.${eventId}`),
+    ]);
+
+    // Event-Info: Entries
+    setText('ev-info-entries', results.length || '—');
 
     const tbody = $('themed-results-tbody');
     if (!tbody) return;
 
     if (!results.length) {
-      tbody.innerHTML = emptyRow(7, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
-      setText('themed-results-hdr', 'CURRENT RESULTS — NO DATA');
+      tbody.innerHTML = emptyRow(8, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
+      setText('themed-results-hdr', `${rdLabel} ${evLabel} — NO DATA`.trim());
       return;
     }
 
-    tbody.innerHTML = results.map((r, i) => `
-      <tr${r.is_dnf ? ' style="opacity:.5"' : ''}>
-        <td class="${rankClass(i)}">${r.is_dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0')}</td>
-        <td>${r.driver_name || '—'}</td>
-        <td style="font-size:12px;color:#aaa;">${r.vehicle || '—'}</td>
-        <td>${r.time || '—'}</td>
-        <td>${r.base_points ?? '—'}</td>
-        <td class="ev">${r.cr_multiplier ? r.cr_multiplier.toFixed(2) : '—'}</td>
-        <td class="ev">${r.total_points ?? r.points ?? '—'}</td>
-      </tr>`).join('');
+    // Stage-Index aufbauen: stageResults[stageid][drivername] = entry
+    const stageIdx = {};
+    stageResults.forEach(r => {
+      if (!stageIdx[r.stage_id]) stageIdx[r.stage_id] = {};
+      stageIdx[r.stage_id][r.driver_name] = r;
+    });
 
-    setText('themed-results-hdr', `CURRENT RESULTS — ${results.length} ENTRIES`);
+    tbody.innerHTML = results.map((r, i) => {
+      const dnf       = r.is_dnf;
+      const posStr    = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
+      const crStr     = r.cr_multiplier != null ? Number(r.cr_multiplier).toFixed(2) : '—';
+      const rowId     = `stages-row-${r.driver_id || i}`;
+
+      // Stage-Zeiten Zeile (versteckt, wird bei Klick togglet)
+      let stageRow = '';
+      if (stages.length) {
+        const cells = stages.map(st => {
+          const sr = stageIdx[st.id]?.[r.driver_name];
+          if (!sr) return `<td style="color:#555;">—</td>`;
+          const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
+          return `<td ${cls}>${sr.time_str || '—'}</td>`;
+        }).join('');
+        const hdrs = stages.map(st =>
+          `<td style="font-size:10px;color:var(--red);letter-spacing:1px;">SS${st.stage_number}</td>`
+        ).join('');
+        stageRow = `
+          <tr id="${rowId}" style="display:none;background:#0a0a0a;">
+            <td></td>
+            <td colspan="${7 + stages.length}" style="padding:4px 8px;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <tr>${hdrs}</tr>
+                <tr>${cells}</tr>
+              </table>
+            </td>
+          </tr>`;
+      }
+
+      return `
+        <tr${dnf ? ' style="opacity:.55"' : ''} style="cursor:pointer;" onclick="toggleStageRow('${rowId}')">
+          <td class="${rankClass(i)}">${posStr}</td>
+          <td>${r.driver_name || '—'}</td>
+          <td style="font-size:12px;color:#aaa;">${r.vehicle || '—'}</td>
+          <td>${r.time || '—'}</td>
+          <td>${r.base_points ?? '—'}</td>
+          <td class="ev">${crStr}</td>
+          <td class="ev">${r.cr_points ?? '—'}</td>
+          <td class="ev" style="color:var(--green);">${r.total_points ?? '—'}</td>
+        </tr>${stageRow}`;
+    }).join('');
+
+    // Header aktualisieren
+    const finishers = results.filter(r => !r.is_dnf).length;
+    const dnfs      = results.filter(r => r.is_dnf).length;
+    const statusStr = ev.status === 1 ? ' ● LIVE' : ev.status === 2 ? ' ✓ FINISHED' : '';
+    setText('themed-results-hdr',
+      `${rdLabel} ${evLabel} — ${finishers} FINISHED · ${dnfs} DNF${statusStr}`.trim()
+    );
+
+    // Live-Badge im Header
+    const hdrRight = $('themed-results-hdr')?.querySelector('.col-hdr-right');
+    if (hdrRight) {
+      hdrRight.textContent  = ev.status === 1 ? '● LIVE' : '';
+      hdrRight.style.color  = 'var(--green)';
+    }
 
   } catch (err) {
     console.error('[_fetchAndRenderResults]', err);
-    setHTML('themed-results-tbody', emptyRow(7, 'FEHLER', 'Ergebnisse konnten nicht geladen werden.'));
+    setHTML('themed-results-tbody', emptyRow(8, 'ERROR', 'Could not load results.'));
   }
 }
 
+/** Stage-Zeilen aufklappen/zuklappen. */
+function toggleStageRow(rowId) {
+  const row = document.getElementById(rowId);
+  if (row) row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+
 /**
- * Lädt die Championship-Gesamtwertung.
- * Wird beim Wechsel zum "standings"-Tab aufgerufen (showSubTab).
+ * Championship Standings — gefiltert nach _themedChampId, sortiert nach round_number.
  */
 async function loadStandings() {
   setHTML('standings-tbody', emptyRow(10, 'LOADING…'));
 
+  if (!_themedChampId) {
+    // Championship noch nicht geladen — kurz warten und nochmal
+    await loadThemedResults();
+  }
+
   try {
-    // Alle Ergebnisse für aktive Championship (TODO: championship_id filtern sobald bekannt)
+    // Alle Events dieser Championship (round_number-sortiert, schon im Cache)
+    const evs = _themedEvents.length
+      ? _themedEvents
+      : await sb('events', `select=id,round_number,location,name&championship_id=eq.${_themedChampId}&order=round_number.asc`);
+
+    const evOrder = evs.map(e => e.id); // Round-Reihenfolge
+
+    // Alle Event-Results dieser Championship
     const results = await sb(
       'event_results',
-      'select=driver_name,vehicle,total_points,points,event_id&order=total_points.desc'
+      `select=driver_name,vehicle,total_points,event_id,is_dnf&championship_id=eq.${_themedChampId}&order=event_id.asc`
     );
 
     if (!results.length) {
-      setHTML('standings-tbody', emptyRow(10, 'NO STANDINGS DATA', 'Gesamtwertung wird nach dem ersten Event befüllt.'));
+      setHTML('standings-tbody', emptyRow(10, 'NO STANDINGS DATA', 'Standings appear after the first event.'));
+      setText('standings-hdr', 'CHAMPIONSHIP STANDINGS — NO DATA');
       return;
     }
 
-    // Punkte pro Fahrer aggregieren
+    // Punkte pro Fahrer aggregieren, pro Runde
     const driverMap = {};
     results.forEach(r => {
       const name = r.driver_name;
       if (!name) return;
       if (!driverMap[name]) {
-        driverMap[name] = { name, vehicle: r.vehicle || '—', total: 0, events: [] };
+        driverMap[name] = { name, vehicles: new Set(), roundPts: {}, total: 0 };
       }
-      driverMap[name].total += r.total_points || r.points || 0;
-      driverMap[name].events.push(r.total_points || r.points || 0);
+      if (r.vehicle) driverMap[name].vehicles.add(r.vehicle);
+      const pts = r.total_points ?? 0;
+      driverMap[name].roundPts[r.event_id] = (driverMap[name].roundPts[r.event_id] || 0) + pts;
+      driverMap[name].total += pts;
     });
 
     const sorted = Object.values(driverMap).sort((a, b) => b.total - a.total);
-    const maxRounds = Math.max(...sorted.map(d => d.events.length), 5);
+
+    // Header
+    const champs = await sb('championships', `select=name,season_number&id=eq.${_themedChampId}&limit=1`);
+    const champName = champs[0]?.name || 'CHAMPIONSHIP';
+    setText('standings-hdr', `${champName} — STANDINGS`);
+    setText('standings-hdr-right', `${evOrder.length} ROUNDS`);
+
+    // Tabellen-Header dynamisch bauen (eine Spalte pro Runde)
+    const theadRow = document.querySelector('#tab-standings table thead tr');
+    if (theadRow) {
+      const roundHdrs = evs.map(ev =>
+        `<th title="${ev.name || ev.location || ''}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
+      ).join('');
+      theadRow.innerHTML = `<th>#</th><th>DRIVER</th><th>CAR</th>${roundHdrs}<th>TOTAL</th><th>LOYALTY</th>`;
+    }
 
     const tbody = $('standings-tbody');
     if (tbody) {
       tbody.innerHTML = sorted.map((d, i) => {
-        const roundCells = Array.from({ length: maxRounds }, (_, ri) =>
-          `<td style="font-size:12px;color:#999;">${d.events[ri] ?? '—'}</td>`
-        ).join('');
+        // Fahrzeug-Anzeige: wenn nur eines → zeigen, sonst mehrere
+        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : `${d.vehicles.size} cars`;
+        // Loyalty-Check: genau ein Fahrzeug die ganze Saison
+        const loyal  = d.vehicles.size === 1 ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+
+        const roundCells = evOrder.map(evId => {
+          const pts = d.roundPts[evId];
+          return pts != null
+            ? `<td style="font-size:12px;color:#ccc;">${pts}</td>`
+            : `<td style="font-size:12px;color:#555;">—</td>`;
+        }).join('');
+
         return `
           <tr>
             <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
             <td>${d.name}</td>
-            <td style="font-size:12px;color:#aaa;">${d.vehicle}</td>
+            <td style="font-size:12px;color:#aaa;">${carStr}</td>
             ${roundCells}
-            <td class="ev">${d.total}</td>
-            <td class="eq">—</td>
+            <td class="ev" style="color:var(--green);font-weight:bold;">${d.total}</td>
+            <td class="ev">${loyal}</td>
           </tr>`;
       }).join('');
     }
 
+    // Active-Drivers in Hero aktualisieren
+    setText('champ-drivers', sorted.length);
+
   } catch (err) {
     console.error('[loadStandings]', err);
-    setHTML('standings-tbody', emptyRow(10, 'FEHLER', 'Gesamtwertung konnte nicht geladen werden.'));
+    setHTML('standings-tbody', emptyRow(10, 'ERROR', 'Could not load standings.'));
+  }
+}
+
+/**
+ * Car Ratings für aktive Championship laden.
+ */
+async function loadCarRatings() {
+  const tbody = document.querySelector('#tab-carratings .cr-table tbody');
+  if (!tbody) return;
+
+  if (!_themedChampId) await loadThemedResults();
+
+  try {
+    const ratings = await sb('car_ratings', `select=*&championship_id=eq.${_themedChampId}&order=cr_value.desc`);
+
+    if (!ratings.length) {
+      tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-title">NO CAR RATINGS SET</div><div class="empty-sub">Configure via Admin before the season starts.</div></div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = ratings.map((r, i) => `
+      <tr>
+        <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
+        <td>${r.vehicle || '—'}</td>
+        <td style="font-size:12px;color:#aaa;">${r.era || r.surface || '—'}</td>
+        <td class="ev">${Number(r.cr_value).toFixed(2)}</td>
+      </tr>`).join('');
+
+    setText('cr-hdr', `CAR RATINGS — ${ratings.length} VEHICLES`);
+  } catch (err) {
+    console.error('[loadCarRatings]', err);
   }
 }
 
