@@ -1,0 +1,7 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+cronSchedule = "*/10 * * * *"
+startCommand = "python grf_sync.py"
+restartPolicyType = "never"
