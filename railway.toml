@@ -1,7 +1,23 @@
 [build]
 builder = "nixpacks"
 
-[deploy]
-cronSchedule = "*/10 * * * *"
+# ── Cron: Auto-Sync (bestehend, unverändert) ──────────────────────────────────
+[[services]]
+name = "grf-sync"
+source = "grf_sync.py"
+
+[services.deploy]
 startCommand = "python grf_sync.py"
-restartPolicyType = "never"
+cronSchedule = "*/10 * * * *"
+
+# ── Web: Admin API (neu) ──────────────────────────────────────────────────────
+[[services]]
+name = "grf-admin-api"
+source = "admin_api.py"
+
+[services.deploy]
+startCommand = "python admin_api.py"
+
+# Sleep nach 10 Minuten Inaktivität → kostet nichts wenn nicht benutzt
+[services.deploy.sleepApplication]
+enabled = true

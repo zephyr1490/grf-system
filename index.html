@@ -996,58 +996,82 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
       <!-- ADMIN SUB NAV -->
       <div class="themed-subnav">
         <div class="sub-tab active" onclick="showAdminTab('car-rating',this)">Car Rating Calc</div>
+        <div class="sub-tab" onclick="showAdminTab('champ-setup',this)">Championship Setup</div>
+        <div class="sub-tab" onclick="showAdminTab('manual-bonuses',this)">Manual Bonuses</div>
+        <div class="sub-tab" onclick="showAdminTab('narratives',this)">Narratives</div>
         <div class="sub-tab" onclick="showAdminTab('elo-update',this)">ELO Update</div>
-        <div class="sub-tab" onclick="showAdminTab('event-create',this)">Event Creation</div>
         <div class="sub-tab" onclick="showAdminTab('font-switcher',this)">Font Switcher</div>
       </div>
 
       <!-- ── TAB: CAR RATING CALCULATOR ── -->
       <div class="admin-tab active" id="atab-car-rating">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
-          <div class="col-hdr" style="margin-bottom:0;">CAR RATING CALCULATOR</div>
+          <div class="col-hdr" style="margin-bottom:0;">CAR RATING CALCULATOR — LIVE RACENET DATA</div>
         </div>
-        <div style="display:grid; grid-template-columns:220px 1fr 1fr; gap:0; background:var(--gray);">
+        <div style="display:grid; grid-template-columns:230px 1fr 1fr; gap:0; background:var(--gray);">
 
           <!-- LEFT: PARAMETERS -->
-          <div style="background:var(--black); border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); padding:14px 12px;">
-            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:12px; border-bottom:1px solid #1a1a1a; padding-bottom:6px;">PARAMETERS</div>
+          <div style="background:var(--black); border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); padding:14px 12px; display:flex; flex-direction:column; gap:12px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; border-bottom:1px solid #1a1a1a; padding-bottom:6px;">PARAMETERS</div>
 
-            <div style="margin-bottom:12px;">
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">CHAMPIONSHIP</label>
+              <select id="cr-champ-select" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+                <option value="">— loading… —</option>
+              </select>
+              <div style="font-size:10px; color:#444; margin-top:3px;">CR will be saved to this championship</div>
+            </div>
+
+            <div>
               <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">TOP % THRESHOLD</label>
               <input type="text" value="25" id="cr-top-pct"
                 style="background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; width:100%; outline:none;">
               <div style="font-size:10px; color:#444; margin-top:3px;">Percentile cutoff for top rating</div>
             </div>
 
-            <div style="margin-bottom:12px;">
+            <div>
               <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">MIN N PER CAR</label>
               <input type="text" value="10" id="cr-min-n"
                 style="background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; width:100%; outline:none;">
               <div style="font-size:10px; color:#444; margin-top:3px;">Minimum data points required</div>
             </div>
 
-            <div style="margin-bottom:20px;">
+            <div>
               <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">EXPONENT</label>
               <input type="text" value="1.5" id="cr-exponent"
                 style="background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; width:100%; outline:none;">
-              <div style="font-size:10px; color:#444; margin-top:3px;">Rating curve exponent</div>
+              <div style="font-size:10px; color:#444; margin-top:3px;">Rating curve exponent (try 1.0–2.0)</div>
             </div>
 
-            <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="background:#222527; border:1px solid #1a1a1a; border-left:3px solid var(--red-dark); padding:8px 10px; font-size:10px; color:#666; line-height:1.6;">
+              CR = (avg_top_time / driver_avg_time) ^ exponent<br>
+              Higher exponent = wider spread between cars.
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:auto;">
               <button onclick="crCalculate()"
                 style="background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
                 ▶ CALCULATE
               </button>
-              <button onclick="crSave()"
-                style="background:#252729; color:var(--green); border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
-                SAVE TO DB
-              </button>
+              <div id="cr-confirm-bar" style="display:none; background:#1a2a1a; border:2px solid var(--green-dim); padding:10px; text-align:center;">
+                <div style="font-size:11px; color:var(--green); margin-bottom:8px; letter-spacing:1px;">PREVIEW OK? SAVE TO DATABASE</div>
+                <div style="display:flex; gap:6px;">
+                  <button onclick="crSave()"
+                    style="flex:1; background:var(--green-dim); color:#000; border:2px solid; border-color:var(--green) #1a5a1a #1a5a1a var(--green); font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:6px; cursor:pointer;">
+                    ✓ CONFIRM &amp; SAVE
+                  </button>
+                  <button onclick="crCancelConfirm()"
+                    style="background:#252729; color:#888; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; padding:6px 10px; cursor:pointer;">
+                    ✕
+                  </button>
+                </div>
+              </div>
               <button onclick="crExport()"
-                style="background:#252729; color:#aaa; border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
+                style="background:#252729; color:#aaa; border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:6px 12px; cursor:pointer;">
                 EXPORT CSV
               </button>
             </div>
-            <div id="cr-status" style="margin-top:10px; font-size:11px; color:#555; min-height:16px;"></div>
+            <div id="cr-status" style="font-size:11px; color:#555; min-height:16px; line-height:1.5;"></div>
           </div>
 
           <!-- MIDDLE: LOCATIONS -->
@@ -1056,7 +1080,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
               LOCATIONS
               <span style="font-size:10px; color:#555; margin-left:auto; font-family:var(--ui-font);" id="cr-loc-count">0 selected</span>
             </div>
-            <div style="height:320px; overflow-y:auto;" id="cr-locations-list">
+            <div style="height:340px; overflow-y:auto;" id="cr-locations-list">
               <!-- populated by JS -->
             </div>
             <div style="margin-top:8px; display:flex; gap:6px;">
@@ -1071,7 +1095,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
               VEHICLE CLASSES
               <span style="font-size:10px; color:#555; margin-left:auto; font-family:var(--ui-font);" id="cr-cls-count">0 selected</span>
             </div>
-            <div style="height:320px; overflow-y:auto;" id="cr-classes-list">
+            <div style="height:340px; overflow-y:auto;" id="cr-classes-list">
               <!-- populated by JS -->
             </div>
             <div style="margin-top:8px; display:flex; gap:6px;">
@@ -1083,19 +1107,313 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 
         <!-- RESULT PREVIEW -->
         <div style="padding:8px; background:var(--gray);">
-          <div class="col-hdr" style="margin-bottom:6px;">CALCULATION PREVIEW</div>
+          <div class="col-hdr" style="margin-bottom:6px;">CALCULATION PREVIEW
+            <span id="cr-preview-info" style="font-family:var(--ui-font); font-weight:normal; font-size:10px; color:#aaa; margin-left:12px;"></span>
+          </div>
           <div class="elo-wrap" style="margin:0;">
             <table class="cr-table">
-              <thead><tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>LOCATION</th><th>N</th><th>CR SCORE</th><th>RATING</th></tr></thead>
+              <thead><tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>N</th><th>AVG TOP TIME</th><th>CAR AVG TIME</th><th>CR VALUE</th><th>RATING</th></tr></thead>
               <tbody id="cr-preview-tbody">
-                <tr><td colspan="7"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select locations and classes, then click Calculate.</div></div></td></tr>
+                <tr><td colspan="8"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select championship, locations, classes → Calculate.</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- EXISTING CR ENTRIES -->
+        <div style="padding:8px; background:var(--gray); border-top:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:6px;">EXISTING CR ENTRIES FOR SELECTED CHAMPIONSHIP</div>
+          <div class="elo-wrap" style="margin:0;">
+            <table class="cr-table">
+              <thead><tr><th>VEHICLE</th><th>CR VALUE</th><th>SURFACE</th><th>ERA</th><th>ACTION</th></tr></thead>
+              <tbody id="cr-existing-tbody">
+                <tr><td colspan="5"><div class="empty"><div class="empty-title">SELECT A CHAMPIONSHIP</div></div></td></tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
 
-      <!-- ── TAB: ELO UPDATE ── -->
+      <!-- ── TAB: CHAMPIONSHIP SETUP ── -->
+      <div class="admin-tab" id="atab-champ-setup" style="display:none;">
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:0;">CHAMPIONSHIP SETUP — CREATE OR EDIT</div>
+        </div>
+        <div style="background:var(--black); padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
+          <!-- LEFT COLUMN -->
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">RACENET CLUB</label>
+              <select id="cs-club" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+                <option value="23799">GRF Themed (23799)</option>
+                <option value="23834">GRF Teamed (23834)</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CHAMPIONSHIP NAME</label>
+              <input id="cs-name" type="text" placeholder="e.g. GRF Themed Season 5 — Golden Era"
+                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">SEASON NUMBER</label>
+                <input id="cs-season" type="number" placeholder="5" min="1"
+                  style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+              </div>
+              <div>
+                <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">VEHICLE CLASS</label>
+                <input id="cs-class" type="text" placeholder="e.g. Group B"
+                  style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">START DATE</label>
+                <input id="cs-start" type="date"
+                  style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; color-scheme:dark;">
+              </div>
+              <div>
+                <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">END DATE</label>
+                <input id="cs-end" type="date"
+                  style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; color-scheme:dark;">
+              </div>
+            </div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">NARRATIVE</label>
+              <textarea id="cs-narrative" rows="5" placeholder="Championship flavour text shown to participants…"
+                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; resize:vertical;"></textarea>
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: BONUS RULES -->
+          <div style="display:flex; flex-direction:column; gap:14px;">
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:8px;">CHAMPIONSHIP RULES / CHALLENGES</label>
+              <div style="display:flex; flex-direction:column; gap:6px;" id="cs-rules-list">
+
+                <!-- Loyalty Bonus — always active, no toggle -->
+                <div style="background:#1a2a1a; border:1px solid #1a3a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+                  <span style="color:var(--green); font-size:12px;">✓</span>
+                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Loyalty Bonus</span>
+                  <span class="ch-badge ch-auto">AUTO</span>
+                  <span style="font-size:10px; color:#555;">+50 pts · always active</span>
+                </div>
+
+                <!-- Stage Improvement -->
+                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+                  <input type="checkbox" id="cr-rule-improvement" style="accent-color:var(--red); width:14px; height:14px;">
+                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Stage Improvement</span>
+                  <span class="ch-badge ch-auto">AUTO</span>
+                  <input type="number" value="10" id="cr-rule-improvement-pts" placeholder="pts"
+                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
+                  <span style="font-size:10px; color:#555;">pts</span>
+                </div>
+
+                <!-- Penalty Challenge -->
+                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+                  <input type="checkbox" id="cr-rule-penalty" style="accent-color:var(--red); width:14px; height:14px;">
+                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Penalty Challenge</span>
+                  <span class="ch-badge ch-auto">AUTO</span>
+                  <input type="number" value="10" id="cr-rule-penalty-pts" placeholder="pts"
+                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
+                  <span style="font-size:10px; color:#555;">pts</span>
+                </div>
+
+                <!-- Survivor Bonus -->
+                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+                  <input type="checkbox" id="cr-rule-survivor" style="accent-color:var(--red); width:14px; height:14px;">
+                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Survivor Bonus</span>
+                  <span class="ch-badge ch-auto">AUTO</span>
+                  <input type="number" value="5" id="cr-rule-survivor-pts" placeholder="pts"
+                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
+                  <span style="font-size:10px; color:#555;">pts</span>
+                </div>
+
+                <!-- Livery Challenge -->
+                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+                  <input type="checkbox" id="cr-rule-livery" style="accent-color:var(--red); width:14px; height:14px;">
+                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Livery Challenge</span>
+                  <span class="ch-badge ch-manual">MANUAL</span>
+                  <input type="number" value="15" id="cr-rule-livery-pts" placeholder="pts"
+                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
+                  <span style="font-size:10px; color:#555;">pts</span>
+                </div>
+
+                <!-- Custom rule -->
+                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+                  <input type="checkbox" id="cr-rule-custom" style="accent-color:var(--red); width:14px; height:14px;">
+                  <input type="text" id="cr-rule-custom-name" placeholder="Custom rule name…"
+                    style="flex:1; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 6px; outline:none;">
+                  <span class="ch-badge ch-manual">MANUAL</span>
+                  <input type="number" value="10" id="cr-rule-custom-pts" placeholder="pts"
+                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
+                  <span style="font-size:10px; color:#555;">pts</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#222527; border:1px solid #1a1a1a; border-left:3px solid var(--green-dim); padding:10px 12px; font-size:11px; color:#666; line-height:1.6;">
+              Locations, stage dates, vehicle class, and entry list are auto-imported from RaceNet after the championship is created there.
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:auto;">
+              <button onclick="csCreate()"
+                style="flex:1; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:1px; padding:9px; cursor:pointer;">
+                CREATE CHAMPIONSHIP
+              </button>
+              <button onclick="csReset()"
+                style="background:#252729; color:#888; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:9px 16px; cursor:pointer;">
+                RESET
+              </button>
+            </div>
+            <div id="cs-status" style="font-size:12px; color:#555; min-height:18px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: MANUAL BONUSES ── -->
+      <div class="admin-tab" id="atab-manual-bonuses" style="display:none;">
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:0;">MANUAL BONUSES — PER DRIVER PER EVENT</div>
+        </div>
+        <div style="display:grid; grid-template-columns:280px 1fr; background:var(--black);">
+
+          <!-- LEFT: FORM -->
+          <div style="border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); padding:14px 12px; display:flex; flex-direction:column; gap:12px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; border-bottom:1px solid #1a1a1a; padding-bottom:6px;">ADD BONUS</div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">CHAMPIONSHIP</label>
+              <select id="mb-champ" onchange="mbLoadEvents()" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+                <option value="">— select —</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">EVENT</label>
+              <select id="mb-event" onchange="mbLoadDrivers()" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+                <option value="">— select championship first —</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">DRIVER</label>
+              <select id="mb-driver" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+                <option value="">— select event first —</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">BONUS TYPE</label>
+              <select id="mb-type" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+                <option value="livery">Livery Challenge</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">BONUS NAME</label>
+              <input type="text" id="mb-name" placeholder="e.g. Livery Challenge Round 3"
+                style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+            </div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">POINTS</label>
+              <input type="number" id="mb-points" value="15" min="1"
+                style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; outline:none;">
+            </div>
+
+            <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">NOTE (optional)</label>
+              <input type="text" id="mb-note" placeholder="Screenshot link or comment…"
+                style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
+            </div>
+
+            <button onclick="mbAdd()"
+              style="background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:8px; cursor:pointer; margin-top:auto;">
+              + ADD BONUS
+            </button>
+            <div id="mb-status" style="font-size:11px; color:#555; min-height:16px;"></div>
+          </div>
+
+          <!-- RIGHT: EXISTING BONUSES TABLE -->
+          <div style="padding:12px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:8px; border-bottom:1px solid #1a1a1a; padding-bottom:6px;">EXISTING MANUAL BONUSES</div>
+            <div class="elo-wrap" style="margin:0;">
+              <table class="elo-table" style="width:100%;">
+                <thead><tr><th>DRIVER</th><th>EVENT</th><th>TYPE</th><th>NAME</th><th>PTS</th><th>NOTE</th><th>DEL</th></tr></thead>
+                <tbody id="mb-existing-tbody">
+                  <tr><td colspan="7"><div class="empty"><div class="empty-title">SELECT CHAMPIONSHIP</div></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: NARRATIVES ── -->
+      <div class="admin-tab" id="atab-narratives" style="display:none;">
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:0;">NARRATIVES — CHAMPIONSHIP &amp; EVENT TEXT</div>
+        </div>
+        <div style="background:var(--black); padding:16px 20px; display:flex; flex-direction:column; gap:16px;">
+
+          <!-- Championship narrative -->
+          <div style="background:#1a1a1a; border:1px solid #252729; padding:14px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:10px;">CHAMPIONSHIP NARRATIVE</div>
+            <div style="display:grid; grid-template-columns:220px 1fr; gap:12px; align-items:start;">
+              <div>
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">CHAMPIONSHIP</label>
+                <select id="nav-champ" onchange="navLoadChamp()" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none; margin-bottom:8px;">
+                  <option value="">— select —</option>
+                </select>
+                <button onclick="navSaveChamp()"
+                  style="width:100%; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:7px; cursor:pointer;">
+                  SAVE NARRATIVE
+                </button>
+                <div id="nav-champ-status" style="font-size:11px; color:#555; margin-top:6px; min-height:16px;"></div>
+              </div>
+              <div>
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">NARRATIVE TEXT</label>
+                <textarea id="nav-champ-text" rows="5" placeholder="Championship description visible on the website…"
+                  style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; resize:vertical;"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Event narrative -->
+          <div style="background:#1a1a1a; border:1px solid #252729; padding:14px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:10px;">EVENT NARRATIVE</div>
+            <div style="display:grid; grid-template-columns:220px 1fr; gap:12px; align-items:start;">
+              <div>
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">CHAMPIONSHIP</label>
+                <select id="nav-ev-champ" onchange="navLoadEvents()" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none; margin-bottom:8px;">
+                  <option value="">— select —</option>
+                </select>
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">EVENT</label>
+                <select id="nav-event" onchange="navLoadEvent()" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none; margin-bottom:8px;">
+                  <option value="">— select championship —</option>
+                </select>
+                <button onclick="navSaveEvent()"
+                  style="width:100%; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:7px; cursor:pointer;">
+                  SAVE NARRATIVE
+                </button>
+                <div id="nav-event-status" style="font-size:11px; color:#555; margin-top:6px; min-height:16px;"></div>
+              </div>
+              <div>
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">NARRATIVE TEXT</label>
+                <textarea id="nav-event-text" rows="5" placeholder="Event story / recap text shown on the website…"
+                  style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; resize:vertical;"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="admin-tab" id="atab-elo-update" style="display:none;">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
           <div class="col-hdr" style="margin-bottom:0;">ELO UPDATE — SELECT CLUBS TO PROCESS</div>
@@ -1131,129 +1449,7 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
         </div>
       </div>
 
-      <!-- ── TAB: EVENT CREATION ── -->
-      <div class="admin-tab" id="atab-event-create" style="display:none;">
-        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
-          <div class="col-hdr" style="margin-bottom:0;">EVENT CREATION — NEW CHAMPIONSHIP</div>
-        </div>
-        <div style="background:var(--black); padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-
-          <!-- LEFT COLUMN -->
-          <div style="display:flex; flex-direction:column; gap:14px;">
-
-            <!-- Club -->
-            <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">RACENET CLUB</label>
-              <select id="ec-club" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-                <option value="">— select club —</option>
-                <option value="themed">GRF Themed</option>
-                <option value="teamed">GRF Teamed</option>
-              </select>
-            </div>
-
-            <!-- Championship Type -->
-            <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CHAMPIONSHIP TYPE</label>
-              <select id="ec-type" onchange="ecTypeChange(this)"
-                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-                <option value="themed">Themed</option>
-                <option value="team">Team</option>
-                <option value="open">Open</option>
-                <option value="historic">Historic</option>
-              </select>
-            </div>
-
-            <!-- Championship Name -->
-            <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CHAMPIONSHIP NAME</label>
-              <input id="ec-name" type="text" placeholder="e.g. GRF Themed Season 5 — Golden Era"
-                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-            </div>
-
-            <!-- Narrative -->
-            <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">NARRATIVE / DESCRIPTION</label>
-              <textarea id="ec-narrative" rows="4" placeholder="Championship flavour text shown to participants…"
-                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; resize:vertical;"></textarea>
-            </div>
-
-            <!-- CR Import -->
-            <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CR IMPORT (JSON or CSV)</label>
-              <div style="display:flex; gap:6px;">
-                <input id="ec-cr-import" type="text" placeholder="paste JSON or select saved CR set…"
-                  style="flex:1; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-                <button onclick="ecLoadCR()"
-                  style="background:#252729; color:#aaa; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:var(--ui-font); font-size:12px; padding:6px 12px; cursor:pointer; white-space:nowrap;">
-                  LOAD
-                </button>
-              </div>
-              <div style="font-size:10px; color:#444; margin-top:3px;">Loaded from Car Rating Calculator — vehicle class multipliers applied automatically.</div>
-            </div>
-
-          </div>
-
-          <!-- RIGHT COLUMN -->
-          <div style="display:flex; flex-direction:column; gap:14px;">
-
-            <!-- TEAM BUILDING (only when type=team) -->
-            <div id="ec-team-section" style="display:none; background:#222527; border:1px solid #1a1a1a; border-left:3px solid var(--red-dark); padding:12px;">
-              <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:10px;">TEAM BUILDER</div>
-              <div style="margin-bottom:8px;">
-                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">TEAM ID</label>
-                <input type="text" id="ec-team-id" placeholder="team_001"
-                  style="width:100%; background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
-              </div>
-              <div style="margin-bottom:8px;">
-                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">TEAM NAME</label>
-                <input type="text" id="ec-team-name" placeholder="e.g. Subaru Works Team"
-                  style="width:100%; background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
-              </div>
-              <div>
-                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">MEMBERS (one per line)</label>
-                <textarea id="ec-team-members" rows="3" placeholder="McRae_WRC&#10;BurnsRally&#10;Vatanen85"
-                  style="width:100%; background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none; resize:vertical;"></textarea>
-              </div>
-            </div>
-
-            <!-- CHALLENGES -->
-            <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CHALLENGES</label>
-              <div style="background:#252729; border:1px solid #1a1a1a; max-height:180px; overflow-y:auto;" id="ec-challenges">
-                <label class="ec-check-row"><input type="checkbox" checked> <span>Loyalty Bonus</span> <span class="ch-badge ch-auto">AUTO</span></label>
-                <label class="ec-check-row"><input type="checkbox" checked> <span>Stage Improvement</span> <span class="ch-badge ch-auto">AUTO</span></label>
-                <label class="ec-check-row"><input type="checkbox" checked> <span>Penalty Challenge</span> <span class="ch-badge ch-auto">AUTO</span></label>
-                <label class="ec-check-row"><input type="checkbox"> <span>Livery Challenge</span> <span class="ch-badge ch-manual">MANUAL</span></label>
-                <label class="ec-check-row"><input type="checkbox"> <span>Survivor Bonus</span> <span class="ch-badge ch-auto">AUTO</span></label>
-              </div>
-            </div>
-
-            <!-- AUTO-IMPORTED FROM RACENET NOTE -->
-            <div style="background:#222527; border:1px solid #1a1a1a; border-left:3px solid var(--green-dim); padding:10px 12px;">
-              <div style="font-family:'Oswald',sans-serif; font-size:11px; color:var(--green); letter-spacing:1px; margin-bottom:6px;">AUTO-IMPORTED FROM RACENET</div>
-              <div style="font-size:11px; color:#555; line-height:1.6;">
-                The following fields are read automatically once the championship is created in Racenet:<br>
-                <span style="color:#777;">Locations · Stage dates · Start/End dates · Vehicle class · Entry list</span>
-              </div>
-            </div>
-
-            <!-- ACTIONS -->
-            <div style="display:flex; gap:8px; margin-top:auto;">
-              <button onclick="ecCreate()"
-                style="flex:1; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:1px; padding:9px; cursor:pointer;">
-                CREATE CHAMPIONSHIP
-              </button>
-              <button onclick="ecReset()"
-                style="background:#252729; color:#888; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:9px 16px; cursor:pointer;">
-                RESET
-              </button>
-            </div>
-            <div id="ec-status" style="font-size:12px; color:#555; min-height:18px;"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── TAB: FONT SWITCHER ── -->
+      <!-- ── TAB: ELO UPDATE ── -->
       <div class="admin-tab" id="atab-font-switcher" style="display:none;">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
           <div class="col-hdr" style="margin-bottom:0;">FONT SWITCHER — LIVE PREVIEW</div>
@@ -1381,7 +1577,13 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 
 const SB_URL   = 'https://ixuhhzdijvtlfdjtrnyi.supabase.co';
 const SB_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4dWhoemRpanZ0bGZkanRybnlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzNDkxOTIsImV4cCI6MjA5NzkyNTE5Mn0.rJi8w8ayIiB-m5v1Kn-f5Re-K2Z_Ke1v1IaJo1qGmSA';
-const ADMIN_PW = 'grf2024'; // TODO: durch serverseitigen Auth-Check ersetzen
+
+// Admin API — läuft auf Railway, Passwort wird NICHT im Code gespeichert
+// URL wird nach dem Deployment in Railway sichtbar (Settings → Domains)
+const ADMIN_API_URL = 'https://grf-admin-api.up.railway.app'; // ← nach Deploy anpassen
+
+// Passwort wird nur für diese Browser-Session im Speicher gehalten (nie persistent)
+let _adminPassword = '';
 
 const DAYS   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
 const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -1406,6 +1608,7 @@ const sbHeaders = {
   'apikey':        SB_KEY,
   'Authorization': 'Bearer ' + SB_KEY,
 };
+
 
 /**
  * Fetch-Wrapper für die Supabase REST API.
@@ -2140,15 +2343,33 @@ function eloRender() {
 
 function adminLogin() {
   const pw = $('admin-pw-input')?.value || '';
-  if (pw === ADMIN_PW) {
-    $('admin-gate').style.display  = 'none';
-    $('admin-panel').style.display = 'block';
-    initAdminPanel();
-  } else {
-    setText('admin-pw-error', '✗ Incorrect password');
-    if ($('admin-pw-input')) $('admin-pw-input').value = '';
-    setTimeout(() => setText('admin-pw-error', ''), 2500);
-  }
+  if (!pw) { setText('admin-pw-error', '⚠ Enter password'); return; }
+
+  setText('admin-pw-error', '⏳ Checking…');
+
+  // Passwort gegen Railway API prüfen
+  fetch(`${ADMIN_API_URL}/health`, {
+    headers: { 'X-Admin-Password': pw }
+  })
+  .then(async res => {
+    if (res.ok) {
+      _adminPassword = pw;  // nur im RAM, nie persistent
+      $('admin-gate').style.display  = 'none';
+      $('admin-panel').style.display = 'block';
+      setText('admin-pw-error', '');
+      if ($('admin-pw-input')) $('admin-pw-input').value = '';
+      initAdminPanel();
+    } else if (res.status === 401) {
+      setText('admin-pw-error', '✗ Incorrect password');
+      if ($('admin-pw-input')) $('admin-pw-input').value = '';
+      setTimeout(() => setText('admin-pw-error', ''), 2500);
+    } else {
+      setText('admin-pw-error', `⚠ Server error ${res.status} — try again`);
+    }
+  })
+  .catch(() => {
+    setText('admin-pw-error', '⚠ Cannot reach admin server — check Railway');
+  });
 }
 
 function adminLogout() {
@@ -2157,10 +2378,65 @@ function adminLogout() {
   if ($('admin-pw-input')) $('admin-pw-input').value = '';
 }
 
-function initAdminPanel() {
-  _buildCheckboxList('cr-locations-list', 'cr-loc', CR_LOCATIONS, 'crUpdateCounts()');
-  _buildCheckboxList('cr-classes-list',   'cr-cls', CR_CLASSES,   'crUpdateCounts()');
+async function initAdminPanel() {
   _buildEloClubList();
+  await adminLoadChampionships();
+  // Locations + Classes dynamisch von Railway API laden
+  crLoadFilters();
+}
+
+async function crLoadFilters() {
+  const locList = $('cr-locations-list');
+  const clsList = $('cr-classes-list');
+  if (locList) locList.innerHTML = '<div style="color:#555;font-size:12px;padding:8px;">Loading from RaceNet…</div>';
+  if (clsList) clsList.innerHTML = '<div style="color:#555;font-size:12px;padding:8px;">Loading…</div>';
+
+  try {
+    const res  = await fetch(`${ADMIN_API_URL}/cr/values`, {
+      headers: { 'X-Admin-Password': _adminPassword }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Locations: {id: name} — build route checkboxes per location
+    const locationRoute = data.location_routes || {};
+    const locations     = data.locations || {};
+    const routes        = data.routes    || {};
+
+    if (locList) {
+      locList.innerHTML = '';
+      // Group routes by location
+      Object.entries(locationRoute).forEach(([locId, routeIds]) => {
+        const locName = locations[locId] || `Location ${locId}`;
+        // Location header
+        const hdr = document.createElement('div');
+        hdr.style.cssText = 'font-size:10px;color:var(--red);letter-spacing:1px;padding:6px 8px 2px;font-family:Oswald,sans-serif;';
+        hdr.textContent = locName.toUpperCase();
+        locList.appendChild(hdr);
+        // Route checkboxes
+        routeIds.forEach(rid => {
+          const routeName = routes[rid] || `Route ${rid}`;
+          const lbl = document.createElement('label');
+          lbl.className = 'cr-check-row';
+          lbl.innerHTML = `<input type="checkbox" name="cr-route" value="${rid}" onchange="crUpdateCounts()"> ${routeName}`;
+          locList.appendChild(lbl);
+        });
+      });
+    }
+
+    // Vehicle Classes: {id: name}
+    const classes = data.vehicle_classes || {};
+    if (clsList) {
+      clsList.innerHTML = Object.entries(classes).map(([id, name]) =>
+        `<label class="cr-check-row"><input type="checkbox" name="cr-cls" value="${id}" onchange="crUpdateCounts()"> ${name}</label>`
+      ).join('');
+    }
+
+    crUpdateCounts();
+  } catch (err) {
+    if (locList) locList.innerHTML = `<div style="color:#c44;font-size:11px;padding:8px;">⚠ ${err.message}<br><span style="color:#555;">Railway API not reachable — check deployment</span></div>`;
+    if (clsList) clsList.innerHTML = '';
+  }
 }
 
 function _buildCheckboxList(containerId, inputName, items, onchange) {
@@ -2178,20 +2454,43 @@ function _buildEloClubList() {
   const el = $('elo-club-list');
   if (!el || el.dataset.built) return;
   const clubs = [
-    { name: 'GRF Themed', info: '22 events processed' },
-    { name: 'GRF Teamed', info: '8 events processed'  },
+    { name: 'GRF Themed', info: '23799' },
+    { name: 'GRF Teamed', info: '23834'  },
   ];
   el.innerHTML = clubs.map((c, i) => `
     <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${i % 2 ? '#050505' : '#0a0a0a'};border:1px solid #1a1a1a;cursor:pointer;font-size:13px;color:var(--gray-light);">
-      <input type="checkbox" name="elo-club" value="${c.name}" style="accent-color:var(--red);width:15px;height:15px;">
+      <input type="checkbox" name="elo-club" value="${c.info}" style="accent-color:var(--red);width:15px;height:15px;">
       <span style="flex:1;">${c.name}</span>
-      <span style="font-size:11px;color:#555;">${c.info}</span>
+      <span style="font-size:11px;color:#555;">Club ${c.info}</span>
     </label>`).join('');
   el.dataset.built = '1';
 }
 
+// Loads all championships into all admin dropdowns
+async function adminLoadChampionships() {
+  const champs = await sb('championships', 'select=id,name,season_number&order=start_date.desc');
+
+  const selects = ['cr-champ-select','mb-champ','nav-champ','nav-ev-champ','cs-edit-champ'];
+  selects.forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    const prev = el.value;
+    el.innerHTML = '<option value="">— select —</option>' +
+      champs.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    if (prev) el.value = prev;
+  });
+
+  if ($('cr-champ-select') && champs.length) {
+    $('cr-champ-select').value = champs[0].id;
+    crLoadExisting();
+  }
+}
+
 
 // ── 10. ADMIN — CAR RATING CALCULATOR ────────────────────────
+
+// Stores last calculated CR results for save
+let _crLastResults = [];
 
 function crUpdateCounts() {
   const locSel = document.querySelectorAll('input[name="cr-loc"]:checked').length;
@@ -2210,50 +2509,162 @@ function crClearAll(type) {
   crUpdateCounts();
 }
 
-function crCalculate() {
-  const locs = [...document.querySelectorAll('input[name="cr-loc"]:checked')].map(c => c.value);
-  const clss = [...document.querySelectorAll('input[name="cr-cls"]:checked')].map(c => c.value);
+async function crCalculate() {
+  const champId  = $('cr-champ-select')?.value;
+  const topPct   = parseFloat($('cr-top-pct')?.value)  || 25;
+  const minN     = parseInt($('cr-min-n')?.value)       || 10;
+  const exponent = parseFloat($('cr-exponent')?.value)  || 1.5;
 
-  if (!locs.length || !clss.length) {
-    setText('cr-status', '⚠ Select at least one location and one class.');
+  if (!champId) { setText('cr-status', '⚠ Select a championship first.'); return; }
+
+  const routeIds  = [...document.querySelectorAll('input[name="cr-route"]:checked')].map(c => parseInt(c.value));
+  const classIds  = [...document.querySelectorAll('input[name="cr-cls"]:checked')].map(c => parseInt(c.value));
+
+  if (!routeIds.length || !classIds.length) {
+    setText('cr-status', '⚠ Select at least one location and class.');
     return;
   }
 
-  const topPct = parseFloat($('cr-top-pct')?.value) || 25;
-  const minN   = parseInt($('cr-min-n')?.value)     || 10;
-  const exp    = parseFloat($('cr-exponent')?.value) || 1.5;
-  setText('cr-status', `⏳ Calculating… (top ${topPct}%, minN=${minN}, exp=${exp})`);
-
-  // TODO: echte Berechnung aus Supabase — aktuell Dummy-Daten
-  const vehicles = [
-    { v: 'Peugeot 205 T16',     cl: 'Group B', loc: 'Monte Carlo',  n: 48, cr: 1.52 },
-    { v: 'Lancia Delta HF',     cl: 'Group A', loc: 'Great Britain', n: 61, cr: 1.21 },
-    { v: 'Subaru Impreza 555',  cl: 'Group A', loc: 'Finland',       n: 44, cr: 1.11 },
-    { v: 'Ford Escort RS',      cl: 'Group A', loc: 'Kenya',         n: 32, cr: 1.00 },
-    { v: 'Mitsubishi Evo III',  cl: 'Group A', loc: 'Sweden',        n: 29, cr: 1.08 },
-  ].filter(r => clss.includes(r.cl));
+  setText('cr-status', `⏳ Loading ${routeIds.length * classIds.length} leaderboards from RaceNet…`);
+  if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'none';
+  _crLastResults = [];
 
   const tbody = $('cr-preview-tbody');
-  if (tbody) {
-    tbody.innerHTML = vehicles.length
-      ? vehicles.map((r, i) => `
-          <tr>
-            <td>${i + 1}</td>
-            <td>${r.v}</td>
-            <td>${r.cl}</td>
-            <td>${r.loc}</td>
-            <td>${r.n}</td>
-            <td class="ev">${r.cr.toFixed(2)}</td>
-            <td><span class="cr-badge ${r.cr >= 1.4 ? 'cr-s' : r.cr >= 1.1 ? 'cr-a' : 'cr-b'}">${r.cr >= 1.4 ? 'S' : r.cr >= 1.1 ? 'A' : 'B'}</span></td>
-          </tr>`).join('')
-      : emptyRow(7, 'NO DATA', 'No results for selected filters.');
-  }
+  if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-title">LOADING…</div><div class="empty-sub">Fetching RaceNet time trial leaderboards. This may take 30–60 seconds.</div></div></td></tr>`;
 
-  setTimeout(() => setText('cr-status', `✓ Done — ${vehicles.length} vehicles calculated`), 600);
+  try {
+    const res  = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body: JSON.stringify({ route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, exponent, max_results: 200 }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      setText('cr-status', `❌ ${err.error || res.status}`);
+      return;
+    }
+
+    const data    = await res.json();
+    const results = data.results || [];
+    const stats   = data.stats   || {};
+
+    _crLastResults = results;
+
+    if (!results.length) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
+      setText('cr-status', 'No results for selected filters.');
+      return;
+    }
+
+    const fmtMs  = ms => { if (!ms) return '—'; const s = ms/1000; const m = Math.floor(s/60); return `${m}:${(s%60).toFixed(3).padStart(6,'0')}`; };
+    const crBadge = cr => cr >= 1.15 ? 'cr-s' : cr >= 1.05 ? 'cr-a' : cr >= 0.95 ? 'cr-b' : 'cr-c';
+    const crLabel = cr => cr >= 1.15 ? 'S' : cr >= 1.05 ? 'A' : cr >= 0.95 ? 'B' : 'C';
+
+    if (tbody) {
+      tbody.innerHTML = results.map((r, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td style="text-align:left;">${r.vehicle}</td>
+          <td style="font-size:11px;color:#888;">${r.era || '—'}</td>
+          <td>${r.n}</td>
+          <td>${fmtMs(r.avg_top_time_ms)}</td>
+          <td>${fmtMs(r.car_avg_ms)}</td>
+          <td style="color:var(--green);">${r.cr.toFixed(4)}</td>
+          <td><span class="cr-badge ${crBadge(r.cr)}">${crLabel(r.cr)}</span></td>
+        </tr>`).join('');
+    }
+
+    setText('cr-preview-info', `${results.length} vehicles · ${stats.stages_loaded} stages · ${stats.total_entries} entries · exp=${exponent}`);
+    setText('cr-status', `✓ ${results.length} vehicles — review preview, then confirm to save.`);
+    if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'block';
+
+  } catch (err) {
+    setText('cr-status', `❌ Network error: ${err.message}`);
+  }
 }
 
-function crSave()   { setText('cr-status', 'Saved to database.'); }
-function crExport() { setText('cr-status', 'CSV export triggered.'); }
+async function crSave() {
+  const champId = $('cr-champ-select')?.value;
+  if (!champId || !_crLastResults.length) { setText('cr-status', '⚠ Nothing to save.'); return; }
+
+  setText('cr-status', '⏳ Saving to database…');
+  if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'none';
+
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/cr/save`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body:    JSON.stringify({ championship_id: champId, results: _crLastResults }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setText('cr-status', `✓ Saved ${data.saved} CR entries.`);
+      _crLastResults = [];
+      crLoadExisting();
+    } else {
+      setText('cr-status', `❌ ${data.error}`);
+    }
+  } catch (err) {
+    setText('cr-status', `❌ ${err.message}`);
+  }
+}
+
+function crCancelConfirm() {
+  if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'none';
+  setText('cr-status', 'Cancelled. Adjust parameters and recalculate.');
+  _crLastResults = [];
+}
+
+async function crLoadExisting() {
+  const champId = $('cr-champ-select')?.value;
+  const tbody = $('cr-existing-tbody');
+  if (!tbody) return;
+  if (!champId) { tbody.innerHTML = emptyRow(5,'SELECT A CHAMPIONSHIP'); return; }
+
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#555;padding:10px;">Loading…</td></tr>`;
+  const rows = await sb('car_ratings', `championship_id=eq.${champId}&select=*&order=cr_value.desc`);
+
+  if (!rows.length) {
+    tbody.innerHTML = emptyRow(5, 'NO CR SET', 'Calculate and save Car Ratings for this championship.');
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="text-align:left;">${r.vehicle}</td>
+      <td style="color:var(--green);">${(+r.cr_value).toFixed(3)}</td>
+      <td>${r.surface || '—'}</td>
+      <td>${r.era || '—'}</td>
+      <td><button onclick="crDeleteRow('${r.id}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
+    </tr>`).join('');
+}
+
+async function crDeleteRow(id) {
+  if (!confirm('Delete this CR entry?')) return;
+  await fetch(`${ADMIN_API_URL}/cr/delete/${id}`, {
+    method: 'DELETE',
+    headers: { 'X-Admin-Password': _adminPassword }
+  });
+  crLoadExisting();
+}
+
+function crExport() {
+  if (!_crLastResults.length) { setText('cr-status', '⚠ Calculate first.'); return; }
+  const lines = ['vehicle,class,n,cr_value'];
+  _crLastResults.forEach(r => lines.push(`"${r.vehicle}","${r.class}",${r.n},${r.cr.toFixed(3)}`));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'car_ratings.csv';
+  a.click();
+}
+
+// When championship changes in CR tab — reload existing
+if (typeof document !== 'undefined') {
+  document.addEventListener('change', e => {
+    if (e.target.id === 'cr-champ-select') crLoadExisting();
+  });
+}
 
 
 // ── 11. ADMIN — ELO UPDATE ────────────────────────────────────
@@ -2272,9 +2683,9 @@ function eloStartUpdate() {
 
   // TODO: echte ELO-Neuberechnung via Supabase Edge Function oder API
   const lines = [
-    `<span style="color:#555;">[${new Date().toLocaleTimeString()}]</span> Starting ELO update for: <span style="color:var(--gray-light);">${clubs.join(', ')}</span>`,
+    `<span style="color:#555;">[${new Date().toLocaleTimeString()}]</span> Starting ELO update for clubs: <span style="color:var(--gray-light);">${clubs.join(', ')}</span>`,
     `<span style="color:#555;">[+0.1s]</span> Fetching event results from Supabase…`,
-    `<span style="color:#555;">[+0.4s]</span> Found <span style="color:var(--green);">127 results</span> across ${clubs.length} club(s)`,
+    `<span style="color:#555;">[+0.4s]</span> Found <span style="color:var(--green);">127 results</span>`,
     `<span style="color:#555;">[+0.8s]</span> Running ELO algorithm (K=32, base=1000)…`,
     `<span style="color:#555;">[+1.2s]</span> Processed <span style="color:var(--green);">13 drivers</span>`,
     `<span style="color:#555;">[+1.5s]</span> Largest gain: <span style="color:var(--green);">BurnsRally +47</span>`,
@@ -2295,40 +2706,223 @@ function eloStartUpdate() {
 }
 
 
-// ── 12. ADMIN — EVENT CREATION ────────────────────────────────
+// ── 12. ADMIN — CHAMPIONSHIP SETUP ───────────────────────────
 
-function ecTypeChange(sel) {
-  const teamSec = $('ec-team-section');
-  if (teamSec) teamSec.style.display = sel.value === 'team' ? 'block' : 'none';
-}
+async function csCreate() {
+  const name   = $('cs-name')?.value.trim();
+  const clubId = $('cs-club')?.value;
+  const season = parseInt($('cs-season')?.value) || null;
+  const cls    = $('cs-class')?.value.trim()     || null;
+  const start  = $('cs-start')?.value            || null;
+  const end    = $('cs-end')?.value              || null;
+  const narr   = $('cs-narrative')?.value.trim() || null;
 
-function ecLoadCR() {
-  setText('ec-status', '✓ CR set loaded — 12 vehicles imported');
-}
+  if (!name || !clubId) { setText('cs-status', '⚠ Club and Name required.'); return; }
+  setText('cs-status', '⏳ Creating…');
 
-function ecCreate() {
-  const name = $('ec-name')?.value.trim();
-  const club = $('ec-club')?.value;
-  if (!name || !club) {
-    setText('ec-status', '⚠ Please fill in Club and Championship Name.');
-    return;
+  const rules = [];
+  const ruleMap = [
+    { id: 'improvement', type: 'stage_improvement', ptsId: 'cr-rule-improvement-pts' },
+    { id: 'penalty',     type: 'penalty_challenge',  ptsId: 'cr-rule-penalty-pts' },
+    { id: 'survivor',    type: 'survivor_bonus',      ptsId: 'cr-rule-survivor-pts' },
+    { id: 'livery',      type: 'livery_challenge',    ptsId: 'cr-rule-livery-pts' },
+    { id: 'custom',      type: 'custom',              ptsId: 'cr-rule-custom-pts', nameId: 'cr-rule-custom-name' },
+  ];
+  ruleMap.forEach(r => {
+    const cb = $(`cr-rule-${r.id}`);
+    if (!cb?.checked) return;
+    rules.push({ rule_type: r.type, is_active: true, points: parseInt($(r.ptsId)?.value) || 10,
+                 description: r.nameId ? $('cr-rule-custom-name')?.value.trim() : null });
+  });
+
+  try {
+    const res  = await fetch(`${ADMIN_API_URL}/championship/create`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body:    JSON.stringify({
+        championship: { club_id: clubId, name, season_number: season, vehicle_class: cls,
+                        start_date: start, end_date: end, narrative: narr },
+        rules,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setText('cs-status', `✓ Championship "${data.name}" created! ID: ${data.id}`);
+      adminLoadChampionships();
+    } else {
+      setText('cs-status', `❌ ${data.error}`);
+    }
+  } catch (err) {
+    setText('cs-status', `❌ ${err.message}`);
   }
-  setText('ec-status', '⏳ Creating championship in Racenet…');
-  // TODO: echte Racenet/Supabase-Integration
-  setTimeout(() => setText('ec-status', `✓ Championship "${name}" created successfully.`), 1200);
 }
 
-function ecReset() {
-  ['ec-club','ec-type','ec-name','ec-narrative','ec-cr-import','ec-team-id','ec-team-name','ec-team-members']
-    .forEach(id => { const el = $(id); if (el) el.value = ''; });
-  const teamSec = $('ec-team-section');
-  if (teamSec) teamSec.style.display = 'none';
-  document.querySelectorAll('#ec-challenges input[type=checkbox]').forEach((cb, i) => cb.checked = i < 3);
-  setText('ec-status', '');
+function csReset() {
+  ['cs-name','cs-season','cs-class','cs-start','cs-end','cs-narrative'].forEach(id => {
+    const el = $(id);
+    if (el) el.value = '';
+  });
+  ['cr-rule-improvement','cr-rule-penalty','cr-rule-survivor','cr-rule-livery','cr-rule-custom'].forEach(id => {
+    const el = $(id); if (el) el.checked = false;
+  });
+  setText('cs-status', '');
 }
 
 
-// ── 13. ADMIN — FONT SWITCHER ─────────────────────────────────
+// ── 13. ADMIN — MANUAL BONUSES ───────────────────────────────
+
+async function mbLoadEvents() {
+  const champId = $('mb-champ')?.value;
+  const sel = $('mb-event');
+  if (!sel) return;
+  if (!champId) { sel.innerHTML = '<option value="">— select championship first —</option>'; return; }
+
+  const events = await sb('events', `championship_id=eq.${champId}&select=id,name,round_number&order=round_number`);
+  sel.innerHTML = '<option value="">— select event —</option>' +
+    events.map(e => `<option value="${e.id}">R${e.round_number} — ${e.name}</option>`).join('');
+  mbLoadExisting();
+}
+
+async function mbLoadDrivers() {
+  const eventId = $('mb-event')?.value;
+  const sel = $('mb-driver');
+  if (!sel) return;
+  if (!eventId) { sel.innerHTML = '<option value="">— select event first —</option>'; return; }
+
+  const results = await sb('event_results', `event_id=eq.${eventId}&select=driver_name&order=driver_name`);
+  const names = [...new Set(results.map(r => r.driver_name))];
+  sel.innerHTML = '<option value="">— select driver —</option>' +
+    names.map(n => `<option value="${n}">${n}</option>`).join('');
+  mbLoadExisting();
+}
+
+async function mbLoadExisting() {
+  const champId = $('mb-champ')?.value;
+  const tbody = $('mb-existing-tbody');
+  if (!tbody || !champId) return;
+
+  const rows = await sb('manual_bonuses', `championship_id=eq.${champId}&select=id,driver_name,event_id,bonus_type,bonus_name,points,note,events(name,round_number)&order=created_at.desc`);
+
+  if (!rows.length) { tbody.innerHTML = emptyRow(7, 'NO MANUAL BONUSES', 'Add bonuses using the form on the left.'); return; }
+  tbody.innerHTML = rows.map(r => {
+    const evName = r.events ? `R${r.events.round_number} ${r.events.name}` : r.event_id;
+    return `<tr>
+      <td>${r.driver_name}</td>
+      <td style="font-size:12px;">${evName}</td>
+      <td>${r.bonus_type}</td>
+      <td>${r.bonus_name || '—'}</td>
+      <td style="color:var(--green);">+${r.points}</td>
+      <td style="font-size:11px;color:#888;">${r.note || '—'}</td>
+      <td><button onclick="mbDelete('${r.id}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function mbAdd() {
+  const champId  = $('mb-champ')?.value;
+  const eventId  = $('mb-event')?.value;
+  const driver   = $('mb-driver')?.value;
+  const type     = $('mb-type')?.value;
+  const bonusName= $('mb-name')?.value.trim();
+  const points   = parseInt($('mb-points')?.value) || 0;
+  const note     = $('mb-note')?.value.trim() || null;
+
+  if (!champId || !eventId || !driver || !type || !points) {
+    setText('mb-status', '⚠ Fill in all required fields.'); return;
+  }
+  setText('mb-status', '⏳ Saving…');
+
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/bonus/add`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body: JSON.stringify({ championship_id: champId, event_id: eventId, driver_name: driver,
+                             bonus_type: type, bonus_name: bonusName, points, note }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setText('mb-status', `✓ Bonus added for ${driver}.`);
+      if ($('mb-name')) $('mb-name').value = '';
+      if ($('mb-note')) $('mb-note').value = '';
+      mbLoadExisting();
+    } else {
+      setText('mb-status', `❌ ${data.error}`);
+    }
+  } catch (err) {
+    setText('mb-status', `❌ ${err.message}`);
+  }
+}
+
+async function mbDelete(id) {
+  if (!confirm('Delete this bonus?')) return;
+  await fetch(`${ADMIN_API_URL}/bonus/delete/${id}`, {
+    method: 'DELETE',
+    headers: { 'X-Admin-Password': _adminPassword }
+  });
+  mbLoadExisting();
+}
+
+
+// ── 14. ADMIN — NARRATIVES ────────────────────────────────────
+
+async function navLoadChamp() {
+  const champId = $('nav-champ')?.value;
+  if (!champId) return;
+  const rows = await sb('championships', `id=eq.${champId}&select=narrative`);
+  if (rows.length && $('nav-champ-text')) $('nav-champ-text').value = rows[0].narrative || '';
+}
+
+async function navSaveChamp() {
+  const champId = $('nav-champ')?.value;
+  const text    = $('nav-champ-text')?.value.trim();
+  if (!champId) { setText('nav-champ-status', '⚠ Select a championship.'); return; }
+  setText('nav-champ-status', '⏳ Saving…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/narrative/championship`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body:    JSON.stringify({ championship_id: champId, narrative: text }),
+    });
+    setText('nav-champ-status', res.ok ? '✓ Saved.' : `❌ Error ${res.status}`);
+  } catch (err) { setText('nav-champ-status', `❌ ${err.message}`); }
+}
+
+async function navLoadEvents() {
+  const champId = $('nav-ev-champ')?.value;
+  const sel = $('nav-event');
+  if (!sel) return;
+  if (!champId) { sel.innerHTML = '<option value="">— select championship —</option>'; return; }
+  const events = await sb('events', `championship_id=eq.${champId}&select=id,name,round_number&order=round_number`);
+  sel.innerHTML = '<option value="">— select event —</option>' +
+    events.map(e => `<option value="${e.id}">R${e.round_number} — ${e.name}</option>`).join('');
+}
+
+async function navLoadEvent() {
+  const eventId = $('nav-event')?.value;
+  if (!eventId) return;
+  const rows = await sb('events', `id=eq.${eventId}&select=narrative`);
+  if (rows.length && $('nav-event-text')) $('nav-event-text').value = rows[0].narrative || '';
+}
+
+async function navSaveEvent() {
+  const eventId = $('nav-event')?.value;
+  const text    = $('nav-event-text')?.value.trim();
+  if (!eventId) { setText('nav-event-status', '⚠ Select an event.'); return; }
+  setText('nav-event-status', '⏳ Saving…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/narrative/event`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body:    JSON.stringify({ event_id: eventId, narrative: text }),
+    });
+    setText('nav-event-status', res.ok ? '✓ Saved.' : `❌ Error ${res.status}`);
+  } catch (err) { setText('nav-event-status', `❌ ${err.message}`); }
+}
+
+
+
+
+// ── 16. INIT ──────────────────────────────────────────────────
 
 function switchFont(cls, cardId) {
   FONT_CLASSES.forEach(c => { if (c) document.body.classList.remove(c); });
@@ -2346,7 +2940,7 @@ function switchFont(cls, cardId) {
 }
 
 
-// ── 14. INIT ──────────────────────────────────────────────────
+// ── 17. INIT ──────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
   // Clock starten
