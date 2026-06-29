@@ -841,10 +841,10 @@ def elo_update():
             elo_val = round(summary.conservative_rating, 1)
             if driver_rows:
                 sb_patch("drivers", f"id=eq.{driver_rows[0]['id']}", {
-                    "elo":            elo_val,
-                    "elo_mu":         round(summary.mu, 2),
-                    "elo_sigma":      round(summary.sigma, 2),
-                    "elo_events":     summary.events_played,
+                    "elo":             elo_val,
+                    "elo_mu":          round(summary.mu, 2),
+                    "elo_sigma":       round(summary.sigma, 2),
+                    "elo_events":      summary.events_played,
                     "elo_provisional": summary.is_provisional,
                 })
 
