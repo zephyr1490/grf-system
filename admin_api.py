@@ -175,7 +175,16 @@ def cr_values():
             "routes":          data.get("routes", {}),
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback
+        tb  = traceback.format_exc()
+        msg = str(e)
+        if "401" in msg or "403" in msg or "token" in msg.lower() or "refresh" in msg.lower():
+            detail = "RaceNet Token abgelaufen — RACENET_TOKEN_RESET=1 setzen"
+        elif "timeout" in msg.lower() or "connection" in msg.lower():
+            detail = "RaceNet nicht erreichbar (Timeout)"
+        else:
+            detail = msg
+        return jsonify({"error": detail, "trace": tb}), 500
 
 
 @app.route("/cr/calculate", methods=["POST"])
@@ -657,20 +666,42 @@ def elo_clubs():
     """
     Lädt alle Clubs des verknüpften RaceNet-Dummy-Accounts.
     Gibt [{id, name}] zurück — wird im Admin-Tab für die ELO-Club-Auswahl genutzt.
+    Fallback: distinct club_ids aus der championships-Tabelle in Supabase.
     """
+    racenet_error = None
+    result = []
+
+    # Versuch 1: RaceNet live
     try:
         client = RacenetClient()
         clubs  = client.get_active_clubs()
-        result = []
         for c in clubs:
             club_id   = str(c.get("clubID") or c.get("id") or "")
             club_name = (c.get("clubSettings") or c.get("settings") or {}).get("name") \
                         or c.get("clubName") or c.get("name") or f"Club {club_id}"
             if club_id:
                 result.append({"id": club_id, "name": club_name})
-        return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        racenet_error = str(e)
+
+    # Fallback: club_ids aus Supabase championships
+    if not result:
+        try:
+            rows = sb_get("championships", "select=club_id,name&order=start_date.desc")
+            seen = {}
+            for r in rows:
+                cid = str(r.get("club_id") or "")
+                if cid and cid not in seen:
+                    seen[cid] = r.get("name", f"Club {cid}")
+            # Nutze club_id als ID, championship-Name als Hinweis
+            for cid, cname in seen.items():
+                result.append({"id": cid, "name": f"Club {cid}", "note": cname})
+        except Exception as e2:
+            if not result:
+                err = racenet_error or str(e2)
+                return jsonify({"error": f"RaceNet: {err}"}), 500
+
+    return jsonify(result)
 
 
 # ── ELO UPDATE ───────────────────────────────────────────────────────────────

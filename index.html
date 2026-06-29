@@ -2520,8 +2520,8 @@ async function crLoadFilters() {
     const res  = await fetch(`${ADMIN_API_URL}/cr/values`, {
       headers: { 'X-Admin-Password': _adminPassword }
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
     // Locations: {id: name} — build route checkboxes per location
     const locationRoute = data.location_routes || {};
@@ -2560,7 +2560,10 @@ async function crLoadFilters() {
 
     crUpdateCounts();
   } catch (err) {
-    if (locList) locList.innerHTML = `<div style="color:#c44;font-size:11px;padding:8px;">⚠ ${err.message}<br><span style="color:#555;">Railway API not reachable — check deployment</span></div>`;
+    const hint = err.message.includes('Token') ? 'RaceNet Token abgelaufen — RACENET_TOKEN_RESET=1 setzen'
+               : err.message.includes('Timeout') ? 'RaceNet Timeout — Railway läuft, aber RaceNet antwortet nicht'
+               : 'Railway API nicht erreichbar oder Deployment-Fehler';
+    if (locList) locList.innerHTML = `<div style="color:#c44;font-size:11px;padding:8px;">⚠ ${err.message}<br><span style="color:#555;">${hint}</span></div>`;
     if (clsList) clsList.innerHTML = '';
   }
 }
