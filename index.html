@@ -2504,7 +2504,7 @@ function adminLogout() {
 }
 
 async function initAdminPanel() {
-  _buildEloClubList();
+  await _buildEloClubList();
   await adminLoadChampionships();
   // Locations + Classes dynamisch von Railway API laden
   crLoadFilters();
@@ -2576,20 +2576,31 @@ function _buildCheckboxList(containerId, inputName, items, onchange) {
   el.dataset.built = '1';
 }
 
-function _buildEloClubList() {
+async function _buildEloClubList() {
   const el = $('elo-club-list');
   if (!el || el.dataset.built) return;
-  const clubs = [
-    { name: 'GRF Themed', info: '23799' },
-    { name: 'GRF Teamed', info: '23834'  },
-  ];
-  el.innerHTML = clubs.map((c, i) => `
-    <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${i % 2 ? '#050505' : '#0a0a0a'};border:1px solid #1a1a1a;cursor:pointer;font-size:13px;color:var(--gray-light);">
-      <input type="checkbox" name="elo-club" value="${c.info}" style="accent-color:var(--red);width:15px;height:15px;">
-      <span style="flex:1;">${c.name}</span>
-      <span style="font-size:11px;color:#555;">Club ${c.info}</span>
-    </label>`).join('');
   el.dataset.built = '1';
+  el.innerHTML = '<span style="font-size:12px;color:#555;">Lade Clubs…</span>';
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/elo/clubs`, {
+      headers: { 'X-Admin-Password': _adminPassword }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const clubs = await res.json();
+    if (!clubs.length) {
+      el.innerHTML = '<span style="font-size:12px;color:#888;">Keine Clubs gefunden.</span>';
+      return;
+    }
+    el.innerHTML = clubs.map((c, i) => `
+      <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${i % 2 ? '#050505' : '#0a0a0a'};border:1px solid #1a1a1a;cursor:pointer;font-size:13px;color:var(--gray-light);">
+        <input type="checkbox" name="elo-club" value="${c.id}" style="accent-color:var(--red);width:15px;height:15px;">
+        <span style="flex:1;">${c.name}</span>
+        <span style="font-size:11px;color:#555;">Club ${c.id}</span>
+      </label>`).join('');
+  } catch(e) {
+    el.innerHTML = `<span style="font-size:12px;color:var(--red);">Fehler beim Laden: ${e.message}</span>`;
+    el.dataset.built = '';  // retry erlauben
+  }
 }
 
 // Loads all championships into all admin dropdowns

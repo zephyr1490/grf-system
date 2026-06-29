@@ -649,6 +649,30 @@ def cr_vehicles():
         return jsonify({"error": str(e)}), 500
 
 
+# ── ELO CLUBS ────────────────────────────────────────────────────────────────
+
+@app.route("/elo/clubs", methods=["GET"])
+@auth
+def elo_clubs():
+    """
+    Lädt alle Clubs des verknüpften RaceNet-Dummy-Accounts.
+    Gibt [{id, name}] zurück — wird im Admin-Tab für die ELO-Club-Auswahl genutzt.
+    """
+    try:
+        client = RacenetClient()
+        clubs  = client.get_active_clubs()
+        result = []
+        for c in clubs:
+            club_id   = str(c.get("clubID") or c.get("id") or "")
+            club_name = (c.get("clubSettings") or c.get("settings") or {}).get("name") \
+                        or c.get("clubName") or c.get("name") or f"Club {club_id}"
+            if club_id:
+                result.append({"id": club_id, "name": club_name})
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── ELO UPDATE ───────────────────────────────────────────────────────────────
 
 @app.route("/elo/update", methods=["POST"])
