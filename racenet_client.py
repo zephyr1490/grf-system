@@ -164,32 +164,100 @@ def _save_json(filepath: str, data: dict):
 #  TOKEN MANAGER
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _supabase_get_refresh_token() -> str:
+    """
+    Liest den zuletzt gespeicherten Refresh Token aus Supabase system_config.
+    Gibt leeren String zurück wenn nicht vorhanden oder Fehler.
+    """
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+    if not url or not key:
+        return ""
+    try:
+        r = requests.get(
+            f"{url}/rest/v1/system_config?key=eq.racenet_refresh_token&select=value",
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            timeout=5,
+        )
+        if r.status_code == 200:
+            rows = r.json()
+            if rows:
+                token = rows[0].get("value", "").strip()
+                if token:
+                    print("  ☁️  Refresh Token aus Supabase geladen.")
+                    return token
+    except Exception as e:
+        print(f"  ⚠  Supabase Token-Lesen fehlgeschlagen: {e}")
+    return ""
+
+
+def _supabase_save_refresh_token(token: str):
+    """
+    Speichert den aktuellen Refresh Token in Supabase system_config.
+    Upsert — erstellt oder aktualisiert den Eintrag.
+    """
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+    if not url or not key or not token:
+        return
+    try:
+        r = requests.post(
+            f"{url}/rest/v1/system_config",
+            headers={
+                "apikey":        key,
+                "Authorization": f"Bearer {key}",
+                "Content-Type":  "application/json",
+                "Prefer":        "resolution=merge-duplicates",
+            },
+            json={"key": "racenet_refresh_token", "value": token},
+            timeout=5,
+        )
+        if r.status_code in (200, 201):
+            print("  ☁️  Refresh Token in Supabase gesichert.")
+        else:
+            print(f"  ⚠  Supabase Token-Speichern fehlgeschlagen: HTTP {r.status_code}")
+    except Exception as e:
+        print(f"  ⚠  Supabase Token-Speichern fehlgeschlagen: {e}")
+
+
 def _bootstrap_from_env():
     """
-    Railway/Cloud: Schreibt RACENET_REFRESH_TOKEN aus der Env-Variable
-    in die Token-Datei — aber NUR wenn dort noch kein Refresh Token steht.
+    Railway/Cloud: Stellt sicher dass ein gültiger Refresh Token in der
+    Token-Datei steht.
 
-    RaceNet rotiert den Refresh Token bei jedem Refresh-Call. Nach dem
-    ersten erfolgreichen Refresh steht in der Datei bereits ein neuer,
-    gültiger Token. Den dürfen wir nicht mit dem alten aus der Env-Variable
-    überschreiben.
+    Reihenfolge (wichtig — RaceNet rotiert den Token bei jedem Refresh):
+      1. Supabase system_config → hat immer den zuletzt rotierten Token
+      2. RACENET_REFRESH_TOKEN Env-Variable → Fallback (erster Start / manueller Reset)
 
-    Für einen manuellen Reset (z.B. nach Token-Ablauf): RACENET_TOKEN_RESET=1
-    in Railway Variables setzen → Bootstrap überschreibt erzwungen.
-    Danach RACENET_TOKEN_RESET wieder entfernen.
+    RACENET_TOKEN_RESET=1 → erzwingt Überschreiben mit Env-Variable
+    (nach Token-Ablauf setzen, dann wieder entfernen)
     """
-    rt = os.environ.get("RACENET_REFRESH_TOKEN", "").strip()
-    if not rt:
+    rt_env = os.environ.get("RACENET_REFRESH_TOKEN", "").strip()
+    if not rt_env:
         return  # lokale Entwicklung — normale Datei-basierte Logik
 
-    existing = _load_json(TOKEN_FILE)
     force_reset = os.environ.get("RACENET_TOKEN_RESET", "").strip() == "1"
 
+    # Zuerst Supabase prüfen — hat den zuletzt rotierten Token
+    rt_supabase = _supabase_get_refresh_token() if not force_reset else ""
+
+    if rt_supabase:
+        # Supabase-Token ist aktueller als Env-Variable → verwenden
+        existing = _load_json(TOKEN_FILE)
+        existing["refresh_token"] = rt_supabase
+        existing.pop("access_token", None)
+        existing.pop("token_expiry", None)
+        _save_json(TOKEN_FILE, existing)
+        print("  ✅ Refresh Token aus Supabase übernommen.")
+        return
+
+    # Kein Supabase-Token → Env-Variable verwenden (erster Start)
+    existing = _load_json(TOKEN_FILE)
     if existing.get("refresh_token") and not force_reset:
-        return  # Token-Datei hat bereits einen Refresh Token → nicht anfassen
+        return  # Datei hat bereits einen Token → nicht anfassen
 
     print("  🌐 Railway: Schreibe Refresh Token aus Env-Variable in Token-Datei...")
-    existing["refresh_token"] = rt
+    existing["refresh_token"] = rt_env
     existing.pop("access_token", None)
     existing.pop("token_expiry", None)
     _save_json(TOKEN_FILE, existing)
@@ -244,6 +312,9 @@ class _TokenManager:
             "token_expiry":  self.token_expiry,
             "saved_at":      datetime.now().isoformat(),
         })
+        # Refresh Token auch in Supabase persistieren — überlebt Container-Neustarts
+        if self.refresh_token:
+            _supabase_save_refresh_token(self.refresh_token)
 
     def _is_expired(self) -> bool:
         return time.time() >= (self.token_expiry - 60)

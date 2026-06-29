@@ -455,6 +455,51 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 .cr-check-row:hover { background:#251010; }
 .cr-check-row input[type=checkbox] { accent-color:var(--red); width:13px; height:13px; cursor:pointer; flex-shrink:0; }
 
+/* CHAMPIONSHIP SETUP */
+.cs-mode-btn {
+  flex:1; background:var(--gray-dark); color:#555; border:none; border-right:1px solid #111;
+  font-family:'Oswald',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px;
+  padding:9px 12px; cursor:pointer; transition:background .15s;
+}
+.cs-mode-btn:last-child { border-right:none; }
+.cs-mode-active { background:var(--black); color:var(--red); border-bottom:2px solid var(--red); }
+.cs-alter-tab {
+  background:transparent; color:#555; border:none; border-bottom:2px solid transparent;
+  font-family:'Oswald',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px;
+  padding:6px 14px; cursor:pointer;
+}
+.cs-alter-active { color:var(--red); border-bottom-color:var(--red); }
+.rule-row {
+  background:#252729; border:1px solid #1a1a1a; padding:9px 12px;
+  display:flex; align-items:center; gap:10px;
+}
+.rule-row input[type=checkbox] { accent-color:var(--red); width:14px; height:14px; }
+.rule-name { flex:1; font-size:13px; color:var(--gray-light); }
+.rule-pts { width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center; }
+.rule-unit { font-size:10px; color:#555; }
+.inp-lbl { font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px; }
+.inp-std {
+  width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;
+}
+textarea.inp-std { resize:vertical; }
+.btn-red {
+  background:var(--red); color:var(--white); border:2px solid;
+  border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright);
+  font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px;
+  padding:7px 14px; cursor:pointer;
+}
+.btn-gray {
+  background:#252729; color:#888; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444;
+  font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px;
+  padding:7px 12px; cursor:pointer;
+}
+.rn-champ-row {
+  padding:8px 10px; border-bottom:1px solid #111; cursor:pointer; font-size:12px; color:#888;
+}
+.rn-champ-row:hover { background:#151515; color:var(--gray-light); }
+.rn-champ-row.selected { background:#1a1010; color:var(--red); border-left:2px solid var(--red); }
+
 /* EMPTY STATE */
 .empty {
   background:var(--black); padding:24px; text-align:center;
@@ -1015,11 +1060,11 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
             <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; border-bottom:1px solid #1a1a1a; padding-bottom:6px;">PARAMETERS</div>
 
             <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">CHAMPIONSHIP</label>
-              <select id="cr-champ-select" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none;">
-                <option value="">— loading… —</option>
-              </select>
-              <div style="font-size:10px; color:#444; margin-top:3px;">CR will be saved to this championship</div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">CR SET</label>
+              <div style="font-size:11px; color:#555; line-height:1.6; background:#111; border:1px solid #1a1a1a; padding:6px 8px;">
+                CR Sets sind unabhängig von Championships.<br>
+                Zuordnung erfolgt im <span style="color:var(--gray-light);">Championship Setup</span> Tab.
+              </div>
             </div>
 
             <div>
@@ -1053,8 +1098,10 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
                 style="background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
                 ▶ CALCULATE
               </button>
-              <div id="cr-confirm-bar" style="display:none; background:#1a2a1a; border:2px solid var(--green-dim); padding:10px; text-align:center;">
-                <div style="font-size:11px; color:var(--green); margin-bottom:8px; letter-spacing:1px;">PREVIEW OK? SAVE TO DATABASE</div>
+              <div id="cr-confirm-bar" style="display:none; background:#1a2a1a; border:2px solid var(--green-dim); padding:10px;">
+                <div style="font-size:11px; color:var(--green); margin-bottom:8px; letter-spacing:1px;">PREVIEW OK? NAME &amp; SAVE</div>
+                <input id="cr-set-name" type="text" placeholder="CR Set Name — e.g. Group B · Monte Carlo 2026"
+                  style="width:100%; background:#111; border:1px solid var(--green-dim); color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:5px 8px; outline:none; margin-bottom:8px;">
                 <div style="display:flex; gap:6px;">
                   <button onclick="crSave()"
                     style="flex:1; background:var(--green-dim); color:#000; border:2px solid; border-color:var(--green) #1a5a1a #1a5a1a var(--green); font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:6px; cursor:pointer;">
@@ -1137,145 +1184,171 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
       <!-- ── TAB: CHAMPIONSHIP SETUP ── -->
       <div class="admin-tab" id="atab-champ-setup" style="display:none;">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
-          <div class="col-hdr" style="margin-bottom:0;">CHAMPIONSHIP SETUP — CREATE OR EDIT</div>
+          <div class="col-hdr" style="margin-bottom:0;">CHAMPIONSHIP SETUP</div>
         </div>
-        <div style="background:var(--black); padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
 
-          <!-- LEFT COLUMN -->
-          <div style="display:flex; flex-direction:column; gap:14px;">
+        <!-- MODE SELECTOR -->
+        <div style="display:flex; gap:0; background:var(--gray-dark); border-bottom:2px solid #111;">
+          <button onclick="csModeSwitch('manual',this)"   id="cs-mode-manual"   class="cs-mode-btn cs-mode-active">① CREATE — WITHOUT RACENET</button>
+          <button onclick="csModeSwitch('racenet',this)"  id="cs-mode-racenet"  class="cs-mode-btn">② CREATE — FROM RACENET</button>
+          <button onclick="csModeSwitch('alter',this)"    id="cs-mode-alter"    class="cs-mode-btn">③ ALTER RUNNING</button>
+        </div>
+
+        <!-- ─── MODE 1: MANUAL CREATE ─────────────────────────────────────── -->
+        <div id="cs-panel-manual" style="background:var(--black); padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+          <div style="display:flex; flex-direction:column; gap:12px;">
             <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">RACENET CLUB</label>
+              <label class="inp-lbl">RACENET CLUB</label>
               <select id="cs-club" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
                 <option value="23799">GRF Themed (23799)</option>
                 <option value="23834">GRF Teamed (23834)</option>
               </select>
+              <div style="font-size:10px;color:#444;margin-top:3px;">Nur als Referenz — RaceNet wird nicht kontaktiert</div>
             </div>
-
             <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">CHAMPIONSHIP NAME</label>
-              <input id="cs-name" type="text" placeholder="e.g. GRF Themed Season 5 — Golden Era"
-                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+              <label class="inp-lbl">CHAMPIONSHIP NAME</label>
+              <input id="cs-name" type="text" placeholder="e.g. GRF Themed Season 5 — Golden Era" class="inp-std">
             </div>
-
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-              <div>
-                <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">SEASON NUMBER</label>
-                <input id="cs-season" type="number" placeholder="5" min="1"
-                  style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-              </div>
-              <div>
-                <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">VEHICLE CLASS</label>
-                <input id="cs-class" type="text" placeholder="e.g. Group B"
-                  style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-              </div>
+              <div><label class="inp-lbl">SEASON</label><input id="cs-season" type="number" placeholder="5" min="1" class="inp-std"></div>
+              <div><label class="inp-lbl">VEHICLE CLASS</label><input id="cs-class" type="text" placeholder="e.g. Group B" class="inp-std"></div>
             </div>
-
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-              <div>
-                <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">START DATE</label>
-                <input id="cs-start" type="date"
-                  style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; color-scheme:dark;">
-              </div>
-              <div>
-                <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">END DATE</label>
-                <input id="cs-end" type="date"
-                  style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; color-scheme:dark;">
-              </div>
+              <div><label class="inp-lbl">START DATE</label><input id="cs-start" type="date" class="inp-std" style="color-scheme:dark;"></div>
+              <div><label class="inp-lbl">END DATE</label><input id="cs-end" type="date" class="inp-std" style="color-scheme:dark;"></div>
             </div>
-
             <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:5px;">NARRATIVE</label>
-              <textarea id="cs-narrative" rows="5" placeholder="Championship flavour text shown to participants…"
-                style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; resize:vertical;"></textarea>
+              <label class="inp-lbl">NARRATIVE</label>
+              <textarea id="cs-narrative" rows="4" placeholder="Championship description…" class="inp-std" style="resize:vertical;"></textarea>
             </div>
           </div>
 
-          <!-- RIGHT COLUMN: BONUS RULES -->
-          <div style="display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <label class="inp-lbl">RULES / CHALLENGES</label>
+            <div style="display:flex; flex-direction:column; gap:5px;">
+              <div style="background:#1a2a1a; border:1px solid #1a3a1a; padding:9px 12px; display:flex; align-items:center; gap:10px;">
+                <span style="color:var(--green);">✓</span><span style="flex:1;font-size:13px;color:var(--gray-light);">Loyalty Bonus</span>
+                <span class="ch-badge ch-auto">AUTO</span><span style="font-size:10px;color:#555;">+50 pts · always</span>
+              </div>
+              <div class="rule-row"><input type="checkbox" id="cr-rule-improvement"><span class="rule-name">Stage Improvement</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="10" id="cr-rule-improvement-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+              <div class="rule-row"><input type="checkbox" id="cr-rule-penalty"><span class="rule-name">Penalty Challenge</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="10" id="cr-rule-penalty-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+              <div class="rule-row"><input type="checkbox" id="cr-rule-survivor"><span class="rule-name">Survivor Bonus</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="5" id="cr-rule-survivor-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+              <div class="rule-row"><input type="checkbox" id="cr-rule-livery"><span class="rule-name">Livery Challenge</span><span class="ch-badge ch-manual">MANUAL</span><input type="number" value="15" id="cr-rule-livery-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+              <div class="rule-row"><input type="checkbox" id="cr-rule-custom"><input type="text" id="cr-rule-custom-name" placeholder="Custom rule…" style="flex:1;background:#1a1a1a;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:3px 6px;outline:none;"><span class="ch-badge ch-manual">MANUAL</span><input type="number" value="10" id="cr-rule-custom-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:auto;">
+              <button onclick="csCreate('manual')" class="btn-red" style="flex:1;">CREATE CHAMPIONSHIP</button>
+              <button onclick="csReset()" class="btn-gray">RESET</button>
+            </div>
+            <div id="cs-status" style="font-size:12px;color:#555;min-height:18px;"></div>
+          </div>
+        </div>
+
+        <!-- ─── MODE 2: CREATE FROM RACENET ──────────────────────────────── -->
+        <div id="cs-panel-racenet" style="display:none; background:var(--black); padding:16px 20px; display:none; grid-template-columns:280px 1fr; gap:20px;">
+          <div style="display:flex; flex-direction:column; gap:12px;">
             <div>
-              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:8px;">CHAMPIONSHIP RULES / CHALLENGES</label>
-              <div style="display:flex; flex-direction:column; gap:6px;" id="cs-rules-list">
+              <label class="inp-lbl">CLUB</label>
+              <select id="cs-rn-club" onchange="csRnLoadChamps()" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+                <option value="23799">GRF Themed (23799)</option>
+                <option value="23834">GRF Teamed (23834)</option>
+              </select>
+            </div>
+            <button onclick="csRnLoadChamps()" class="btn-gray" style="width:100%;">▶ LOAD FROM RACENET</button>
+            <div id="cs-rn-list" style="background:#111; border:1px solid #1a1a1a; min-height:120px; max-height:280px; overflow-y:auto; padding:4px;">
+              <div style="color:#444;font-size:11px;padding:10px;text-align:center;">Click Load to fetch championships</div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:12px;" id="cs-rn-detail" style="display:none;">
+            <div style="background:#1a1a1a; border:1px solid #252729; padding:12px; font-size:12px; color:#888; line-height:1.8;" id="cs-rn-preview">
+              Select a championship from the list.
+            </div>
+            <div>
+              <label class="inp-lbl">OVERRIDE NAME (optional)</label>
+              <input id="cs-rn-name" type="text" placeholder="Leave empty to use RaceNet name" class="inp-std">
+            </div>
+            <div>
+              <label class="inp-lbl">SEASON NUMBER</label>
+              <input id="cs-rn-season" type="number" placeholder="5" class="inp-std">
+            </div>
+            <div>
+              <label class="inp-lbl">VEHICLE CLASS</label>
+              <input id="cs-rn-class" type="text" placeholder="e.g. Group B" class="inp-std">
+            </div>
+            <div style="display:flex; gap:8px; margin-top:auto;">
+              <button onclick="csCreate('racenet')" class="btn-red" style="flex:1;">IMPORT &amp; CREATE</button>
+            </div>
+            <div id="cs-rn-status" style="font-size:12px;color:#555;min-height:18px;"></div>
+          </div>
+        </div>
 
-                <!-- Loyalty Bonus — always active, no toggle -->
-                <div style="background:#1a2a1a; border:1px solid #1a3a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
-                  <span style="color:var(--green); font-size:12px;">✓</span>
-                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Loyalty Bonus</span>
-                  <span class="ch-badge ch-auto">AUTO</span>
-                  <span style="font-size:10px; color:#555;">+50 pts · always active</span>
+        <!-- ─── MODE 3: ALTER RUNNING ─────────────────────────────────────── -->
+        <div id="cs-panel-alter" style="display:none; background:var(--black); padding:16px 20px;">
+          <div style="display:grid; grid-template-columns:260px 1fr; gap:20px;">
+
+            <!-- LEFT: Championship auswählen -->
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <label class="inp-lbl">CHAMPIONSHIP</label>
+              <select id="cs-alter-champ" onchange="csAlterLoad()" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
+                <option value="">— select —</option>
+              </select>
+              <div style="font-size:10px; color:#444;">Wähle die zu bearbeitende Championship</div>
+            </div>
+
+            <!-- RIGHT: Edit Tabs -->
+            <div id="cs-alter-panel" style="display:none;">
+              <div style="display:flex; gap:0; border-bottom:1px solid #1a1a1a; margin-bottom:12px;">
+                <button onclick="csAlterTab('teams',this)"    class="cs-alter-tab cs-alter-active">TEAMS</button>
+                <button onclick="csAlterTab('bonuses',this)"  class="cs-alter-tab">BONUSES</button>
+                <button onclick="csAlterTab('details',this)"  class="cs-alter-tab">DETAILS</button>
+              </div>
+
+              <!-- TEAMS -->
+              <div id="cs-alter-teams">
+                <div style="font-size:11px;color:#555;margin-bottom:10px;">Fahrer einem Team zuordnen. Ein Fahrer kann nur in einem Team sein.</div>
+                <div id="cs-teams-builder" style="display:flex; flex-direction:column; gap:8px;">
+                  <!-- dynamisch -->
                 </div>
-
-                <!-- Stage Improvement -->
-                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
-                  <input type="checkbox" id="cr-rule-improvement" style="accent-color:var(--red); width:14px; height:14px;">
-                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Stage Improvement</span>
-                  <span class="ch-badge ch-auto">AUTO</span>
-                  <input type="number" value="10" id="cr-rule-improvement-pts" placeholder="pts"
-                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
-                  <span style="font-size:10px; color:#555;">pts</span>
+                <button onclick="csAddTeam()" style="margin-top:8px; background:#252729; color:#888; border:1px solid #333; font-family:var(--ui-font); font-size:12px; padding:5px 12px; cursor:pointer;">+ ADD TEAM</button>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                  <button onclick="csTeamsSave()" class="btn-red">SAVE TEAMS</button>
                 </div>
+                <div id="cs-teams-status" style="font-size:11px;color:#555;margin-top:6px;min-height:16px;"></div>
+              </div>
 
-                <!-- Penalty Challenge -->
-                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
-                  <input type="checkbox" id="cr-rule-penalty" style="accent-color:var(--red); width:14px; height:14px;">
-                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Penalty Challenge</span>
-                  <span class="ch-badge ch-auto">AUTO</span>
-                  <input type="number" value="10" id="cr-rule-penalty-pts" placeholder="pts"
-                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
-                  <span style="font-size:10px; color:#555;">pts</span>
-                </div>
-
-                <!-- Survivor Bonus -->
-                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
-                  <input type="checkbox" id="cr-rule-survivor" style="accent-color:var(--red); width:14px; height:14px;">
-                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Survivor Bonus</span>
-                  <span class="ch-badge ch-auto">AUTO</span>
-                  <input type="number" value="5" id="cr-rule-survivor-pts" placeholder="pts"
-                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
-                  <span style="font-size:10px; color:#555;">pts</span>
-                </div>
-
-                <!-- Livery Challenge -->
-                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
-                  <input type="checkbox" id="cr-rule-livery" style="accent-color:var(--red); width:14px; height:14px;">
-                  <span style="flex:1; font-size:13px; color:var(--gray-light);">Livery Challenge</span>
-                  <span class="ch-badge ch-manual">MANUAL</span>
-                  <input type="number" value="15" id="cr-rule-livery-pts" placeholder="pts"
-                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
-                  <span style="font-size:10px; color:#555;">pts</span>
-                </div>
-
-                <!-- Custom rule -->
-                <div style="background:#252729; border:1px solid #1a1a1a; padding:10px 12px; display:flex; align-items:center; gap:10px;">
-                  <input type="checkbox" id="cr-rule-custom" style="accent-color:var(--red); width:14px; height:14px;">
-                  <input type="text" id="cr-rule-custom-name" placeholder="Custom rule name…"
-                    style="flex:1; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 6px; outline:none;">
-                  <span class="ch-badge ch-manual">MANUAL</span>
-                  <input type="number" value="10" id="cr-rule-custom-pts" placeholder="pts"
-                    style="width:52px; background:#1a1a1a; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 5px; outline:none; text-align:center;">
-                  <span style="font-size:10px; color:#555;">pts</span>
+              <!-- BONUSES (link to bonus tab) -->
+              <div id="cs-alter-bonuses" style="display:none; font-size:13px; color:#888; padding:20px 0;">
+                Manual Bonuses werden im Tab <strong style="color:var(--gray-light);">Manual Bonuses</strong> verwaltet.<br>
+                Die Championship ist dort bereits vorausgewählt wenn du von hier wechselst.
+                <div style="margin-top:12px;">
+                  <button onclick="showAdminTab('manual-bonuses', document.querySelector('.sub-tab:nth-child(4)'))" class="btn-gray">→ OPEN MANUAL BONUSES</button>
                 </div>
               </div>
-            </div>
 
-            <div style="background:#222527; border:1px solid #1a1a1a; border-left:3px solid var(--green-dim); padding:10px 12px; font-size:11px; color:#666; line-height:1.6;">
-              Locations, stage dates, vehicle class, and entry list are auto-imported from RaceNet after the championship is created there.
+              <!-- DETAILS -->
+              <div id="cs-alter-details" style="display:none; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  <div><label class="inp-lbl">NAME</label><input id="cs-alter-name" type="text" class="inp-std"></div>
+                  <div><label class="inp-lbl">VEHICLE CLASS</label><input id="cs-alter-class" type="text" class="inp-std"></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div><label class="inp-lbl">START</label><input id="cs-alter-start" type="date" class="inp-std" style="color-scheme:dark;"></div>
+                    <div><label class="inp-lbl">END</label><input id="cs-alter-end" type="date" class="inp-std" style="color-scheme:dark;"></div>
+                  </div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  <div><label class="inp-lbl">NARRATIVE</label><textarea id="cs-alter-narrative" rows="5" class="inp-std" style="resize:vertical;"></textarea></div>
+                </div>
+                <div style="grid-column:1/-1; display:flex; gap:8px;">
+                  <button onclick="csAlterSave()" class="btn-red">SAVE CHANGES</button>
+                </div>
+                <div id="cs-alter-status" style="grid-column:1/-1; font-size:12px;color:#555;min-height:18px;"></div>
+              </div>
             </div>
-
-            <div style="display:flex; gap:8px; margin-top:auto;">
-              <button onclick="csCreate()"
-                style="flex:1; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:1px; padding:9px; cursor:pointer;">
-                CREATE CHAMPIONSHIP
-              </button>
-              <button onclick="csReset()"
-                style="background:#252729; color:#888; border:2px solid; border-color:#444 #1a1a1a #1a1a1a #444; font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:9px 16px; cursor:pointer;">
-                RESET
-              </button>
-            </div>
-            <div id="cs-status" style="font-size:12px; color:#555; min-height:18px;"></div>
           </div>
         </div>
       </div>
 
+      <!-- ── TAB: MANUAL BONUSES ── -->
       <!-- ── TAB: MANUAL BONUSES ── -->
       <div class="admin-tab" id="atab-manual-bonuses" style="display:none;">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
@@ -2341,6 +2414,22 @@ function eloRender() {
 
 // ── 9. ADMIN PAGE ─────────────────────────────────────────────
 
+// Zentraler Helper für alle Railway Admin API Calls
+async function adminFetch(endpoint, body=null, method='POST') {
+  const opts = {
+    method,
+    headers: { 'X-Admin-Password': _adminPassword }
+  };
+  if (body && method !== 'GET') {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res  = await fetch(`${ADMIN_API_URL}${endpoint}`, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
 function adminLogin() {
   const pw = $('admin-pw-input')?.value || '';
   if (!pw) { setText('admin-pw-error', '⚠ Enter password'); return; }
@@ -2470,7 +2559,7 @@ function _buildEloClubList() {
 async function adminLoadChampionships() {
   const champs = await sb('championships', 'select=id,name,season_number&order=start_date.desc');
 
-  const selects = ['cr-champ-select','mb-champ','nav-champ','nav-ev-champ','cs-edit-champ'];
+  const selects = ['mb-champ','nav-champ','nav-ev-champ','cs-alter-champ'];
   selects.forEach(id => {
     const el = $(id);
     if (!el) return;
@@ -2479,11 +2568,6 @@ async function adminLoadChampionships() {
       champs.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
     if (prev) el.value = prev;
   });
-
-  if ($('cr-champ-select') && champs.length) {
-    $('cr-champ-select').value = champs[0].id;
-    crLoadExisting();
-  }
 }
 
 
@@ -2585,28 +2669,32 @@ async function crCalculate() {
 }
 
 async function crSave() {
-  const champId = $('cr-champ-select')?.value;
-  if (!champId || !_crLastResults.length) { setText('cr-status', '⚠ Nothing to save.'); return; }
+  const name = $('cr-set-name')?.value.trim();
+  if (!name) { setText('cr-status', '⚠ Enter a name for this CR set.'); $('cr-set-name')?.focus(); return; }
+  if (!_crLastResults.length) { setText('cr-status', '⚠ Nothing to save.'); return; }
 
-  setText('cr-status', '⏳ Saving to database…');
+  setText('cr-status', '⏳ Saving CR set…');
   if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'none';
 
+  const routeIds  = [...document.querySelectorAll('input[name="cr-route"]:checked')].map(c => parseInt(c.value));
+  const classIds  = [...document.querySelectorAll('input[name="cr-cls"]:checked')].map(c => parseInt(c.value));
+
   try {
-    const res = await fetch(`${ADMIN_API_URL}/cr/save`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
-      body:    JSON.stringify({ championship_id: champId, results: _crLastResults }),
+    const res = await adminFetch('/cr/save', {
+      name,
+      route_ids:  routeIds,
+      class_ids:  classIds,
+      top_pct:    parseFloat($('cr-top-pct')?.value) || 25,
+      min_n:      parseInt($('cr-min-n')?.value) || 10,
+      exponent:   parseFloat($('cr-exponent')?.value) || 1.5,
+      results:    _crLastResults,
     });
-    const data = await res.json();
-    if (res.ok) {
-      setText('cr-status', `✓ Saved ${data.saved} CR entries.`);
-      _crLastResults = [];
-      crLoadExisting();
-    } else {
-      setText('cr-status', `❌ ${data.error}`);
-    }
-  } catch (err) {
-    setText('cr-status', `❌ ${err.message}`);
+    setText('cr-status', `✓ CR Set "${res.name}" saved — ${res.saved} vehicles. Assign to a championship in the Championship Setup tab.`);
+    _crLastResults = [];
+    if ($('cr-set-name')) $('cr-set-name').value = '';
+    crLoadExisting();
+  } catch (e) {
+    setText('cr-status', `❌ ${e.message}`);
   }
 }
 
@@ -2617,26 +2705,46 @@ function crCancelConfirm() {
 }
 
 async function crLoadExisting() {
-  const champId = $('cr-champ-select')?.value;
   const tbody = $('cr-existing-tbody');
   if (!tbody) return;
-  if (!champId) { tbody.innerHTML = emptyRow(5,'SELECT A CHAMPIONSHIP'); return; }
-
   tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#555;padding:10px;">Loading…</td></tr>`;
-  const rows = await sb('car_ratings', `championship_id=eq.${champId}&select=*&order=cr_value.desc`);
 
-  if (!rows.length) {
-    tbody.innerHTML = emptyRow(5, 'NO CR SET', 'Calculate and save Car Ratings for this championship.');
-    return;
+  try {
+    const sets = await adminFetch('/cr/sets', null, 'GET');
+    if (!sets.length) {
+      tbody.innerHTML = emptyRow(5, 'NO CR SETS', 'Calculate and save a CR Set above.');
+      return;
+    }
+    tbody.innerHTML = sets.map(s => `
+      <tr>
+        <td style="text-align:left;">${s.name}</td>
+        <td style="font-size:11px;color:#888;">${(s.vehicle_classes || []).join(', ') || '—'}</td>
+        <td style="color:#888;">${s.exponent || '—'}</td>
+        <td style="font-size:11px;color:#555;">${s.created_at?.split('T')[0] || '—'}</td>
+        <td><button onclick="crDeleteSet('${s.id}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
+      </tr>`).join('');
+
+    // Auch CR-Set Dropdown in Championship Setup befüllen
+    _crPopulateSetDropdowns(sets);
+  } catch (e) {
+    tbody.innerHTML = emptyRow(5, 'ERROR', e.message);
   }
-  tbody.innerHTML = rows.map(r => `
-    <tr>
-      <td style="text-align:left;">${r.vehicle}</td>
-      <td style="color:var(--green);">${(+r.cr_value).toFixed(3)}</td>
-      <td>${r.surface || '—'}</td>
-      <td>${r.era || '—'}</td>
-      <td><button onclick="crDeleteRow('${r.id}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
-    </tr>`).join('');
+}
+
+function _crPopulateSetDropdowns(sets) {
+  // Dropdown für CR-Zuordnung in Championship Setup (falls vorhanden)
+  const sel = $('cs-cr-set-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— no CR set —</option>' +
+    sets.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+}
+
+async function crDeleteSet(id) {
+  if (!confirm('Delete this CR set and all its car ratings?')) return;
+  try {
+    await adminFetch(`/cr/sets/${id}`, null, 'DELETE');
+    crLoadExisting();
+  } catch (e) { setText('cr-status', `❌ ${e.message}`); }
 }
 
 async function crDeleteRow(id) {
@@ -2708,9 +2816,266 @@ function eloStartUpdate() {
 
 // ── 12. ADMIN — CHAMPIONSHIP SETUP ───────────────────────────
 
-async function csCreate() {
-  const name   = $('cs-name')?.value.trim();
-  const clubId = $('cs-club')?.value;
+// ── 12. ADMIN — CHAMPIONSHIP SETUP (3 Modi) ──────────────────
+
+let _csSelectedRnChamp = null; // ausgewählte RaceNet Championship
+
+function csModeSwitch(mode, btn) {
+  ['manual','racenet','alter'].forEach(m => {
+    const p = $(`cs-panel-${m}`);
+    const b = $(`cs-mode-${m}`);
+    if (p) p.style.display = 'none';
+    if (b) b.classList.remove('cs-mode-active');
+  });
+  const panel = $(`cs-panel-${mode}`);
+  if (panel) panel.style.display = mode === 'manual' ? 'grid' : (mode === 'racenet' ? 'grid' : 'block');
+  if (btn) btn.classList.add('cs-mode-active');
+}
+
+// ── MODUS 1: MANUAL CREATE ────────────────────────────────────
+
+async function csCreate(mode) {
+  mode = mode || 'manual';
+
+  // Gemeinsame Daten
+  const rules = _csCollectRules();
+
+  if (mode === 'manual') {
+    const name  = $('cs-name')?.value.trim();
+    const clubId= $('cs-club')?.value;
+    if (!name) { setText('cs-status', '⚠ Name required.'); return; }
+    setText('cs-status', '⏳ Creating…');
+
+    try {
+      const res = await adminFetch('/championship/create', {
+        mode: 'manual',
+        championship: {
+          club_id:       clubId,
+          name,
+          season_number: parseInt($('cs-season')?.value) || null,
+          vehicle_class: $('cs-class')?.value.trim() || null,
+          start_date:    $('cs-start')?.value || null,
+          end_date:      $('cs-end')?.value   || null,
+          narrative:     $('cs-narrative')?.value.trim() || null,
+        },
+        rules,
+      });
+      setText('cs-status', `✓ "${res.name}" created! ID: ${res.id}`);
+      adminLoadChampionships();
+    } catch (e) { setText('cs-status', `❌ ${e.message}`); }
+
+  } else if (mode === 'racenet') {
+    if (!_csSelectedRnChamp) { setText('cs-rn-status', '⚠ Select a championship from the list.'); return; }
+    const name = $('cs-rn-name')?.value.trim() || _csSelectedRnChamp.name;
+    setText('cs-rn-status', '⏳ Importing…');
+
+    try {
+      const res = await adminFetch('/championship/create', {
+        mode: 'racenet',
+        championship: {
+          club_id:       $('cs-rn-club')?.value,
+          racenet_id:    _csSelectedRnChamp.racenet_id,
+          name,
+          season_number: parseInt($('cs-rn-season')?.value) || null,
+          vehicle_class: $('cs-rn-class')?.value.trim() || null,
+          start_date:    _csSelectedRnChamp.start_at?.split('T')[0] || null,
+          end_date:      _csSelectedRnChamp.close_at?.split('T')[0] || null,
+        },
+        rules: [],
+      });
+      const msg = res.warning
+        ? `⚠ ${res.name} created — ${res.warning}`
+        : `✓ "${res.name}" created with ${res.events_imported} events imported!`;
+      setText('cs-rn-status', msg);
+      adminLoadChampionships();
+    } catch (e) { setText('cs-rn-status', `❌ ${e.message}`); }
+  }
+}
+
+function _csCollectRules() {
+  const rules = [];
+  const map = [
+    { id: 'improvement', type: 'stage_improvement', ptsId: 'cr-rule-improvement-pts' },
+    { id: 'penalty',     type: 'penalty_challenge',  ptsId: 'cr-rule-penalty-pts' },
+    { id: 'survivor',    type: 'survivor_bonus',      ptsId: 'cr-rule-survivor-pts' },
+    { id: 'livery',      type: 'livery_challenge',    ptsId: 'cr-rule-livery-pts' },
+    { id: 'custom',      type: 'custom',              ptsId: 'cr-rule-custom-pts' },
+  ];
+  map.forEach(r => {
+    const cb = $(`cr-rule-${r.id}`);
+    if (!cb?.checked) return;
+    rules.push({ rule_type: r.type, is_active: true,
+                 points: parseInt($(r.ptsId)?.value) || 10,
+                 description: r.id === 'custom' ? $('cr-rule-custom-name')?.value.trim() : null });
+  });
+  return rules;
+}
+
+function csReset() {
+  ['cs-name','cs-season','cs-class','cs-start','cs-end','cs-narrative'].forEach(id => {
+    const el = $(id); if (el) el.value = '';
+  });
+  ['cr-rule-improvement','cr-rule-penalty','cr-rule-survivor','cr-rule-livery','cr-rule-custom']
+    .forEach(id => { const el = $(id); if (el) el.checked = false; });
+  setText('cs-status', '');
+}
+
+// ── MODUS 2: RACENET IMPORT ───────────────────────────────────
+
+async function csRnLoadChamps() {
+  const clubId = $('cs-rn-club')?.value;
+  const list   = $('cs-rn-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:#555;font-size:11px;padding:10px;text-align:center;">⏳ Loading from RaceNet…</div>';
+  _csSelectedRnChamp = null;
+
+  try {
+    const champs = await adminFetch('/championship/racenet-list', { club_id: clubId });
+    if (!champs.length) {
+      list.innerHTML = '<div style="color:#555;font-size:11px;padding:10px;text-align:center;">No championships found</div>';
+      return;
+    }
+    list.innerHTML = champs.map(c => `
+      <div class="rn-champ-row" onclick="csRnSelect(this, ${JSON.stringify(c).replace(/"/g,'&quot;')})">
+        <div style="color:var(--gray-light);font-weight:bold;">${c.name}</div>
+        <div style="font-size:10px;color:#555;margin-top:2px;">
+          ${c.start_at ? c.start_at.split('T')[0] : '?'} → ${c.close_at ? c.close_at.split('T')[0] : '?'}
+          · ID: ${c.racenet_id}
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="color:#c44;font-size:11px;padding:10px;">❌ ${e.message}</div>`;
+  }
+}
+
+function csRnSelect(el, champ) {
+  document.querySelectorAll('.rn-champ-row').forEach(r => r.classList.remove('selected'));
+  el.classList.add('selected');
+  _csSelectedRnChamp = champ;
+
+  const detail  = $('cs-rn-detail');
+  const preview = $('cs-rn-preview');
+  if (detail)  detail.style.display  = 'flex';
+  if (preview) preview.innerHTML =
+    `<span style="color:var(--gray-light);font-size:13px;">${champ.name}</span><br>` +
+    `<span>Start: ${champ.start_at?.split('T')[0] || '—'}</span><br>` +
+    `<span>Close: ${champ.close_at?.split('T')[0] || '—'}</span><br>` +
+    `<span>RaceNet ID: ${champ.racenet_id}</span>`;
+  if ($('cs-rn-name')) $('cs-rn-name').value = '';
+}
+
+// ── MODUS 3: ALTER ────────────────────────────────────────────
+
+function csAlterTab(tab, btn) {
+  ['teams','bonuses','details'].forEach(t => {
+    const p = $(`cs-alter-${t}`);
+    if (p) p.style.display = 'none';
+  });
+  document.querySelectorAll('.cs-alter-tab').forEach(b => b.classList.remove('cs-alter-active'));
+  const panel = $(`cs-alter-${tab}`);
+  if (panel) panel.style.display = tab === 'details' ? 'grid' : 'block';
+  if (btn) btn.classList.add('cs-alter-active');
+}
+
+async function csAlterLoad() {
+  const champId = $('cs-alter-champ')?.value;
+  const panel   = $('cs-alter-panel');
+  if (!champId) { if (panel) panel.style.display = 'none'; return; }
+  if (panel) panel.style.display = 'block';
+
+  // Championship Details laden
+  const rows = await sb('championships', `id=eq.${champId}&select=*`);
+  if (rows.length) {
+    const c = rows[0];
+    if ($('cs-alter-name'))      $('cs-alter-name').value      = c.name || '';
+    if ($('cs-alter-class'))     $('cs-alter-class').value     = c.vehicle_class || '';
+    if ($('cs-alter-start'))     $('cs-alter-start').value     = c.start_date || '';
+    if ($('cs-alter-end'))       $('cs-alter-end').value       = c.end_date || '';
+    if ($('cs-alter-narrative')) $('cs-alter-narrative').value = c.narrative || '';
+  }
+
+  // Teams laden
+  csTeamsLoad(champId);
+}
+
+async function csAlterSave() {
+  const champId = $('cs-alter-champ')?.value;
+  if (!champId) return;
+  setText('cs-alter-status', '⏳ Saving…');
+  try {
+    await adminFetch('/championship/alter', {
+      championship_id: champId,
+      fields: {
+        name:          $('cs-alter-name')?.value.trim(),
+        vehicle_class: $('cs-alter-class')?.value.trim(),
+        start_date:    $('cs-alter-start')?.value || null,
+        end_date:      $('cs-alter-end')?.value   || null,
+        narrative:     $('cs-alter-narrative')?.value.trim(),
+      }
+    });
+    setText('cs-alter-status', '✓ Saved.');
+    adminLoadChampionships();
+  } catch (e) { setText('cs-alter-status', `❌ ${e.message}`); }
+}
+
+// ── TEAMS ─────────────────────────────────────────────────────
+
+async function csTeamsLoad(champId) {
+  const builder = $('cs-teams-builder');
+  if (!builder) return;
+  try {
+    const teams = await adminFetch(`/teams/${champId}`, null, 'GET');
+    builder.innerHTML = '';
+    if (teams.length) {
+      teams.forEach(t => csAddTeam(t.name, t.color, (t.team_members || []).map(m => m.driver_name)));
+    } else {
+      csAddTeam(); // ein leeres Team als Start
+    }
+  } catch (e) {
+    csAddTeam();
+  }
+}
+
+function csAddTeam(name='', color='#c0392b', members=[]) {
+  const builder = $('cs-teams-builder');
+  if (!builder) return;
+  const idx = builder.children.length;
+  const div = document.createElement('div');
+  div.className = 'cs-team-row';
+  div.style.cssText = 'background:#1a1a1a; border:1px solid #252729; padding:10px; display:grid; grid-template-columns:1fr 80px auto; gap:8px; align-items:start;';
+  div.innerHTML = `
+    <div>
+      <input type="text" value="${name}" placeholder="Team name…" data-team-name
+        style="width:100%;background:#252729;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:13px;padding:5px 8px;outline:none;margin-bottom:6px;">
+      <textarea placeholder="Members (one per line)…" data-team-members rows="3"
+        style="width:100%;background:#252729;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:5px 8px;outline:none;resize:vertical;">${members.join('\n')}</textarea>
+    </div>
+    <div>
+      <label class="inp-lbl">COLOR</label>
+      <input type="color" value="${color}" data-team-color style="width:100%;height:36px;background:#252729;border:1px solid #333;cursor:pointer;padding:2px;">
+    </div>
+    <button onclick="this.closest('.cs-team-row').remove()" style="background:#1a0a0a;border:1px solid #3a1a1a;color:#c44;font-size:14px;padding:6px 10px;cursor:pointer;margin-top:18px;">✕</button>`;
+  builder.appendChild(div);
+}
+
+async function csTeamsSave() {
+  const champId = $('cs-alter-champ')?.value;
+  if (!champId) return;
+  setText('cs-teams-status', '⏳ Saving…');
+
+  const rows   = document.querySelectorAll('.cs-team-row');
+  const teams  = [...rows].map(row => ({
+    name:    row.querySelector('[data-team-name]')?.value.trim(),
+    color:   row.querySelector('[data-team-color]')?.value,
+    members: row.querySelector('[data-team-members]')?.value
+                .split('\n').map(s => s.trim()).filter(Boolean),
+  })).filter(t => t.name);
+
+  try {
+    const res = await adminFetch('/teams/save', { championship_id: champId, teams });
+    setText('cs-teams-status', `✓ ${res.teams.length} teams saved.`);
+  } catch (e) { setText('cs-teams-status', `❌ ${e.message}`); }
+}
   const season = parseInt($('cs-season')?.value) || null;
   const cls    = $('cs-class')?.value.trim()     || null;
   const start  = $('cs-start')?.value            || null;
@@ -2755,17 +3120,6 @@ async function csCreate() {
   } catch (err) {
     setText('cs-status', `❌ ${err.message}`);
   }
-}
-
-function csReset() {
-  ['cs-name','cs-season','cs-class','cs-start','cs-end','cs-narrative'].forEach(id => {
-    const el = $(id);
-    if (el) el.value = '';
-  });
-  ['cr-rule-improvement','cr-rule-penalty','cr-rule-survivor','cr-rule-livery','cr-rule-custom'].forEach(id => {
-    const el = $(id); if (el) el.checked = false;
-  });
-  setText('cs-status', '');
 }
 
 
