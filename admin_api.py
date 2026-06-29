@@ -68,6 +68,8 @@ def sb_post(table, data):
 def sb_patch(table, qs, data):
     h = {**SB, "Prefer": "return=minimal"}
     r = requests.patch(f"{SUPABASE_URL}/rest/v1/{table}?{qs}", headers=h, json=data, timeout=10)
+    if not r.ok:
+        print(f"[sb_patch ERROR] {table}?{qs} → HTTP {r.status_code}: {r.text}")
     r.raise_for_status()
 
 def sb_delete(table, qs):
@@ -838,13 +840,20 @@ def elo_update():
         # Ratings in drivers.elo schreiben
         for summary in summaries:
             elo_val = round(summary.conservative_rating, 1)
-            sb_patch("drivers", f"name=eq.{requests.utils.quote(summary.display_name)}", {
-                "elo":             elo_val,
-                "elo_mu":          round(summary.mu, 2),
-                "elo_sigma":       round(summary.sigma, 2),
-                "elo_events":      summary.events_played,
-                "elo_provisional": summary.is_provisional,
-            })
+            h = {**SB, "Prefer": "return=minimal"}
+            requests.patch(
+                f"{SUPABASE_URL}/rest/v1/drivers",
+                headers=h,
+                params={"name": f"eq.{summary.display_name}"},
+                json={
+                    "elo":             elo_val,
+                    "elo_mu":          round(summary.mu, 2),
+                    "elo_sigma":       round(summary.sigma, 2),
+                    "elo_events":      summary.events_played,
+                    "elo_provisional": summary.is_provisional,
+                },
+                timeout=10,
+            )
 
         log(f"✓ ELO update complete. {drivers_updated} drivers updated.")
         return jsonify({"ok": True, "log": log_lines, "drivers": drivers_updated})
