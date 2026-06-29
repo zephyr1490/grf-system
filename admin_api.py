@@ -774,7 +774,7 @@ def elo_update():
                 # Ergebnisse laden
                 results = sb_get(
                     "event_results",
-                    f"event_id=eq.{ev_id}&select=driver_name,final_rank,vehicle,is_dnf&order=final_rank.asc"
+                    f"event_id=eq.{ev_id}&select=driver_name,position,vehicle,is_dnf&order=position.asc"
                 )
                 if not results:
                     continue
@@ -783,7 +783,7 @@ def elo_update():
                 dnf_list  = []
                 for r in results:
                     driver  = r.get("driver_name","")
-                    rank    = r.get("final_rank")
+                    rank    = r.get("position")
                     vehicle = r.get("vehicle","Unknown")
                     is_dnf  = r.get("is_dnf", False)
                     if not driver:
