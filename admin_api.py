@@ -424,14 +424,21 @@ def championship_racenet_list():
         return jsonify({"error": "club_id required"}), 400
     try:
         client = RacenetClient()
-        data   = client.get_championships(club_id)
-        champs = data if isinstance(data, list) else data.get("championships", [])
-        result = [{
-            "racenet_id": str(c.get("id","")),
-            "name":       c.get("name",""),
-            "start_at":   c.get("startAt") or c.get("startDate",""),
-            "close_at":   c.get("closeAt") or c.get("endDate",""),
-        } for c in champs]
+        ids    = client.get_all_championship_ids(club_id)
+        result = []
+        for cid in ids:
+            try:
+                c = client.get_championship(club_id, cid)
+                result.append({
+                    "racenet_id": str(c.get("id", cid)),
+                    "name":       c.get("name", ""),
+                    "start_at":   c.get("startAt") or c.get("startDate", ""),
+                    "close_at":   c.get("closeAt") or c.get("endDate", ""),
+                })
+            except Exception:
+                result.append({"racenet_id": str(cid), "name": f"Championship {cid}", "start_at": "", "close_at": ""})
+        # Sort by start_at descending (newest first)
+        result.sort(key=lambda x: x.get("start_at") or "", reverse=True)
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -581,6 +588,217 @@ def narrative_event():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── CR MANUAL SAVE ───────────────────────────────────────────────────────────
+
+@app.route("/cr/manual-save", methods=["POST"])
+@auth
+def cr_manual_save():
+    """
+    Speichert manuell eingegebene CR-Werte für eine Championship direkt in car_ratings.
+    Body: { championship_id, ratings: [{vehicle, cr_value}, ...] }
+    """
+    body    = request.json or {}
+    champ   = body.get("championship_id","").strip()
+    ratings = body.get("ratings", [])
+    if not champ or not ratings:
+        return jsonify({"error": "championship_id and ratings required"}), 400
+    try:
+        # Alte manuelle CR-Werte löschen (nur die ohne cr_set_id)
+        sb_url = f"{SUPABASE_URL}/rest/v1/car_ratings"
+        requests.delete(
+            sb_url,
+            headers=SB,
+            params={"championship_id": f"eq.{champ}", "cr_set_id": "is.null"},
+        )
+        # Neue einfügen
+        rows = [
+            {"championship_id": champ, "vehicle": r["vehicle"],
+             "cr_value": float(r["cr_value"]), "cr_set_id": None}
+            for r in ratings if r.get("vehicle") and r.get("cr_value") is not None
+        ]
+        if rows:
+            requests.post(sb_url, headers=SB, json=rows)
+        # Championship cr_set_id auf null (manuell, kein Set)
+        sb_patch("championships", f"id=eq.{champ}", {"cr_set_id": None})
+        return jsonify({"ok": True, "saved": len(rows)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/cr/vehicles", methods=["GET"])
+@auth
+def cr_vehicles():
+    """
+    Gibt alle Fahrzeuge (distinct) für eine Championship zurück.
+    Query: ?championship_id=xxx
+    """
+    champ = request.args.get("championship_id","").strip()
+    if not champ:
+        return jsonify({"error": "championship_id required"}), 400
+    try:
+        # Aus stage_results alle vehicles sammeln
+        rows = sb_get("stage_results", f"championship_id=eq.{champ}&select=vehicle")
+        vehicles = sorted({r["vehicle"] for r in rows if r.get("vehicle")})
+        # Aktuelle CR-Werte laden
+        cr_rows = sb_get("car_ratings", f"championship_id=eq.{champ}&select=vehicle,cr_value")
+        cr_map  = {r["vehicle"]: r["cr_value"] for r in cr_rows}
+        return jsonify([{"vehicle": v, "cr_value": cr_map.get(v)} for v in vehicles])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── ELO UPDATE ───────────────────────────────────────────────────────────────
+
+@app.route("/elo/update", methods=["POST"])
+@auth
+def elo_update():
+    """
+    Führt echten ELO-Update durch.
+    Body: { club_ids: ["23799", "23834"], force_reset: false }
+
+    Liest event_results aus Supabase (chronologisch nach event start_date),
+    baut RawEvent-Objekte und verarbeitet sie mit elo_pipeline.
+    Speichert Ergebnisse in elo_ratings Tabelle.
+    """
+    import json, sys, os
+    sys.path.insert(0, os.path.dirname(__file__))
+
+    body       = request.json or {}
+    club_ids   = body.get("club_ids", [])
+    force      = body.get("force_reset", False)
+
+    if not club_ids:
+        return jsonify({"error": "club_ids required"}), 400
+
+    try:
+        from elo_engine   import Rating
+        from elo_pipeline import RawEvent, process_racenet_events, process_historical_batch, summarize_track
+        from elo_state    import EloState
+        from elo_categories import CategoryLookups
+
+        log_lines = []
+        def log(msg):
+            log_lines.append(msg)
+
+        log(f"Starting ELO update for clubs: {', '.join(club_ids)}")
+
+        # Leere Lookups (keine Surface/Drivetrain-Metadaten verfügbar)
+        lookups = CategoryLookups(surface_by_location={}, vehicle_meta={})
+
+        # State aus Supabase laden (gespeichert als JSON in elo_state Tabelle)
+        state_rows = sb_get("elo_state", "select=*&limit=1")
+        if state_rows and not force:
+            state = EloState.from_dict(json.loads(state_rows[0]["state_json"]))
+            log(f"Loaded existing ELO state ({len(state.processed_event_ids)} events already processed)")
+        else:
+            state = EloState(profile_name="grf")
+            log("Starting fresh ELO state")
+
+        # Events aus Supabase laden — chronologisch nach Championship start_date
+        # Alle Events aller gewünschten Clubs
+        champ_rows = sb_get(
+            "championships",
+            f"select=id,club_id,name,start_date&order=start_date.asc"
+        )
+        # Filter auf gewünschte clubs
+        champ_rows = [c for c in champ_rows if str(c.get("club_id","")) in club_ids]
+        log(f"Found {len(champ_rows)} championships across clubs")
+
+        raw_events = []
+        for champ in champ_rows:
+            champ_id = champ["id"]
+            # Events dieser Championship (chronologisch)
+            ev_rows = sb_get("events", f"championship_id=eq.{champ_id}&select=id,name,location,status&order=round_number.asc")
+            for ev in ev_rows:
+                ev_id  = ev["id"]
+                # Nur abgeschlossene Events (status=2 = completed)
+                if ev.get("status", 0) != 2:
+                    continue
+                # Ergebnisse laden
+                results = sb_get(
+                    "event_results",
+                    f"event_id=eq.{ev_id}&select=driver_name,final_rank,vehicle,is_dnf&order=final_rank.asc"
+                )
+                if not results:
+                    continue
+
+                finishers = []
+                dnf_list  = []
+                for r in results:
+                    driver  = r.get("driver_name","")
+                    rank    = r.get("final_rank")
+                    vehicle = r.get("vehicle","Unknown")
+                    is_dnf  = r.get("is_dnf", False)
+                    if not driver:
+                        continue
+                    if is_dnf:
+                        dnf_list.append((driver, vehicle, driver))
+                    elif rank:
+                        finishers.append((driver, rank, vehicle, driver))
+
+                if not finishers and not dnf_list:
+                    continue
+
+                event_id = f"{champ['club_id']}:{champ_id}:{ev_id}"
+                raw_events.append(RawEvent(
+                    event_id=event_id,
+                    location=ev.get("location") or ev.get("name",""),
+                    finishers=finishers,
+                    dnf_drivers=dnf_list,
+                ))
+
+        log(f"Loaded {len(raw_events)} completed events to process")
+
+        if force:
+            # Kompletter Neustart: alle Events verarbeiten
+            state = EloState(profile_name="grf")
+            logs  = process_historical_batch(state, raw_events, lookups, clubs=club_ids, force=True)
+            log(f"Batch fit complete: {len(logs)} events processed")
+        else:
+            logs = process_racenet_events(state, raw_events, lookups)
+            log(f"Delta update: {len(logs)} new events processed")
+
+        drivers_updated = len(state.ratings.get("overall", {}))
+        log(f"Processed {drivers_updated} drivers")
+
+        # Ranking für Log
+        summaries = summarize_track(state, "overall")
+        if summaries:
+            top = summaries[0]
+            log(f"Top rated: {top.display_name} ({top.conservative_rating:.0f})")
+
+        # State in Supabase speichern
+        state_json = json.dumps(state.to_dict())
+        existing   = sb_get("elo_state", "select=id&limit=1")
+        if existing:
+            sb_patch("elo_state", f"id=eq.{existing[0]['id']}", {"state_json": state_json})
+        else:
+            requests.post(
+                f"{SUPABASE_URL}/rest/v1/elo_state",
+                headers=SB, json={"state_json": state_json}
+            )
+
+        # Ratings in drivers.elo schreiben
+        for summary in summaries:
+            driver_rows = sb_get("drivers", f"name=eq.{requests.utils.quote(summary.display_name)}&select=id")
+            elo_val = round(summary.conservative_rating, 1)
+            if driver_rows:
+                sb_patch("drivers", f"id=eq.{driver_rows[0]['id']}", {
+                    "elo":            elo_val,
+                    "elo_mu":         round(summary.mu, 2),
+                    "elo_sigma":      round(summary.sigma, 2),
+                    "elo_events":     summary.events_played,
+                    "elo_provisional": summary.is_provisional,
+                })
+
+        log(f"✓ ELO update complete. {drivers_updated} drivers updated.")
+        return jsonify({"ok": True, "log": log_lines, "drivers": drivers_updated})
+
+    except Exception as e:
+        import traceback
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 
 # ── Start ─────────────────────────────────────────────────────────────────────

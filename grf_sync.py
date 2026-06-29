@@ -379,6 +379,7 @@ def sync_event(db: SupabaseClient, client,
     driver_total_ms:     dict[str, int]  = {n: 0     for n in driver_info}
     driver_is_dnf:       dict[str, bool] = {n: False for n in driver_info}
     driver_stages_done:  dict[str, int]  = {n: 0     for n in driver_info}
+    driver_last_real_ms: dict[str, int | None] = {n: None for n in driver_info}
 
     stages_with_data = [(s, e) for s, e in stage_data if e]
 
@@ -397,11 +398,25 @@ def sync_event(db: SupabaseClient, client,
             elif t_ms is not None and not driver_is_dnf.get(name, False):
                 driver_total_ms[name]    += t_ms
                 driver_stages_done[name] += 1
+                driver_last_real_ms[name] = t_ms  # track last real time
 
-        # Driver missing from this stage = DNF
+        # Driver missing from this stage (which HAS data) = DNF
         for name in driver_info:
             if name not in seen:
                 driver_is_dnf[name] = True
+
+    # Override: if a driver has a real time on the LAST stage with data,
+    # they finished — clear the DNF flag.
+    if stages_with_data:
+        last_entries = stages_with_data[-1][1]
+        for entry in last_entries:
+            name = entry.get("displayName", "")
+            if not name:
+                continue
+            t_ms = time_str_to_ms(entry.get("time", ""))
+            if t_ms is not None and not is_dnf_ms(t_ms):
+                # Real time on last stage = finisher regardless of earlier gaps
+                driver_is_dnf[name] = False
 
     # Split finishers / DNFs and rank
     finishers = sorted(
