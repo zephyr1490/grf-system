@@ -837,16 +837,14 @@ def elo_update():
 
         # Ratings in drivers.elo schreiben
         for summary in summaries:
-            driver_rows = sb_get("drivers", f"name=eq.{requests.utils.quote(summary.display_name)}&select=id")
             elo_val = round(summary.conservative_rating, 1)
-            if driver_rows:
-                sb_patch("drivers", f"id=eq.{driver_rows[0]['id']}", {
-                    "elo":             elo_val,
-                    "elo_mu":          round(summary.mu, 2),
-                    "elo_sigma":       round(summary.sigma, 2),
-                    "elo_events":      summary.events_played,
-                    "elo_provisional": summary.is_provisional,
-                })
+            sb_patch("drivers", f"name=eq.{requests.utils.quote(summary.display_name)}", {
+                "elo":             elo_val,
+                "elo_mu":          round(summary.mu, 2),
+                "elo_sigma":       round(summary.sigma, 2),
+                "elo_events":      summary.events_played,
+                "elo_provisional": summary.is_provisional,
+            })
 
         log(f"✓ ELO update complete. {drivers_updated} drivers updated.")
         return jsonify({"ok": True, "log": log_lines, "drivers": drivers_updated})
