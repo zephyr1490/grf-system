@@ -228,6 +228,7 @@ body::after {
 .ed{color:#FF4444!important;font-size:10px;}
 .eq{color:#444!important;font-size:10px;}
 
+.see-more {
   background:var(--black); padding:4px 8px;
   font-size:10px; color:var(--red); cursor:pointer;
   border-top:1px solid #1a1a1a;
@@ -3075,51 +3076,6 @@ async function csTeamsSave() {
     const res = await adminFetch('/teams/save', { championship_id: champId, teams });
     setText('cs-teams-status', `✓ ${res.teams.length} teams saved.`);
   } catch (e) { setText('cs-teams-status', `❌ ${e.message}`); }
-}
-  const season = parseInt($('cs-season')?.value) || null;
-  const cls    = $('cs-class')?.value.trim()     || null;
-  const start  = $('cs-start')?.value            || null;
-  const end    = $('cs-end')?.value              || null;
-  const narr   = $('cs-narrative')?.value.trim() || null;
-
-  if (!name || !clubId) { setText('cs-status', '⚠ Club and Name required.'); return; }
-  setText('cs-status', '⏳ Creating…');
-
-  const rules = [];
-  const ruleMap = [
-    { id: 'improvement', type: 'stage_improvement', ptsId: 'cr-rule-improvement-pts' },
-    { id: 'penalty',     type: 'penalty_challenge',  ptsId: 'cr-rule-penalty-pts' },
-    { id: 'survivor',    type: 'survivor_bonus',      ptsId: 'cr-rule-survivor-pts' },
-    { id: 'livery',      type: 'livery_challenge',    ptsId: 'cr-rule-livery-pts' },
-    { id: 'custom',      type: 'custom',              ptsId: 'cr-rule-custom-pts', nameId: 'cr-rule-custom-name' },
-  ];
-  ruleMap.forEach(r => {
-    const cb = $(`cr-rule-${r.id}`);
-    if (!cb?.checked) return;
-    rules.push({ rule_type: r.type, is_active: true, points: parseInt($(r.ptsId)?.value) || 10,
-                 description: r.nameId ? $('cr-rule-custom-name')?.value.trim() : null });
-  });
-
-  try {
-    const res  = await fetch(`${ADMIN_API_URL}/championship/create`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
-      body:    JSON.stringify({
-        championship: { club_id: clubId, name, season_number: season, vehicle_class: cls,
-                        start_date: start, end_date: end, narrative: narr },
-        rules,
-      }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setText('cs-status', `✓ Championship "${data.name}" created! ID: ${data.id}`);
-      adminLoadChampionships();
-    } else {
-      setText('cs-status', `❌ ${data.error}`);
-    }
-  } catch (err) {
-    setText('cs-status', `❌ ${err.message}`);
-  }
 }
 
 
