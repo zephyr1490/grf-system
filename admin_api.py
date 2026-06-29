@@ -838,22 +838,25 @@ def elo_update():
             )
 
         # Ratings in drivers.elo schreiben
+        driver_names_in_db = {r["name"] for r in sb_get("drivers", "select=name")}
+        matched = 0
+        unmatched = []
         for summary in summaries:
             elo_val = round(summary.conservative_rating, 1)
-            h = {**SB, "Prefer": "return=minimal"}
-            requests.patch(
-                f"{SUPABASE_URL}/rest/v1/drivers",
-                headers=h,
-                params={"name": f"eq.{summary.display_name}"},
-                json={
-                    "elo":             elo_val,
-                    "elo_mu":          round(summary.mu, 2),
-                    "elo_sigma":       round(summary.sigma, 2),
-                    "elo_events":      summary.events_played,
-                    "elo_provisional": summary.is_provisional,
-                },
-                timeout=10,
-            )
+            if summary.display_name not in driver_names_in_db:
+                unmatched.append(summary.display_name)
+                continue
+            sb_patch("drivers", f"name=eq.{requests.utils.quote(summary.display_name)}", {
+                "elo":             elo_val,
+                "elo_mu":          round(summary.mu, 2),
+                "elo_sigma":       round(summary.sigma, 2),
+                "elo_events":      summary.events_played,
+                "elo_provisional": summary.is_provisional,
+            })
+            matched += 1
+        log(f"ELO written: {matched} matched, {len(unmatched)} unmatched")
+        if unmatched:
+            log(f"Unmatched drivers (not in drivers table): {', '.join(unmatched[:10])}")
 
         log(f"✓ ELO update complete. {drivers_updated} drivers updated.")
         return jsonify({"ok": True, "log": log_lines, "drivers": drivers_updated})
