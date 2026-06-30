@@ -504,6 +504,34 @@ def sync_event(db: SupabaseClient, client,
             db.insert_ignore("drivers", new_drivers, on_conflict="name")
             log(f"      👤 {len(new_drivers)} new driver(s) added")
 
+    # ── 6. Update driver stats (starts, wins) from all event_results ──────────
+    if not test:
+        try:
+            all_results = db.select(
+                "event_results",
+                "select=driver_name,position,is_dnf"
+            )
+            stats: dict = {}
+            for r in all_results:
+                name = r.get("driver_name", "")
+                if not name:
+                    continue
+                s = stats.setdefault(name, {"starts": 0, "wins": 0})
+                if not r.get("is_dnf", False):
+                    s["starts"] += 1
+                    if r.get("position") == 1:
+                        s["wins"] += 1
+            for name, s in stats.items():
+                requests.patch(
+                    f"{db.url}/rest/v1/drivers",
+                    headers={**db.headers, "Prefer": "return=minimal"},
+                    params={"name": f"eq.{name}"},
+                    json={"starts": s["starts"], "wins": s["wins"]},
+                    timeout=10,
+                )
+        except Exception as e:
+            log(f"      ⚠ Stats update failed: {e}")
+
     return True
 
 

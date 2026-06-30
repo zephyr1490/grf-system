@@ -367,6 +367,10 @@ def championship_create():
         if mode == "racenet" and champ.get("racenet_id"):
             champ["id"] = champ["racenet_id"]
 
+        # Nur bekannte Spalten — racenet_id o.ä. würden Supabase 400 geben
+        CHAMP_FIELDS = {"id","club_id","name","narrative","vehicle_class","season_number","start_date","end_date"}
+        champ = {k: v for k, v in champ.items() if k in CHAMP_FIELDS}
+
         created  = sb_post("championships", champ)
         champ_id = created[0]["id"] if isinstance(created, list) else created["id"]
 
@@ -784,7 +788,7 @@ def elo_update():
 
             ev_rows = sb_get(
                 "events",
-                f"championship_id=eq.{champ_id}&select=id,name,location,status,end_date,round_number&order=round_number.asc"
+                f"championship_id=eq.{champ_id}&select=id,name,location,status,start_date,end_date,round_number&order=round_number.asc"
             )
             for ev in ev_rows:
                 ev_id  = ev["id"]
@@ -808,7 +812,9 @@ def elo_update():
                     if not driver:
                         continue
                     # Letztes Event-Datum pro Fahrer tracken (für Decay)
-                    ev_end = ev.get("end_date") or champ_start
+                    # Priorität: event.end_date > event.start_date > champ.end_date > champ.start_date
+                    ev_end = (ev.get("end_date") or ev.get("start_date") or
+                              champ.get("end_date") or champ_start or "")
                     if ev_end:
                         if driver not in driver_last_event_date or ev_end > driver_last_event_date[driver]:
                             driver_last_event_date[driver] = ev_end

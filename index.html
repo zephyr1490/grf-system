@@ -220,9 +220,6 @@ body::after {
 }
 .elo-table tr:nth-child(even) td { background:#252729; }
 .elo-table tr:hover td { background:#2d1515; color:var(--white); }
-.elo-th-info { cursor:help; user-select:none; white-space:nowrap; }
-.elo-th-info:hover { color:var(--red); }
-.elo-row-inactive td { opacity:0.5; }
 .p1{color:#FFD700!important;font-weight:bold;}
 .p2{color:#C0C0C0!important;}
 .p3{color:#CD7F32!important;}
@@ -952,14 +949,13 @@ textarea.inp-std { resize:vertical; }
     <div class="event-selector" style="flex-wrap:wrap; gap:8px; padding:8px 12px; align-items:center;">
       <span class="event-selector-lbl" style="font-size:12px;">FILTER:</span>
       <button class="ev-btn active" onclick="eloFilter('all',this)">All Drivers</button>
-      <button class="ev-btn" onclick="eloFilter('active',this)">Active Only</button>
-      <button class="ev-btn" onclick="eloFilter('inactive',this)">Inactive Only</button>
-      <button class="ev-btn" onclick="eloFilter('established',this)">Established (5+ starts)</button>
-      <button class="ev-btn" onclick="eloFilter('improved',this)">Most Improved</button>
+      <button class="ev-btn" onclick="eloFilter('established',this)">Established Only (5+ starts)</button>
+      <button class="ev-btn" onclick="eloFilter('improved',this)">Recent Gainers</button>
       <div class="menu-sep" style="height:20px; margin:0 4px;"></div>
       <span class="event-selector-lbl" style="font-size:12px;">CLUB:</span>
       <button class="ev-btn active" id="elo-club-all" onclick="eloClub('all',this)">All Clubs</button>
-      <span id="elo-club-buttons" style="display:contents;"></span>
+      <button class="ev-btn" id="elo-club-themed" onclick="eloClub('GRF Themed',this)">GRF Themed</button>
+      <button class="ev-btn" id="elo-club-teamed" onclick="eloClub('GRF Teamed',this)">GRF Teamed</button>
       <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
         <span class="event-selector-lbl" style="font-size:12px;">SEARCH:</span>
         <input id="elo-search" type="text" placeholder="driver name..." oninput="eloRender()"
@@ -969,15 +965,13 @@ textarea.inp-std { resize:vertical; }
 
     <!-- ELO TABLE -->
     <div style="padding:6px; background:var(--gray);">
-      <div class="elo-wrap" style="margin:0; position:relative;">
+      <div class="elo-wrap" style="margin:0;">
         <table class="elo-table" style="font-size:13px;">
           <thead>
             <tr>
               <th style="width:40px;">#</th>
               <th>DRIVER</th>
-              <th class="elo-th-info" data-info="elo">ELO ⓘ</th>
-              <th class="elo-th-info" data-info="mu">μ ⓘ</th>
-              <th class="elo-th-info" data-info="sigma">σ ⓘ</th>
+              <th>ELO</th>
               <th>Δ 7D</th>
               <th>STARTS</th>
               <th>WINS</th>
@@ -987,10 +981,9 @@ textarea.inp-std { resize:vertical; }
             </tr>
           </thead>
           <tbody id="elo-full-tbody">
-            <tr><td colspan="11"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
+            <tr><td colspan="9"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
           </tbody>
         </table>
-        <div id="elo-info-popup" style="display:none; position:absolute; z-index:20; background:#111; border:1px solid #333; padding:10px 12px; font-size:12px; line-height:1.5; color:var(--gray-light); max-width:260px; box-shadow:0 4px 12px rgba(0,0,0,0.5);"></div>
       </div>
       <div style="padding:6px 8px; font-size:11px; color:#555; background:var(--black); border-top:1px solid #1a1a1a;">
         <span id="elo-result-count">— drivers shown</span> &nbsp;·&nbsp; ELO base: 1000 &nbsp;·&nbsp; Established threshold: 5 starts
@@ -2382,25 +2375,13 @@ async function loadEloData() {
       name:        d.name,
       country:     d.country || '',
       elo:         d.elo || 1000,
-      mu:          d.elo_mu ?? d.elo ?? 1000,
-      sigma:       d.elo_sigma ?? 0,
       delta:       d.elo_change || 0,
       starts:      d.starts || 0,
       wins:        d.wins || 0,
       best:        bestPos[d.name] && bestPos[d.name] < 999 ? `P${bestPos[d.name]}` : '—',
       club:        d.club || '',
       established: (d.starts || 0) >= 5,
-      inactive:    !!d.elo_inactive,
     }));
-
-    // Club-Filter-Buttons dynamisch aufbauen
-    const clubs = [...new Set(_eloData.map(d => d.club).filter(Boolean))].sort();
-    const clubBtnContainer = $('elo-club-buttons');
-    if (clubBtnContainer) {
-      clubBtnContainer.innerHTML = clubs.map(c => `
-        <button class="ev-btn" onclick="eloClub('${c.replace(/'/g,"\\'")}',this)">${c}</button>
-      `).join('');
-    }
 
     eloRender();
     renderMostImproved(drivers);
@@ -2412,19 +2393,16 @@ async function loadEloData() {
 
 function eloFilter(mode, el) {
   _eloFilterMode = mode;
-  document.querySelectorAll('#page-elo .event-selector:first-of-type .ev-btn, #page-elo .ev-btn').forEach(b => {
-    if (b.closest('.event-selector') && b.onclick && b.getAttribute('onclick')?.includes('eloFilter')) {
-      b.classList.remove('active');
-    }
-  });
+  document.querySelectorAll('#page-elo .ev-btn').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   eloRender();
 }
 
 function eloClub(club, el) {
   _eloClubFilter = club;
-  document.querySelectorAll('#page-elo .ev-btn').forEach(b => {
-    if (b.getAttribute('onclick')?.includes('eloClub')) b.classList.remove('active');
+  ['elo-club-all', 'elo-club-themed', 'elo-club-teamed'].forEach(id => {
+    const b = $(id);
+    if (b) b.classList.remove('active');
   });
   if (el) el.classList.add('active');
   eloRender();
@@ -2434,11 +2412,9 @@ function eloRender() {
   const search = ($('elo-search')?.value || '').toLowerCase();
   let data = [..._eloData];
 
-  if (_eloFilterMode === 'active')      data = data.filter(d => !d.inactive);
-  if (_eloFilterMode === 'inactive')    data = data.filter(d => d.inactive);
   if (_eloFilterMode === 'established') data = data.filter(d => d.established);
   if (_eloFilterMode === 'improved')    data = data.filter(d => d.delta > 0).sort((a, b) => b.delta - a.delta);
-  if (_eloClubFilter !== 'all')         data = data.filter(d => d.club.toLowerCase().includes(_eloClubFilter.toLowerCase()));
+  if (_eloClubFilter !== 'all')         data = data.filter(d => d.club.toLowerCase().includes(_eloClubFilter));
   if (search)                           data = data.filter(d => d.name.toLowerCase().includes(search));
 
   const tbody = $('elo-full-tbody');
@@ -2446,20 +2422,18 @@ function eloRender() {
 
   tbody.innerHTML = data.length
     ? data.map((d, i) => `
-        <tr class="${d.inactive ? 'elo-row-inactive' : ''}">
+        <tr>
           <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
           <td>${d.country} ${d.name}</td>
           <td class="ev">${d.elo}</td>
-          <td>${d.mu.toFixed ? d.mu.toFixed(0) : d.mu}</td>
-          <td>${d.sigma.toFixed ? d.sigma.toFixed(0) : d.sigma}</td>
           <td>${deltaHTML(d.delta)}</td>
           <td>${d.starts}</td>
           <td>${d.wins}</td>
           <td>${d.best}</td>
-          <td style="font-size:13px;color:#999;">${d.club || '—'}</td>
-          <td>${d.inactive ? '<span style="color:#666;">INACTIVE</span>' : statusBadge(d.established)}</td>
+          <td style="font-size:13px;color:#999;">—</td>
+          <td>${statusBadge(d.established)}</td>
         </tr>`).join('')
-    : emptyRow(11,
+    : emptyRow(9,
         _eloData.length ? 'NO RESULTS' : 'LOADING…',
         _eloData.length ? 'No drivers match the current filter.' : 'Fetching ELO data from Supabase…'
       );
@@ -2469,35 +2443,9 @@ function eloRender() {
   if (_eloData.length) {
     setText('elo-count',            _eloData.length);
     setText('elo-established-count', _eloData.filter(d => d.established).length);
-    const activeSorted = _eloData.filter(d => !d.inactive);
-    if (activeSorted[0]) setText('elo-top', `${activeSorted[0].elo} — ${activeSorted[0].name}`);
+    if (_eloData[0]) setText('elo-top', `${_eloData[0].elo} — ${_eloData[0].name}`);
   }
 }
-
-// ── Info-Popups für ELO/μ/σ Spaltenköpfe ──────────────────────
-const ELO_INFO_TEXT = {
-  elo: 'ELO — Der konservative Gesamtwert (μ − 1.5×σ). Das ist der Wert der zum Ranking benutzt wird: hohe Unsicherheit (σ) drückt den Wert nach unten, bis genug Rennen gefahren wurden.',
-  mu:  'μ (Mu) — Die geschätzte tatsächliche Fahrstärke. Steigt bei guten Ergebnissen gegen starke Gegner, sinkt bei schwachen Ergebnissen oder Inaktivität.',
-  sigma: 'σ (Sigma) — Die Unsicherheit der Einschätzung. Hoch bei wenigen Rennen oder langer Pause, sinkt mit mehr Starts. Je niedriger, desto verlässlicher ist der ELO-Wert.',
-};
-
-document.addEventListener('click', (e) => {
-  const popup = $('elo-info-popup');
-  if (!popup) return;
-  const th = e.target.closest('.elo-th-info');
-  if (th) {
-    const key = th.dataset.info;
-    popup.textContent = ELO_INFO_TEXT[key] || '';
-    const thRect = th.getBoundingClientRect();
-    const wrapRect = th.closest('.elo-wrap').getBoundingClientRect();
-    popup.style.left = Math.max(0, thRect.left - wrapRect.left) + 'px';
-    popup.style.top  = (thRect.bottom - wrapRect.top + 4) + 'px';
-    popup.style.display = 'block';
-    e.stopPropagation();
-  } else if (!e.target.closest('#elo-info-popup')) {
-    popup.style.display = 'none';
-  }
-});
 
 
 // ── 9. ADMIN PAGE ─────────────────────────────────────────────
@@ -2556,7 +2504,7 @@ function adminLogout() {
 }
 
 async function initAdminPanel() {
-  await _buildEloClubList();
+  _buildEloClubList();
   await adminLoadChampionships();
   // Locations + Classes dynamisch von Railway API laden
   crLoadFilters();
@@ -2572,8 +2520,8 @@ async function crLoadFilters() {
     const res  = await fetch(`${ADMIN_API_URL}/cr/values`, {
       headers: { 'X-Admin-Password': _adminPassword }
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
     // Locations: {id: name} — build route checkboxes per location
     const locationRoute = data.location_routes || {};
@@ -2612,10 +2560,7 @@ async function crLoadFilters() {
 
     crUpdateCounts();
   } catch (err) {
-    const hint = err.message.includes('Token') ? 'RaceNet Token abgelaufen — RACENET_TOKEN_RESET=1 setzen'
-               : err.message.includes('Timeout') ? 'RaceNet Timeout — Railway läuft, aber RaceNet antwortet nicht'
-               : 'Railway API nicht erreichbar oder Deployment-Fehler';
-    if (locList) locList.innerHTML = `<div style="color:#c44;font-size:11px;padding:8px;">⚠ ${err.message}<br><span style="color:#555;">${hint}</span></div>`;
+    if (locList) locList.innerHTML = `<div style="color:#c44;font-size:11px;padding:8px;">⚠ ${err.message}<br><span style="color:#555;">Railway API not reachable — check deployment</span></div>`;
     if (clsList) clsList.innerHTML = '';
   }
 }
@@ -2631,31 +2576,20 @@ function _buildCheckboxList(containerId, inputName, items, onchange) {
   el.dataset.built = '1';
 }
 
-async function _buildEloClubList() {
+function _buildEloClubList() {
   const el = $('elo-club-list');
   if (!el || el.dataset.built) return;
+  const clubs = [
+    { name: 'GRF Themed', info: '23799' },
+    { name: 'GRF Teamed', info: '23834'  },
+  ];
+  el.innerHTML = clubs.map((c, i) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${i % 2 ? '#050505' : '#0a0a0a'};border:1px solid #1a1a1a;cursor:pointer;font-size:13px;color:var(--gray-light);">
+      <input type="checkbox" name="elo-club" value="${c.info}" style="accent-color:var(--red);width:15px;height:15px;">
+      <span style="flex:1;">${c.name}</span>
+      <span style="font-size:11px;color:#555;">Club ${c.info}</span>
+    </label>`).join('');
   el.dataset.built = '1';
-  el.innerHTML = '<span style="font-size:12px;color:#555;">Lade Clubs…</span>';
-  try {
-    const res = await fetch(`${ADMIN_API_URL}/elo/clubs`, {
-      headers: { 'X-Admin-Password': _adminPassword }
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const clubs = await res.json();
-    if (!clubs.length) {
-      el.innerHTML = '<span style="font-size:12px;color:#888;">Keine Clubs gefunden.</span>';
-      return;
-    }
-    el.innerHTML = clubs.map((c, i) => `
-      <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${i % 2 ? '#050505' : '#0a0a0a'};border:1px solid #1a1a1a;cursor:pointer;font-size:13px;color:var(--gray-light);">
-        <input type="checkbox" name="elo-club" value="${c.id}" style="accent-color:var(--red);width:15px;height:15px;">
-        <span style="flex:1;">${c.name}</span>
-        <span style="font-size:11px;color:#555;">Club ${c.id}</span>
-      </label>`).join('');
-  } catch(e) {
-    el.innerHTML = `<span style="font-size:12px;color:var(--red);">Fehler beim Laden: ${e.message}</span>`;
-    el.dataset.built = '';  // retry erlauben
-  }
 }
 
 // Loads all championships into all admin dropdowns
