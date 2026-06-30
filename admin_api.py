@@ -744,7 +744,7 @@ def elo_update():
         # Leere Lookups (keine Surface/Drivetrain-Metadaten verfügbar)
         lookups = CategoryLookups(surface_by_location={}, vehicle_meta={})
 
-        # State aus Supabase laden (gespeichert als JSON in elo_state Tabelle)
+        # State aus Supabase laden
         state_rows = sb_get("elo_state", "select=*&limit=1")
         if state_rows and not force:
             state = EloState.from_dict(json.loads(state_rows[0]["state_json"]))
@@ -753,27 +753,33 @@ def elo_update():
             state = EloState(profile_name="grf")
             log("Starting fresh ELO state")
 
-        # Events aus Supabase laden — chronologisch nach Championship start_date
-        # Alle Events aller gewünschten Clubs
+        # ── Championships chronologisch laden ─────────────────────────────
         champ_rows = sb_get(
             "championships",
-            f"select=id,club_id,name,start_date&order=start_date.asc"
+            "select=id,club_id,name,start_date&order=start_date.asc"
         )
-        # Filter auf gewünschte clubs
         champ_rows = [c for c in champ_rows if str(c.get("club_id","")) in club_ids]
         log(f"Found {len(champ_rows)} championships across clubs")
 
-        raw_events = []
+        # ── Events laden: pro Championship chronologisch nach round_number ─
+        # Wir speichern (champ_start_date, round_number, RawEvent) für globale Sortierung
+        raw_events_with_date = []
+        # Auch end_date der letzten Stage pro Fahrer für Decay-Berechnung
+        driver_last_event_date: dict = {}  # {driver_name: "YYYY-MM-DD"}
+
         for champ in champ_rows:
-            champ_id = champ["id"]
-            # Events dieser Championship (chronologisch)
-            ev_rows = sb_get("events", f"championship_id=eq.{champ_id}&select=id,name,location,status&order=round_number.asc")
+            champ_id    = champ["id"]
+            champ_start = champ.get("start_date") or ""
+
+            ev_rows = sb_get(
+                "events",
+                f"championship_id=eq.{champ_id}&select=id,name,location,status,end_date,round_number&order=round_number.asc"
+            )
             for ev in ev_rows:
                 ev_id  = ev["id"]
-                # Nur abgeschlossene Events (status=2 = completed)
                 if ev.get("status", 0) != 2:
                     continue
-                # Ergebnisse laden
+
                 results = sb_get(
                     "event_results",
                     f"event_id=eq.{ev_id}&select=driver_name,position,vehicle,is_dnf&order=position.asc"
@@ -790,6 +796,11 @@ def elo_update():
                     is_dnf  = r.get("is_dnf", False)
                     if not driver:
                         continue
+                    # Letztes Event-Datum pro Fahrer tracken (für Decay)
+                    ev_end = ev.get("end_date") or champ_start
+                    if ev_end:
+                        if driver not in driver_last_event_date or ev_end > driver_last_event_date[driver]:
+                            driver_last_event_date[driver] = ev_end
                     if is_dnf:
                         dnf_list.append((driver, vehicle, driver))
                     elif rank:
@@ -799,20 +810,25 @@ def elo_update():
                     continue
 
                 event_id = f"{champ['club_id']}:{champ_id}:{ev_id}"
-                raw_events.append(RawEvent(
+                raw_event = RawEvent(
                     event_id=event_id,
                     location=ev.get("location") or ev.get("name",""),
                     finishers=finishers,
                     dnf_drivers=dnf_list,
-                ))
+                )
+                raw_events_with_date.append((champ_start, ev.get("round_number", 0), raw_event))
 
-        log(f"Loaded {len(raw_events)} completed events to process")
+        # Global chronologisch sortieren: erst nach Championship-Startdatum, dann Round
+        raw_events_with_date.sort(key=lambda x: (x[0] or "", x[1]))
+        raw_events = [x[2] for x in raw_events_with_date]
+        log(f"Loaded {len(raw_events)} completed events to process (chronological order)")
 
+        # ── ELO berechnen ─────────────────────────────────────────────────
         if force:
-            # Kompletter Neustart: alle Events verarbeiten
             state = EloState(profile_name="grf")
-            logs  = process_historical_batch(state, raw_events, lookups, clubs=club_ids, force=True)
-            log(f"Batch fit complete: {len(logs)} events processed")
+            # Sequenziell + chronologisch (nicht Batch) für Force Reset
+            logs = process_racenet_events(state, raw_events, lookups)
+            log(f"Sequential fit complete: {len(logs)} events processed")
         else:
             logs = process_racenet_events(state, raw_events, lookups)
             log(f"Delta update: {len(logs)} new events processed")
@@ -820,13 +836,48 @@ def elo_update():
         drivers_updated = len(state.ratings.get("overall", {}))
         log(f"Processed {drivers_updated} drivers")
 
-        # Ranking für Log
-        summaries = summarize_track(state, "overall")
-        if summaries:
-            top = summaries[0]
-            log(f"Top rated: {top.display_name} ({top.conservative_rating:.0f})")
+        # ── Inaktivitäts-Decay anwenden ───────────────────────────────────
+        # Decay: pro Woche Inaktivität bewegt sich mu um DECAY_PER_WEEK Richtung 1000
+        # Fahrer gilt als inaktiv wenn letztes Event > INACTIVE_WEEKS Wochen her
+        from datetime import date, timedelta
+        DECAY_PER_WEEK  = 8.0   # mu-Punkte pro Woche Richtung Baseline
+        INACTIVE_WEEKS  = 4     # ab wann inaktiv
+        BASELINE_MU     = 1000.0
+        today = date.today()
 
-        # State in Supabase speichern
+        overall_ratings = state.ratings.get("overall", {})
+        for driver_name, rating in overall_ratings.items():
+            last_date_str = driver_last_event_date.get(driver_name)
+            if not last_date_str:
+                continue
+            try:
+                last_date = date.fromisoformat(last_date_str[:10])
+            except Exception:
+                continue
+            weeks_inactive = (today - last_date).days / 7.0
+            if weeks_inactive >= INACTIVE_WEEKS:
+                # Decay: mu bewegt sich Richtung Baseline
+                decay = DECAY_PER_WEEK * weeks_inactive
+                if rating.mu > BASELINE_MU:
+                    rating.mu = max(BASELINE_MU, rating.mu - decay)
+                elif rating.mu < BASELINE_MU:
+                    rating.mu = min(BASELINE_MU, rating.mu + decay)
+                # Sigma leicht erhöhen (mehr Unsicherheit durch Inaktivität)
+                rating.sigma = min(rating.sigma * 1.02 ** weeks_inactive, 350.0)
+                state.driver_inactive[driver_name] = True
+
+        # Summaries nach Decay neu berechnen (inkl. inaktive)
+        summaries = summarize_track(state, "overall", include_inactive=True)
+        if summaries:
+            top = [s for s in summaries if not s.is_inactive]
+            if top:
+                log(f"Top rated (active): {top[0].display_name} ({top[0].conservative_rating:.0f})")
+            log(f"Top rated (overall): {summaries[0].display_name} ({summaries[0].conservative_rating:.0f})")
+
+        inactive_count = sum(1 for s in summaries if s.is_inactive)
+        log(f"Inactive drivers (>{INACTIVE_WEEKS}w): {inactive_count}")
+
+        # ── State in Supabase speichern ───────────────────────────────────
         state_json = json.dumps(state.to_dict())
         existing   = sb_get("elo_state", "select=id&limit=1")
         if existing:
@@ -837,9 +888,9 @@ def elo_update():
                 headers=SB, json={"state_json": state_json}
             )
 
-        # Ratings in drivers.elo schreiben
+        # ── Ratings in drivers Tabelle schreiben ──────────────────────────
         driver_names_in_db = {r["name"] for r in sb_get("drivers", "select=name")}
-        matched = 0
+        matched   = 0
         unmatched = []
         for summary in summaries:
             elo_val = round(summary.conservative_rating, 1)
@@ -852,11 +903,12 @@ def elo_update():
                 "elo_sigma":       round(summary.sigma, 2),
                 "elo_events":      summary.events_played,
                 "elo_provisional": summary.is_provisional,
+                "elo_inactive":    summary.is_inactive,
             })
             matched += 1
         log(f"ELO written: {matched} matched, {len(unmatched)} unmatched")
         if unmatched:
-            log(f"Unmatched drivers (not in drivers table): {', '.join(unmatched[:10])}")
+            log(f"Unmatched (not in drivers table): {', '.join(unmatched[:10])}")
 
         log(f"✓ ELO update complete. {drivers_updated} drivers updated.")
         return jsonify({"ok": True, "log": log_lines, "drivers": drivers_updated})
