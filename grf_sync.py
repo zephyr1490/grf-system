@@ -665,9 +665,15 @@ def main():
         print("  ℹ TEST MODE — nothing written to Supabase")
     print("=" * 60)
 
-    # ── ELO automatisch aktualisieren wenn neue Ergebnisse gesynced wurden ──
-    if not test_mode and total_synced > 0:
-        log(f"\n🔢 {total_synced} event(s) synced — triggering ELO update...")
+    # ── ELO automatisch aktualisieren ──────────────────────────────────────
+    # WICHTIG: läuft bei JEDEM Sync-Durchlauf, nicht nur wenn total_synced > 0.
+    # Grund: die Inaktivitäts-Decay-Berechnung (4-Wochen-Frist) hängt vom
+    # aktuellen Datum ab, nicht von neuen Ergebnissen. Wäre dieser Trigger an
+    # total_synced > 0 gekoppelt, würde die Inaktivitäts-Neuberechnung in
+    # Phasen ohne frische Resultate (zwischen Events/Saisons) komplett
+    # einfrieren — Fahrer blieben dann unbegrenzt lange fälschlich "aktiv".
+    if not test_mode:
+        log(f"\n🔢 Triggering ELO/inactivity update ({total_synced} new event(s) this run)...")
         try:
             admin_api_url = os.environ.get("ADMIN_API_URL", "").rstrip("/")
             admin_api_pw  = os.environ.get("ADMIN_API_PASSWORD", "")

@@ -356,6 +356,17 @@ def championship_create():
         return jsonify({"error": "name required"}), 400
 
     try:
+        # WICHTIG: Wenn Mode 2 (RaceNet-Import), muss die Championship-ID
+        # exakt der RaceNet-ID entsprechen. grf_sync.py upserted laufende
+        # Championships über genau diese ID (on_conflict="id") — wird hier
+        # keine explizite id gesetzt, generiert Supabase eine eigene und
+        # der Cronjob legt für dieselbe Championship eine ZWEITE, separate
+        # Zeile an. Alle Live-Events/Ergebnisse landen dann dort, nicht
+        # bei der hier im Admin erstellten Zeile (CR/Bonuses/Narrative
+        # wären dadurch "wirkungslos" für die laufende Saison).
+        if mode == "racenet" and champ.get("racenet_id"):
+            champ["id"] = champ["racenet_id"]
+
         created  = sb_post("championships", champ)
         champ_id = created[0]["id"] if isinstance(created, list) else created["id"]
 
