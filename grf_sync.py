@@ -33,6 +33,7 @@ Usage:
 """
 
 import sys
+import os
 import time
 import requests
 from datetime import datetime
@@ -382,10 +383,8 @@ def sync_event(db: SupabaseClient, client,
     driver_last_real_ms: dict[str, int | None] = {n: None for n in driver_info}
 
     stages_with_data = [(s, e) for s, e in stage_data if e]
-    n_stages = len(stages_with_data)
 
-    for stage_index, (_stage, entries) in enumerate(stages_with_data):
-        is_last_stage = (stage_index == n_stages - 1)
+    for _stage, entries in stages_with_data:
         seen = set()
         for entry in entries:
             name  = entry.get("displayName", "")
@@ -395,30 +394,30 @@ def sync_event(db: SupabaseClient, client,
             t_ms = time_str_to_ms(entry.get("time", ""))
             dnf  = is_dnf_ms(t_ms)
 
-            if is_last_stage:
-                # Letzte Stage: fehlende Zeit ODER Maximalwert = DNF des Events
-                if t_ms is None or dnf:
-                    driver_is_dnf[name] = True
-                elif not driver_is_dnf.get(name, False):
-                    driver_total_ms[name]    += t_ms
-                    driver_stages_done[name] += 1
-            else:
-                # Frühere Stage: fehlende Zeit = DNF; Maximalwert = addieren, kein DNF
-                if t_ms is None:
-                    driver_is_dnf[name] = True
-                elif dnf:
-                    # Strafzeit zur Gesamtzeit addieren (Fahrer bleibt im Rennen)
-                    driver_total_ms[name]    += t_ms
-                    driver_stages_done[name] += 1
-                elif not driver_is_dnf.get(name, False):
-                    driver_total_ms[name]    += t_ms
-                    driver_stages_done[name] += 1
-                    driver_last_real_ms[name] = t_ms
+            if dnf:
+                driver_is_dnf[name] = True
+            elif t_ms is not None and not driver_is_dnf.get(name, False):
+                driver_total_ms[name]    += t_ms
+                driver_stages_done[name] += 1
+                driver_last_real_ms[name] = t_ms  # track last real time
 
-        # Fahrer der auf dieser Stage (die Daten hat) komplett fehlt = DNF
+        # Driver missing from this stage (which HAS data) = DNF
         for name in driver_info:
             if name not in seen:
                 driver_is_dnf[name] = True
+
+    # Override: if a driver has a real time on the LAST stage with data,
+    # they finished — clear the DNF flag.
+    if stages_with_data:
+        last_entries = stages_with_data[-1][1]
+        for entry in last_entries:
+            name = entry.get("displayName", "")
+            if not name:
+                continue
+            t_ms = time_str_to_ms(entry.get("time", ""))
+            if t_ms is not None and not is_dnf_ms(t_ms):
+                # Real time on last stage = finisher regardless of earlier gaps
+                driver_is_dnf[name] = False
 
     # Split finishers / DNFs and rank
     finishers = sorted(
@@ -594,6 +593,7 @@ def sync_championship(db: SupabaseClient, client,
         time.sleep(0.5)
 
     log(f"    📊 Synced: {synced} | Skipped: {skipped}")
+    return synced
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -637,6 +637,7 @@ def main():
         sys.exit(1)
 
     t0 = time.time()
+    total_synced = 0
 
     for club_id in GRF_CLUBS:
         log(f"\n🏁 Club {club_id}...")
@@ -653,8 +654,9 @@ def main():
             log("  ℹ No active championship.")
             continue
 
-        sync_championship(db, client, club_id, current,
+        n = sync_championship(db, client, club_id, current,
                           test=test_mode, force_full=force_full)
+        total_synced += (n or 0)
 
     print()
     print("=" * 60)
@@ -662,6 +664,29 @@ def main():
     if test_mode:
         print("  ℹ TEST MODE — nothing written to Supabase")
     print("=" * 60)
+
+    # ── ELO automatisch aktualisieren wenn neue Ergebnisse gesynced wurden ──
+    if not test_mode and total_synced > 0:
+        log(f"\n🔢 {total_synced} event(s) synced — triggering ELO update...")
+        try:
+            admin_api_url = os.environ.get("ADMIN_API_URL", "").rstrip("/")
+            admin_api_pw  = os.environ.get("ADMIN_API_PASSWORD", "")
+            if not admin_api_url:
+                log("  ⚠ ADMIN_API_URL not set — skipping ELO auto-update")
+            else:
+                resp = requests.post(
+                    f"{admin_api_url}/elo/update",
+                    headers={"X-Admin-Password": admin_api_pw, "Content-Type": "application/json"},
+                    json={"club_ids": GRF_CLUBS, "force_reset": False},
+                    timeout=120,
+                )
+                if resp.ok:
+                    data = resp.json()
+                    log(f"  ✅ ELO updated: {data.get('drivers', '?')} drivers")
+                else:
+                    log(f"  ❌ ELO update failed: HTTP {resp.status_code} — {resp.text[:200]}")
+        except Exception as ex:
+            log(f"  ❌ ELO update request failed: {ex}")
 
 
 if __name__ == "__main__":
