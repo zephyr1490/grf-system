@@ -371,7 +371,15 @@ def championship_create():
         CHAMP_FIELDS = {"id","club_id","name","narrative","vehicle_class","season_number","start_date","end_date"}
         champ = {k: v for k, v in champ.items() if k in CHAMP_FIELDS}
 
-        created  = sb_post("championships", champ)
+        # Upsert statt Insert — vermeidet 409 wenn dieselbe RaceNet-ID nochmal importiert wird
+        h_upsert = {**SB, "Prefer": "resolution=merge-duplicates,return=representation"}
+        r_c = requests.post(
+            f"{SUPABASE_URL}/rest/v1/championships?on_conflict=id",
+            headers=h_upsert, json=champ, timeout=10
+        )
+        if not r_c.ok:
+            return jsonify({"error": f"Championships upsert failed: {r_c.text}"}), 500
+        created  = r_c.json()
         champ_id = created[0]["id"] if isinstance(created, list) else created["id"]
 
         # Rules speichern
@@ -812,7 +820,6 @@ def elo_update():
                     if not driver:
                         continue
                     # Letztes Event-Datum pro Fahrer tracken (für Decay)
-                    # Priorität: event.end_date > event.start_date > champ.end_date > champ.start_date
                     ev_end = (ev.get("end_date") or ev.get("start_date") or
                               champ.get("end_date") or champ_start or "")
                     if ev_end:

@@ -504,13 +504,10 @@ def sync_event(db: SupabaseClient, client,
             db.insert_ignore("drivers", new_drivers, on_conflict="name")
             log(f"      👤 {len(new_drivers)} new driver(s) added")
 
-    # ── 6. Update driver stats (starts, wins) from all event_results ──────────
+    # ── 6. Update driver stats (starts, wins) ──────────────────────────────────
     if not test:
         try:
-            all_results = db.select(
-                "event_results",
-                "select=driver_name,position,is_dnf"
-            )
+            all_results = db.select("event_results", "select=driver_name,position,is_dnf")
             stats: dict = {}
             for r in all_results:
                 name = r.get("driver_name", "")
