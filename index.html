@@ -1761,6 +1761,42 @@ function setHTML(id, html) {
   if (el) el.innerHTML = html;
 }
 
+/**
+ * escapeHtml(value) — wandelt gefährliche HTML-Sonderzeichen in Entities um.
+ * Sicherheits-relevant: verhindert Stored XSS über RaceNet-Displaynamen
+ * (driver_name kommt 1:1, ungefiltert von RaceNet — jeder Spieler kontrolliert
+ * diesen String komplett) und andere DB-Freitextfelder (vehicle, note,
+ * bonus_name, narrative), die über innerHTML/setHTML ins DOM gerendert werden.
+ */
+function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * safe`...` — Tagged Template, escaped automatisch JEDEN interpolierten Wert.
+ * Verwendung: statt `<td>${r.driver_name}</td>` einfach safe`<td>${r.driver_name}</td>`
+ * — exakt dieselbe Schreibweise, nur ein Zeichen davor. Kein manuelles
+ * escapeHtml() an jeder einzelnen Stelle nötig und damit auch nicht vergessbar
+ * bei künftigem neuem Code — das ist der Punkt: escaping wird zum Standardfall,
+ * nicht zur Ausnahme, an die man aktiv denken muss.
+ *
+ * WICHTIG: nur für TEXT-Interpolationen (Namen, Freitext) gedacht. Werte, die
+ * bewusst rohes HTML enthalten sollen (z.B. bereits fertig gebaute Sub-Tabellen
+ * wie `stageRow`, `roundHdrs`, `hdrs`, `cells` — siehe deren Aufrufstellen),
+ * NICHT über safe`` einbetten, sonst wird deren HTML mit-escaped und als Text
+ * statt als Markup angezeigt. Diese bleiben bewusst normale Template-Literals.
+ */
+function safe(strings, ...values) {
+  return strings.reduce((out, str, i) =>
+    out + str + (i < values.length ? escapeHtml(values[i]) : ''), '');
+}
+
 /** Formatiert ein ISO-Datum als "JUN 20". */
 function fmtDate(str) {
   if (!str) return '—';
@@ -1919,7 +1955,7 @@ async function loadHome() {
         ? top10.map((d, i) => `
             <tr>
               <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
-              <td>${d.country || ''} ${d.name}</td>
+              <td>${escapeHtml(d.country || '')} ${escapeHtml(d.name)}</td>
               <td class="ev">${d.elo || '—'}</td>
               <td class="eq">—</td>
               <td>${d.starts || 0}</td>
@@ -1957,7 +1993,7 @@ function renderMostImproved(drivers) {
   container.innerHTML = withChange.map((d, i) => `
     <div class="improved-row">
       <div class="improved-rank">${i + 1}</div>
-      <div class="improved-name">${d.name}</div>
+      <div class="improved-name">${escapeHtml(d.name)}</div>
       <div class="improved-bar-wrap">
         <div class="improved-bar-bg">
           <div class="improved-bar-fg" style="width:${Math.round((d.elo_change / maxVal) * 100)}%"></div>
@@ -2187,8 +2223,8 @@ async function _fetchAndRenderResults(eventId) {
       return `
         <tr${dnf ? ' style="opacity:.55"' : ''} style="cursor:pointer;" onclick="toggleStageRow('${rowId}')">
           <td class="${rankClass(i)}">${posStr}</td>
-          <td>${r.driver_name || '—'}</td>
-          <td style="font-size:12px;color:#aaa;">${r.vehicle || '—'}</td>
+          <td>${escapeHtml(r.driver_name) || '—'}</td>
+          <td style="font-size:12px;color:#aaa;">${escapeHtml(r.vehicle) || '—'}</td>
           <td>${r.time || '—'}</td>
           <td>${r.base_points ?? '—'}</td>
           <td class="ev">${crStr}</td>
@@ -2304,8 +2340,8 @@ async function loadStandings() {
         return `
           <tr>
             <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
-            <td>${d.name}</td>
-            <td style="font-size:12px;color:#aaa;">${carStr}</td>
+            <td>${escapeHtml(d.name)}</td>
+            <td style="font-size:12px;color:#aaa;">${escapeHtml(carStr)}</td>
             ${roundCells}
             <td class="ev" style="color:var(--green);font-weight:bold;">${d.total}</td>
             <td class="ev">${loyal}</td>
@@ -2342,7 +2378,7 @@ async function loadCarRatings() {
     tbody.innerHTML = ratings.map((r, i) => `
       <tr>
         <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
-        <td>${r.vehicle || '—'}</td>
+        <td>${escapeHtml(r.vehicle) || '—'}</td>
         <td style="font-size:12px;color:#aaa;">${r.era || r.surface || '—'}</td>
         <td class="ev">${Number(r.cr_value).toFixed(2)}</td>
       </tr>`).join('');
@@ -2446,7 +2482,7 @@ function eloRender() {
     ? data.map((d, i) => `
         <tr class="${d.inactive ? 'elo-row-inactive' : ''}">
           <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
-          <td>${d.country} ${d.name}</td>
+          <td>${escapeHtml(d.country)} ${escapeHtml(d.name)}</td>
           <td class="ev">${d.elo}</td>
           <td>${d.mu != null ? Math.round(d.mu) : '—'}</td>
           <td>${d.sigma != null ? Math.round(d.sigma) : '—'}</td>
@@ -2454,7 +2490,7 @@ function eloRender() {
           <td>${d.starts}</td>
           <td>${d.wins}</td>
           <td>${d.best}</td>
-          <td style="font-size:13px;color:#999;">${d.club || '—'}</td>
+          <td style="font-size:13px;color:#999;">${escapeHtml(d.club) || '—'}</td>
           <td>${d.inactive ? '<span style="color:#555;font-size:12px;">INACTIVE</span>' : (d.provisional ? '<span style="color:#888;font-size:12px;">PROVISIONAL</span>' : statusBadge(d.established))}</td>
         </tr>`).join('')
     : emptyRow(11,
@@ -2761,7 +2797,7 @@ async function crCalculate() {
       tbody.innerHTML = results.map((r, i) => `
         <tr>
           <td>${i + 1}</td>
-          <td style="text-align:left;">${r.vehicle}</td>
+          <td style="text-align:left;">${escapeHtml(r.vehicle)}</td>
           <td style="font-size:11px;color:#888;">${r.era || '—'}</td>
           <td>${r.n}</td>
           <td>${fmtMs(r.avg_top_time_ms)}</td>
@@ -2969,9 +3005,9 @@ async function crManualLoadVehicles() {
 
     list.innerHTML = vehicles.map(v => `
       <div style="display:flex; align-items:center; gap:10px; padding:6px 8px; background:#252729; border:1px solid #1a1a1a;">
-        <span style="flex:1; font-size:12px; color:var(--gray-light);">${v.vehicle}</span>
+        <span style="flex:1; font-size:12px; color:var(--gray-light);">${escapeHtml(v.vehicle)}</span>
         <input type="number" step="0.001" min="0.1" max="2"
-          data-vehicle="${v.vehicle}"
+          data-vehicle="${escapeHtml(v.vehicle)}"
           class="crm-cr-input"
           value="${v.cr_value != null ? v.cr_value : ''}"
           placeholder="e.g. 0.95"
@@ -3241,10 +3277,10 @@ function csAddTeam(name='', color='#c0392b', members=[]) {
   div.style.cssText = 'background:#1a1a1a; border:1px solid #252729; padding:10px; display:grid; grid-template-columns:1fr 80px auto; gap:8px; align-items:start;';
   div.innerHTML = `
     <div>
-      <input type="text" value="${name}" placeholder="Team name…" data-team-name
+      <input type="text" value="${escapeHtml(name)}" placeholder="Team name…" data-team-name
         style="width:100%;background:#252729;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:13px;padding:5px 8px;outline:none;margin-bottom:6px;">
       <textarea placeholder="Members (one per line)…" data-team-members rows="3"
-        style="width:100%;background:#252729;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:5px 8px;outline:none;resize:vertical;">${members.join('\n')}</textarea>
+        style="width:100%;background:#252729;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:5px 8px;outline:none;resize:vertical;">${escapeHtml(members.join('\n'))}</textarea>
     </div>
     <div>
       <label class="inp-lbl">COLOR</label>
@@ -3310,14 +3346,14 @@ async function mbLoadExisting() {
 
   if (!rows.length) { tbody.innerHTML = emptyRow(7, 'NO MANUAL BONUSES', 'Add bonuses using the form on the left.'); return; }
   tbody.innerHTML = rows.map(r => {
-    const evName = r.events ? `R${r.events.round_number} ${r.events.name}` : r.event_id;
+    const evName = r.events ? `R${r.events.round_number} ${escapeHtml(r.events.name)}` : r.event_id;
     return `<tr>
-      <td>${r.driver_name}</td>
+      <td>${escapeHtml(r.driver_name)}</td>
       <td style="font-size:12px;">${evName}</td>
       <td>${r.bonus_type}</td>
-      <td>${r.bonus_name || '—'}</td>
+      <td>${escapeHtml(r.bonus_name) || '—'}</td>
       <td style="color:var(--green);">+${r.points}</td>
-      <td style="font-size:11px;color:#888;">${r.note || '—'}</td>
+      <td style="font-size:11px;color:#888;">${escapeHtml(r.note) || '—'}</td>
       <td><button onclick="mbDelete('${r.id}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
     </tr>`;
   }).join('');
