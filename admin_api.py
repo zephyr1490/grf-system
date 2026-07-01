@@ -760,9 +760,9 @@ def elo_update():
 
     try:
         from elo_engine   import Rating
-        from elo_pipeline import RawEvent, process_racenet_events, process_historical_batch, summarize_track
+        from elo_pipeline import RawEvent, process_racenet_events, summarize_track
         from elo_state    import EloState
-        from elo_categories import CategoryLookups
+        from elo_categories import build_lookups
 
         log_lines = []
         def log(msg):
@@ -770,8 +770,15 @@ def elo_update():
 
         log(f"Starting ELO update for clubs: {', '.join(club_ids)}")
 
-        # Leere Lookups (keine Surface/Drivetrain-Metadaten verfügbar)
-        lookups = CategoryLookups(surface_by_location={}, vehicle_meta={})
+        # Surface (Location) + Vehicle (Drivetrain/Era) Lookups — statische
+        # Dateien, EA WRC bekommt keine Updates mehr, Autos/Locations ändern
+        # sich nie wieder. Liegen neben elo_categories.py.
+        lookup_dir     = os.path.dirname(os.path.abspath(__file__))
+        surface_path   = os.path.join(lookup_dir, "category_lookups_surface.json")
+        vehicle_path   = os.path.join(lookup_dir, "category_lookups_vehicles.json")
+        lookups = build_lookups(surface_path, vehicle_path)
+        log(f"Lookups geladen: {len(lookups.surface_by_location)} Locations, "
+            f"{len(lookups.vehicle_meta)} Fahrzeuge")
 
         # State aus Supabase laden
         state_rows = sb_get("elo_state", "select=*&limit=1")

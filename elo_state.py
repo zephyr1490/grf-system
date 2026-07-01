@@ -50,23 +50,6 @@ class EloState:
     # demselben Spieler zugeordnet.
     driver_labels: Dict[str, str] = field(default_factory=dict)
 
-    # Historische Basis (Bradley-Terry-Batch, ordnungsunabhängig) — der
-    # aktive Mechanismus für den einmaligen Seed aus voller Racenet-Historie
-    # (ein oder mehrere Clubs). Ersetzt das alte CSV-Lock-Konzept unten,
-    # das nur noch als "JRC ELO IMPORT"-Referenz im Code steht.
-    historical_batch_locked: bool = False
-    historical_batch_loaded_at: Optional[str] = None
-    historical_batch_event_count: int = 0
-    historical_batch_driver_count: int = 0
-    historical_batch_clubs: List[str] = field(default_factory=list)
-
-    # ── JRC ELO IMPORT (auskommentiert im GUI, Felder hier nur als Referenz
-    #    für eine spätere CSV-Variante belassen) ─────────────────────────────
-    csv_baseline_locked: bool = False
-    csv_baseline_loaded_at: Optional[str] = None
-    csv_baseline_event_count: int = 0
-    csv_baseline_driver_count: int = 0
-
     # ── Hilfsfunktionen ─────────────────────────────────────────────────────
 
     # {driver_id: gesehene Clubs}. Zeigt, wie gut ein Fahrer über Clubs hinweg
@@ -138,19 +121,6 @@ class EloState:
         if event_id not in self.processed_event_ids:
             self.processed_event_ids.append(event_id)
 
-    def lock_historical_batch(self, event_count: int, driver_count: int, clubs: List[str]) -> None:
-        self.historical_batch_locked = True
-        self.historical_batch_loaded_at = datetime.now(timezone.utc).isoformat()
-        self.historical_batch_event_count = event_count
-        self.historical_batch_driver_count = driver_count
-        self.historical_batch_clubs = clubs
-
-    def lock_csv_baseline(self, event_count: int, driver_count: int) -> None:
-        self.csv_baseline_locked = True
-        self.csv_baseline_loaded_at = datetime.now(timezone.utc).isoformat()
-        self.csv_baseline_event_count = event_count
-        self.csv_baseline_driver_count = driver_count
-
     # ── Serialisierung ──────────────────────────────────────────────────────
 
     def to_dict(self) -> dict:
@@ -168,15 +138,6 @@ class EloState:
             "driver_inactive": self.driver_inactive,
             "total_events_processed": self.total_events_processed,
             "inactivity_threshold": self.inactivity_threshold,
-            "csv_baseline_locked": self.csv_baseline_locked,
-            "csv_baseline_loaded_at": self.csv_baseline_loaded_at,
-            "csv_baseline_event_count": self.csv_baseline_event_count,
-            "csv_baseline_driver_count": self.csv_baseline_driver_count,
-            "historical_batch_locked": self.historical_batch_locked,
-            "historical_batch_loaded_at": self.historical_batch_loaded_at,
-            "historical_batch_event_count": self.historical_batch_event_count,
-            "historical_batch_driver_count": self.historical_batch_driver_count,
-            "historical_batch_clubs": self.historical_batch_clubs,
         }
 
     @staticmethod
@@ -194,15 +155,6 @@ class EloState:
         st.driver_inactive = {k: bool(v) for k, v in d.get("driver_inactive", {}).items()}
         st.total_events_processed = d.get("total_events_processed", 0)
         st.inactivity_threshold = d.get("inactivity_threshold", 20)
-        st.csv_baseline_locked = d.get("csv_baseline_locked", False)
-        st.csv_baseline_loaded_at = d.get("csv_baseline_loaded_at")
-        st.csv_baseline_event_count = d.get("csv_baseline_event_count", 0)
-        st.csv_baseline_driver_count = d.get("csv_baseline_driver_count", 0)
-        st.historical_batch_locked = d.get("historical_batch_locked", False)
-        st.historical_batch_loaded_at = d.get("historical_batch_loaded_at")
-        st.historical_batch_event_count = d.get("historical_batch_event_count", 0)
-        st.historical_batch_driver_count = d.get("historical_batch_driver_count", 0)
-        st.historical_batch_clubs = d.get("historical_batch_clubs", [])
         return st
 
 

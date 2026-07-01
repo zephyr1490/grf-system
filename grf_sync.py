@@ -26,9 +26,16 @@ Points:
 Loyalty bonus checked by website at championship level — not here.
 
 Usage:
-  python grf_sync.py          — smart sync (current championship only)
-  python grf_sync.py --full   — force re-sync of all events
-  python grf_sync.py --test   — test connections, no writes
+  python grf_sync.py                    — smart sync (current championship only)
+  python grf_sync.py --full             — load ALL championships (current + historical)
+                                           per club; still smart-skips stage data for
+                                           events that already have stage_results
+                                           (event/championship dates are always backfilled)
+  python grf_sync.py --full --force-stages
+                                         — same as --full, but ALSO re-fetches stage
+                                           data for events that already have it
+                                           (slow — use only if stage data is suspect)
+  python grf_sync.py --test             — test connections, no writes
 ════════════════════════════════════════════════════════════════════════════════
 """
 
@@ -42,8 +49,8 @@ from datetime import datetime
 #  CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-SUPABASE_URL = "https://ixuhhzdijvtlfdjtrnyi.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4dWhoemRpanZ0bGZkanRybnlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzNDkxOTIsImV4cCI6MjA5NzkyNTE5Mn0.rJi8w8ayIiB-m5v1Kn-f5Re-K2Z_Ke1v1IaJo1qGmSA"
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ixuhhzdijvtlfdjtrnyi.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")   # service_role key — bypasses RLS, correct for a trusted server-side script. Was hardcoded to the public anon key before — fixed this session.
 
 GRF_CLUBS = ["23799", "23834"]
 
@@ -376,38 +383,37 @@ def sync_event(db: SupabaseClient, client,
         log("      ℹ No drivers found across all stages.")
         return False
 
-    # Sum times per driver, detect DNFs
-    driver_total_ms:     dict[str, int]  = {n: 0     for n in driver_info}
-    driver_is_dnf:       dict[str, bool] = {n: False for n in driver_info}
-    driver_stages_done:  dict[str, int]  = {n: 0     for n in driver_info}
-    driver_last_real_ms: dict[str, int | None] = {n: None for n in driver_info}
+    # Sum times per driver; DNF/Finisher decided ONLY by the driver's status
+    # on the LAST stage with data — never by what happened on earlier stages.
+    #
+    # Rules (confirmed with owner):
+    #   1. Every stage entry a driver has — real time OR RaceNet's own max/penalty
+    #      time — counts fully toward the total. We never compute/guess a max time
+    #      ourselves; if RaceNet gives one, we sum it like any other stage time.
+    #   2. Finisher vs. DNF is decided EXCLUSIVELY by the LAST stage with data:
+    #        - real time there              -> finisher (regardless of earlier stages)
+    #        - max/round-number time there  -> DNF (regardless of earlier stages)
+    #        - missing entirely there       -> DNF (quit and never came back)
+    driver_total_ms:    dict[str, int]  = {n: 0     for n in driver_info}
+    driver_is_dnf:      dict[str, bool] = {n: True  for n in driver_info}  # DNF until proven otherwise below
+    driver_stages_done: dict[str, int]  = {n: 0     for n in driver_info}
 
     stages_with_data = [(s, e) for s, e in stage_data if e]
 
+    # 1) Sum every stage entry a driver has, real or max-time alike.
     for _stage, entries in stages_with_data:
-        seen = set()
         for entry in entries:
-            name  = entry.get("displayName", "")
+            name = entry.get("displayName", "")
             if not name:
                 continue
-            seen.add(name)
             t_ms = time_str_to_ms(entry.get("time", ""))
-            dnf  = is_dnf_ms(t_ms)
-
-            if dnf:
-                driver_is_dnf[name] = True
-            elif t_ms is not None and not driver_is_dnf.get(name, False):
+            if t_ms is not None:
                 driver_total_ms[name]    += t_ms
                 driver_stages_done[name] += 1
-                driver_last_real_ms[name] = t_ms  # track last real time
 
-        # Driver missing from this stage (which HAS data) = DNF
-        for name in driver_info:
-            if name not in seen:
-                driver_is_dnf[name] = True
-
-    # Override: if a driver has a real time on the LAST stage with data,
-    # they finished — clear the DNF flag.
+    # 2) Finisher/DNF decided exclusively by the LAST stage with data.
+    #    Anyone not explicitly cleared here (incl. drivers absent from the last
+    #    stage entirely) stays DNF from the default above.
     if stages_with_data:
         last_entries = stages_with_data[-1][1]
         for entry in last_entries:
@@ -416,7 +422,6 @@ def sync_event(db: SupabaseClient, client,
                 continue
             t_ms = time_str_to_ms(entry.get("time", ""))
             if t_ms is not None and not is_dnf_ms(t_ms):
-                # Real time on last stage = finisher regardless of earlier gaps
                 driver_is_dnf[name] = False
 
     # Split finishers / DNFs and rank
@@ -496,7 +501,7 @@ def sync_event(db: SupabaseClient, client,
     if not test and driver_info:
         existing = {r["name"] for r in db.select("drivers", "select=name")}
         new_drivers = [
-            {"name": name, "elo": 1500, "wins": 0, "starts": 0, "country": ""}
+            {"name": name, "elo": 1000, "wins": 0, "starts": 0, "country": ""}
             for name in driver_info
             if name and name not in existing
         ]
@@ -538,7 +543,7 @@ def sync_event(db: SupabaseClient, client,
 
 def sync_championship(db: SupabaseClient, client,
                       club_id: str, champ: dict,
-                      test: bool = False, force_full: bool = False):
+                      test: bool = False, force_stage_reload: bool = False):
 
     champ_id = champ.get("id")
     if not champ_id:
@@ -587,9 +592,32 @@ def sync_championship(db: SupabaseClient, client,
         ev_id   = event.get("id")
         ev_name = (event.get("eventSettings") or {}).get("name") or ev_id
 
+        # ── Always backfill event metadata, regardless of skip decision below.
+        # This is a single cheap Supabase upsert — NOT a RaceNet stage call —
+        # so it's safe to run even for events whose stage data we're skipping.
+        # This is what fills in start_date/end_date for events that were
+        # created earlier (e.g. via Admin's RaceNet import) without dates.
+        #
+        # Date extraction + log happen OUTSIDE the `if not test` guard (same
+        # pattern as the championship-level date log above) so --test shows
+        # you exactly what dates WOULD be written, per event, without writing.
+        ev_settings_bf = event.get("eventSettings") or {}
+        ev_location_bf = ev_settings_bf.get("location") or ev_settings_bf.get("locationName") or ""
+        ev_start_bf, ev_end_bf = extract_dates(event)
+        log(f"      📅 Rd.{round_num} dates: {ev_start_bf or '?'} → {ev_end_bf or '?'}")
+
+        if not test:
+            db.upsert("events", {
+                "id": ev_id, "championship_id": champ_id,
+                "club_id": club_id, "name": ev_name, "location": ev_location_bf,
+                "round_number": round_num,
+                "start_date": ev_start_bf, "end_date": ev_end_bf,
+                "status": event.get("status", 0),
+            }, on_conflict="id")
+
         # Smart skip: only skip completed events that already have stage_results
         # Do NOT skip based on status==0 alone (unreliable per RaceNet client notes)
-        if not force_full:
+        if not force_stage_reload:
             has_stage_results = db.exists("stage_results", f"event_id=eq.{ev_id}")
             ev_status = event.get("status", 0)
 
@@ -597,14 +625,14 @@ def sync_championship(db: SupabaseClient, client,
             if ev_status == 1:
                 log(f"    🟢 Rd.{round_num} {ev_name} — active, syncing...")
 
-            # Completed with data: skip
+            # Completed with data: skip stage-level reload (dates already backfilled above)
             elif ev_status == 2 and has_stage_results:
-                log(f"    ✓  Rd.{round_num} {ev_name} — completed & synced, skipping")
+                log(f"    ✓  Rd.{round_num} {ev_name} — completed & synced, skipping stage reload")
                 skipped += 1
                 continue
             # Status==0 with data already: skip (past championship events)
             elif ev_status == 0 and has_stage_results:
-                log(f"    ✓  Rd.{round_num} {ev_name} — already synced, skipping")
+                log(f"    ✓  Rd.{round_num} {ev_name} — already synced, skipping stage reload")
                 skipped += 1
                 continue
             # No data yet: always try to sync
@@ -626,17 +654,20 @@ def sync_championship(db: SupabaseClient, client,
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    test_mode  = "--test" in sys.argv
-    force_full = "--full" in sys.argv
+    test_mode    = "--test" in sys.argv
+    force_full   = "--full" in sys.argv           # visit ALL championships (not just current)
+    force_stages = "--force-stages" in sys.argv    # ALSO re-fetch stage data for already-synced events
 
     print("=" * 60)
     print("  GRF Sync Script v3")
     if test_mode:
         print("  Mode: TEST — no writes to Supabase")
+    elif force_full and force_stages:
+        print("  Mode: FULL RE-SYNC — all championships, all stages re-fetched")
     elif force_full:
-        print("  Mode: FULL RE-SYNC — all events")
+        print("  Mode: FULL — all championships, smart-skip on stage data")
     else:
-        print("  Mode: SMART — skips completed & synced events")
+        print("  Mode: SMART — all clubs, current championship only, skips completed & synced events")
     print(f"  Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
@@ -652,6 +683,16 @@ def main():
         sys.exit(1)
 
     # Supabase
+    if not SUPABASE_KEY:
+        log("❌ SUPABASE_SERVICE_KEY environment variable is not set (or empty).")
+        log("   This script now requires the service_role key from Supabase")
+        log("   (Dashboard → Settings → API → service_role), set as an environment")
+        log("   variable — it no longer has the key hardcoded. If running locally,")
+        log("   set it in your shell before running, e.g.:")
+        log("   export SUPABASE_SERVICE_KEY='eyJ...'  (Mac/Linux)")
+        log("   $env:SUPABASE_SERVICE_KEY='eyJ...'     (Windows PowerShell)")
+        sys.exit(1)
+
     log("Connecting to Supabase...")
     try:
         db = SupabaseClient(SUPABASE_URL, SUPABASE_KEY)
@@ -664,7 +705,24 @@ def main():
     t0 = time.time()
     total_synced = 0
 
-    for club_id in GRF_CLUBS:
+    # Club-Liste: IMMER alle Clubs vom RaceNet-Account (nicht nur GRF_CLUBS) —
+    # sowohl im normalen 10-Min-Cron als auch unter --full. Der Unterschied
+    # zwischen den beiden Modi ist NICHT "wie viele Clubs", sondern "wie viele
+    # Championships pro Club" (siehe force_full-Verzweigung weiter unten:
+    # ALLE Championships vs. nur currentChampionship). GRF_CLUBS bleibt nur
+    # als Fallback, falls der RaceNet-Call fehlschlägt.
+    try:
+        all_clubs = client.get_active_clubs()
+        club_ids  = [str(c.get("clubID") or c.get("id","")) for c in all_clubs]
+        club_ids  = [cid for cid in club_ids if cid]
+        if not club_ids:
+            club_ids = GRF_CLUBS
+        log(f"Syncing {len(club_ids)} club(s) from RaceNet account")
+    except Exception as ex:
+        log(f"  ⚠ Could not load club list ({ex}), falling back to GRF_CLUBS")
+        club_ids = GRF_CLUBS
+
+    for club_id in club_ids:
         log(f"\n🏁 Club {club_id}...")
         try:
             club = client.get_club(club_id)
@@ -673,15 +731,42 @@ def main():
             continue
 
         log(f"  {club.get('clubName', club_id)}")
-        current = club.get("currentChampionship", {})
 
-        if not current or not current.get("id"):
-            log("  ℹ No active championship.")
-            continue
+        if force_full:
+            # Load every championship this club has ever run (current + historical),
+            # not just currentChampionship. This is the actual fix for --full.
+            try:
+                champ_ids = client.get_all_championship_ids(club_id)
+            except Exception as ex:
+                log(f"  ❌ Could not load championship list: {ex}")
+                continue
 
-        n = sync_championship(db, client, club_id, current,
-                          test=test_mode, force_full=force_full)
-        total_synced += (n or 0)
+            if not champ_ids:
+                log("  ℹ No championships found for this club.")
+                continue
+
+            log(f"  Found {len(champ_ids)} championship(s) for this club (full history).")
+
+            for champ_id in champ_ids:
+                try:
+                    champ = client.get_championship(club_id, champ_id)
+                except Exception as ex:
+                    log(f"  ❌ Could not load championship {champ_id}: {ex}")
+                    continue
+
+                n = sync_championship(db, client, club_id, champ,
+                                       test=test_mode, force_stage_reload=force_stages)
+                total_synced += (n or 0)
+                time.sleep(0.5)
+        else:
+            current = club.get("currentChampionship", {})
+            if not current or not current.get("id"):
+                log("  ℹ No active championship.")
+                continue
+
+            n = sync_championship(db, client, club_id, current,
+                              test=test_mode, force_stage_reload=force_stages)
+            total_synced += (n or 0)
 
     print()
     print("=" * 60)
@@ -697,8 +782,19 @@ def main():
     # total_synced > 0 gekoppelt, würde die Inaktivitäts-Neuberechnung in
     # Phasen ohne frische Resultate (zwischen Events/Saisons) komplett
     # einfrieren — Fahrer blieben dann unbegrenzt lange fälschlich "aktiv".
+    #
+    # club_ids ist bewusst NICHT mehr hardcoded auf GRF_CLUBS — die ELO läuft
+    # automatisch für ALLE Clubs, die gerade am RaceNet-Account hängen (auch
+    # neu dazugekommene, ohne Code-Änderung). force_reset bleibt False (Delta-
+    # Update); der einmalige volle Rebuild läuft weiterhin manuell über Admin
+    # (Checkbox "alle Clubs" + Force-Reset-Toggle, siehe elo/update im Admin-Tab).
+    # Wiederverwendet dieselbe club_ids-Liste vom Sync-Loop oben (Zeile ~700) —
+    # kein zweiter get_active_clubs()-Call nötig, RaceNet-Aufrufe sparen.
     if not test_mode:
-        log(f"\n🔢 Triggering ELO/inactivity update ({total_synced} new event(s) this run)...")
+        elo_club_ids = club_ids
+
+        log(f"\n🔢 Triggering ELO/inactivity update for {len(elo_club_ids)} club(s) "
+            f"({total_synced} new event(s) this run)...")
         try:
             admin_api_url = os.environ.get("ADMIN_API_URL", "").rstrip("/")
             admin_api_pw  = os.environ.get("ADMIN_API_PASSWORD", "")
@@ -708,7 +804,7 @@ def main():
                 resp = requests.post(
                     f"{admin_api_url}/elo/update",
                     headers={"X-Admin-Password": admin_api_pw, "Content-Type": "application/json"},
-                    json={"club_ids": GRF_CLUBS, "force_reset": False},
+                    json={"club_ids": elo_club_ids, "force_reset": False},
                     timeout=120,
                 )
                 if resp.ok:

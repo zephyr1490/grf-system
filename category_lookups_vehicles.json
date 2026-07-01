@@ -1,0 +1,398 @@
+{
+  "Alpine Renault A110 1600 S": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Audi Sport quattro S1 (E2)": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "BMW M1 Procar Rally": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "BMW M3 Evo Rally": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Citroën C2 R2 Max": {
+    "drivetrain": "FWD",
+    "era": "modern"
+  },
+  "Citroën C2 Super 1600": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Citroën C3 Rally2": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Citroën C3 WRC": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Citroën C4 WRC": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Citroën DS3 WRC '12": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Citroën Saxo Super 1600": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Citroën Xsara Kit Car": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Citroën Xsara WRC": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Fiat 131 Abarth Rally": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Fiat Grande Punto Abarth S2000": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Ford Escort MK2": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Ford Escort MK2 McRae Motorsport": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Ford Escort Mk 6 Maxi": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Ford Escort RS 1600 MK1": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Ford Escort RS Cosworth": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Ford Fiesta MK8 Rally4": {
+    "drivetrain": "FWD",
+    "era": "modern"
+  },
+  "Ford Fiesta R5 MK7 Evo 2": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Ford Fiesta Rally2": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Ford Fiesta Rally3": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Ford Fiesta Rally3 Evo": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Ford Fiesta WRC": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Ford Focus RS Rally 2001": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Ford Focus RS Rally 2008": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Ford Focus WRC '99": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Ford Puma Rally1 HYBRID (2023)": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Ford Puma Rally1 HYBRID (2024)": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Ford Puma S1600": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Ford RS200": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Ford Sierra Cosworth RS500": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Hillman Avenger": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Hyundai i20 Coupe WRC '21": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Hyundai i20 N Rally1 HYBRID (2023)": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Hyundai i20 N Rally1 HYBRID (2024)": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Hyundai i20 N Rally2": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Junior WRC Builder Vehicle": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Lancia 037 Evo 2": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Lancia Delta HF Integrale": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Lancia Delta S4": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Lancia Fulvia HF": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Lancia Stratos": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "MG Metro 6R4": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "MINI Cooper S": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "MINI Countryman Rally Edition": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "MINI John Cooper Works WRC": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "McRae R4": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Mitsubishi Galant VR4": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Mitsubishi Lancer Evolution VI": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Mitsubishi Lancer Evolution X": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Opel Adam R2": {
+    "drivetrain": "FWD",
+    "era": "modern"
+  },
+  "Opel Ascona 400": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Opel Corsa Rally4": {
+    "drivetrain": "FWD",
+    "era": "modern"
+  },
+  "Opel Corsa S2000": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Opel Kadett C GT/E": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Opel Manta 400": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Peugeot 205 GTI": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Peugeot 205 T16 Evo 2": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Peugeot 206 Rally": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "Peugeot 206 S1600": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Peugeot 207 S2000": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Peugeot 208 Rally4": {
+    "drivetrain": "FWD",
+    "era": "modern"
+  },
+  "Peugeot 208 T16 R5": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Peugeot 306 Maxi": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Peugeot 309 GTI": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Porsche 911 SC RS": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Renault 5 Turbo": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Renault Clio Rally3": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Renault Clio Rally4": {
+    "drivetrain": "FWD",
+    "era": "modern"
+  },
+  "Renault Clio S1600": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Renault Maxi Mégane": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Renault Twingo II": {
+    "drivetrain": "FWD",
+    "era": "modern"
+  },
+  "SEAT Córdoba WRC": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "SEAT Ibiza Kit Car": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "SUBARU Impreza 1995": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "SUBARU Impreza 1998": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "SUBARU Impreza 2001": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "SUBARU Impreza 2008": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "SUBARU Legacy RS": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  },
+  "SUBARU WRX STI NR4": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Talbot Sunbeam Lotus": {
+    "drivetrain": "RWD",
+    "era": "historic"
+  },
+  "Toyota GR Yaris Rally1 HYBRID (2023)": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Toyota GR Yaris Rally1 HYBRID (2024)": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Toyota GR Yaris Rally2": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Vauxhall Astra Rally Car": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Vauxhall Nova Sport": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Volkswagen Golf GTI": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Volkswagen Golf IV Kit Car": {
+    "drivetrain": "FWD",
+    "era": "historic"
+  },
+  "Volkswagen Polo 2017": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Volkswagen Polo GTI R5": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "Volkswagen Polo R WRC 2013": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "WRC Builder Vehicle": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "WRC2 Builder Vehicle": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "ŠKODA Fabia RS Rally2": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "ŠKODA Fabia Rally2 Evo": {
+    "drivetrain": "AWD",
+    "era": "modern"
+  },
+  "ŠKODA Fabia WRC": {
+    "drivetrain": "AWD",
+    "era": "historic"
+  }
+}

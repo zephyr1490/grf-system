@@ -48,8 +48,8 @@ DRIVETRAIN_RWD = "RWD"
 DRIVETRAIN_FWD = "FWD"
 DRIVETRAIN_UNKNOWN = "unknown"
 
-ERA_MODERN  = "modern"
-ERA_CLASSIC = "classic"
+ERA_MODERN   = "modern"
+ERA_HISTORIC = "historic"
 ERA_UNKNOWN  = "unknown"
 
 
@@ -127,7 +127,7 @@ def load_vehicle_meta_json(filepath: str) -> Dict[str, VehicleMeta]:
     Erwartet JSON-Format:
     {
       "Toyota GR Yaris Rally1": {"drivetrain": "AWD", "era": "modern", "vehicle_class": "Rally1"},
-      "Lancia Stratos":         {"drivetrain": "RWD", "era": "classic"}
+      "Lancia Stratos":         {"drivetrain": "RWD", "era": "historic"}
     }
     """
     if not os.path.exists(filepath):
@@ -211,7 +211,7 @@ def tracks_for_event(location: str, results: List[RawResult], lookups: CategoryL
       - "overall"               -> alle Teilnehmer (immer)
       - "surface:<surface>"     -> alle Teilnehmer (nur wenn Surface bekannt)
       - "drivetrain:<AWD/RWD/FWD>" -> nur Teilnehmer mit diesem Antrieb (wenn >= 2)
-      - "era:<modern/classic>"  -> nur Teilnehmer mit dieser Ära (wenn >= 2)
+      - "era:<modern/historic>"  -> nur Teilnehmer mit dieser Ära (wenn >= 2)
 
     surface_granular=True  -> "gravel_soft"/"gravel_hard" getrennt
     surface_granular=False -> beide zu "gravel" zusammengefasst
