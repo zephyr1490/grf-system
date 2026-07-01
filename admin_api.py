@@ -103,6 +103,37 @@ def sb_patch(table, qs, data):
         print(f"[sb_patch ERROR] {table}?{qs} → HTTP {r.status_code}: {r.text}")
     r.raise_for_status()
 
+def sb_upsert_all(table, rows, on_conflict, chunk_size=500):
+    """
+    Bulk-Upsert statt N sequenzieller sb_patch()-Calls — EIN POST pro Chunk
+    (Prefer: resolution=merge-duplicates → nur die mitgeschickten Spalten
+    werden überschrieben, alle anderen bleiben unangetastet, exakt wie beim
+    bisherigen sb_patch() pro Zeile).
+
+    Grund: die alte for-Schleife mit einem sb_patch() pro Fahrer war bei
+    ~1000 durch den Pagination-Cap "unmatched" Fahrern unbemerkt schnell
+    genug — seit dem Pagination-Fix werden korrekt alle ~2219 Fahrer
+    geschrieben, was die 43s auf mehrere hundert Sekunden (Cron: 14min statt
+    ~90s) hochgetrieben hat. Das ist der dazugehörige Performance-Fix
+    (im Briefing als "Fix direction: batch/bulk-upsert" vorgemerkt).
+
+    rows: Liste von dicts, JEDES muss die on_conflict-Spalte enthalten
+          (hier: "name"), sonst kann Supabase nicht matchen.
+    """
+    if not rows:
+        return
+    h = {**SB, "Prefer": "resolution=merge-duplicates,return=minimal"}
+    for i in range(0, len(rows), chunk_size):
+        chunk = rows[i:i + chunk_size]
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/{table}?on_conflict={on_conflict}",
+            headers=h, json=chunk, timeout=30,
+        )
+        if not r.ok:
+            print(f"[sb_upsert_all ERROR] {table} chunk {i}-{i+len(chunk)} → "
+                  f"HTTP {r.status_code}: {r.text}")
+        r.raise_for_status()
+
 def sb_delete(table, qs):
     h = {**SB, "Prefer": "return=minimal"}
     r = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}?{qs}", headers=h, timeout=10)
@@ -966,16 +997,18 @@ def elo_update():
                 headers=SB, json={"state_json": state_json}
             )
 
-        # ── Ratings in drivers Tabelle schreiben ──────────────────────────
+        # ── Ratings in drivers Tabelle schreiben (Bulk-Upsert statt N PATCHes) ──
         driver_names_in_db = {r["name"] for r in sb_get_all("drivers", "select=name")}
         matched   = 0
         unmatched = []
+        upsert_rows = []
         for summary in summaries:
             elo_val = round(summary.conservative_rating, 1)
             if summary.display_name not in driver_names_in_db:
                 unmatched.append(summary.display_name)
                 continue
-            sb_patch("drivers", f"name=eq.{requests.utils.quote(summary.display_name)}", {
+            upsert_rows.append({
+                "name":            summary.display_name,
                 "elo":             elo_val,
                 "elo_mu":          round(summary.mu, 2),
                 "elo_sigma":       round(summary.sigma, 2),
@@ -984,6 +1017,7 @@ def elo_update():
                 "elo_inactive":    summary.is_inactive,
             })
             matched += 1
+        sb_upsert_all("drivers", upsert_rows, on_conflict="name")
         log(f"ELO written: {matched} matched, {len(unmatched)} unmatched")
         if unmatched:
             log(f"Unmatched (not in drivers table): {', '.join(unmatched[:10])}")
