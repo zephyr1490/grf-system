@@ -192,6 +192,36 @@ class SupabaseClient:
         r.raise_for_status()
         return r.json()
 
+    def select_all(self, table: str, filters: str = "", page_size: int = 1000) -> list:
+        """
+        Wie select(), aber holt ALLE Zeilen via limit/offset-Pagination.
+        Notwendig weil Supabase/PostgREST unpaginierte Reads still auf 1000
+        Zeilen kappt — kein Fehler, keine Warnung, einfach weniger Daten.
+        (Bug-Klasse aus dem Briefing, Known Issue #5 — dies ist einer der
+        bestätigten Fälle: event_results ist mit 25k+ Zeilen weit über dem Cap.)
+
+        Erzwingt eine stabile Sortierung (order=id.asc), falls der Aufrufer
+        keine eigene angibt — ohne deterministische Order sind aufeinander-
+        folgende limit/offset-Seiten nicht garantiert überlappungsfrei.
+        """
+        if "order=" not in filters:
+            sep = "&" if filters else ""
+            filters = f"{filters}{sep}order=id.asc"
+
+        all_rows: list = []
+        offset = 0
+        while True:
+            sep = "&" if filters else ""
+            page_filters = f"{filters}{sep}limit={page_size}&offset={offset}"
+            page = self.select(table, page_filters)
+            if not page:
+                break
+            all_rows.extend(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
+        return all_rows
+
     def upsert(self, table: str, data: dict | list, on_conflict: str = "id") -> list:
         if isinstance(data, dict):
             data = [data]
@@ -512,7 +542,7 @@ def sync_event(db: SupabaseClient, client,
     # ── 6. Update driver stats (starts, wins) ──────────────────────────────────
     if not test:
         try:
-            all_results = db.select("event_results", "select=driver_name,position,is_dnf")
+            all_results = db.select_all("event_results", "select=driver_name,position,is_dnf")
             stats: dict = {}
             for r in all_results:
                 name = r.get("driver_name", "")

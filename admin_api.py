@@ -61,6 +61,37 @@ def sb_get(table, qs=""):
     r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}?{qs}", headers=SB, timeout=10)
     r.raise_for_status(); return r.json()
 
+def sb_get_all(table, qs="", page_size=1000):
+    """
+    Wie sb_get(), aber holt ALLE Zeilen via limit/offset-Pagination.
+    Supabase/PostgREST kappt unpaginierte Reads still auf 1000 Zeilen — kein
+    Fehler, keine Warnung, einfach weniger Daten. (Bug-Klasse aus dem Briefing,
+    Known Issue #5 — dies ist der Fall, der den drivers-Namens-Match in
+    elo_update() bei 2219 Fahrern kaputt gemacht hat: alles jenseits der ersten
+    ~1000 gelesenen Namen wurde als "unmatched" verworfen und nie geschrieben.)
+
+    Erzwingt eine stabile Sortierung (order=id.asc), falls der Aufrufer keine
+    eigene angibt — ohne deterministische Order sind aufeinanderfolgende
+    limit/offset-Seiten nicht garantiert überlappungsfrei.
+    """
+    if "order=" not in qs:
+        sep = "&" if qs else ""
+        qs = f"{qs}{sep}order=id.asc"
+
+    all_rows = []
+    offset = 0
+    while True:
+        sep = "&" if qs else ""
+        page_qs = f"{qs}{sep}limit={page_size}&offset={offset}"
+        page = sb_get(table, page_qs)
+        if not page:
+            break
+        all_rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return all_rows
+
 def sb_post(table, data):
     r = requests.post(f"{SUPABASE_URL}/rest/v1/{table}", headers=SB, json=data, timeout=10)
     r.raise_for_status(); return r.json()
@@ -936,7 +967,7 @@ def elo_update():
             )
 
         # ── Ratings in drivers Tabelle schreiben ──────────────────────────
-        driver_names_in_db = {r["name"] for r in sb_get("drivers", "select=name")}
+        driver_names_in_db = {r["name"] for r in sb_get_all("drivers", "select=name")}
         matched   = 0
         unmatched = []
         for summary in summaries:
