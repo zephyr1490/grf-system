@@ -418,7 +418,7 @@ def _import_racenet_events(client, champ_id: str, racenet_champ_id: str, club_id
     Benennt Events als 'Rd.N — Location'.
     """
     # Club-Championships laden um Events zu finden
-    club_data = client.get_championship_details(club_id, racenet_champ_id)
+    club_data = client.get_championship(club_id, racenet_champ_id)
     events_raw = club_data.get("events", []) or club_data.get("legs", [])
 
     imported = []
@@ -430,14 +430,16 @@ def _import_racenet_events(client, champ_id: str, racenet_champ_id: str, club_id
 
         name = f"Rd.{i} — {loc_name}"
 
+        start_date = ev.get("startAt") or ev.get("startDate") or None
+        end_date   = ev.get("closeAt") or ev.get("endDate") or None
         row = {
             "championship_id":  champ_id,
             "racenet_event_id": str(ev.get("id", ev.get("eventId", ""))),
             "name":             name,
             "location":         loc_name,
             "round_number":     i,
-            "start_at":         ev.get("startAt") or ev.get("startDate"),
-            "close_at":         ev.get("closeAt") or ev.get("endDate"),
+            "start_date":       start_date[:10] if start_date else None,
+            "end_date":         end_date[:10]   if end_date   else None,
         }
         sb_post("events", row)
         imported.append(row)
@@ -490,6 +492,10 @@ def championship_alter():
     fields   = body.get("fields", {})
     if not champ_id or not fields:
         return jsonify({"error": "championship_id and fields required"}), 400
+    ALLOWED = {"name","vehicle_class","season_number","start_date","end_date","narrative"}
+    fields = {k: v for k, v in fields.items() if k in ALLOWED and v is not None}
+    if not fields:
+        return jsonify({"error": "no valid fields to update"}), 400
     try:
         sb_patch("championships", f"id=eq.{champ_id}", fields)
         return jsonify({"ok": True})
@@ -779,7 +785,7 @@ def elo_update():
         # ── Championships chronologisch laden ─────────────────────────────
         champ_rows = sb_get(
             "championships",
-            "select=id,club_id,name,start_date&order=start_date.asc"
+            "select=id,club_id,name,start_date,end_date&order=start_date.asc"
         )
         champ_rows = [c for c in champ_rows if str(c.get("club_id","")) in club_ids]
         log(f"Found {len(champ_rows)} championships across clubs")
