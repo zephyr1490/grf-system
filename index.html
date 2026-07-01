@@ -2455,7 +2455,7 @@ function eloRender() {
           <td>${d.wins}</td>
           <td>${d.best}</td>
           <td style="font-size:13px;color:#999;">${d.club || '—'}</td>
-          <td>${d.inactive ? '<span style="color:#555;font-size:12px;">INACTIVE</span>' : statusBadge(d.established)}</td>
+          <td>${d.inactive ? '<span style="color:#555;font-size:12px;">INACTIVE</span>' : (d.provisional ? '<span style="color:#888;font-size:12px;">PROVISIONAL</span>' : statusBadge(d.established))}</td>
         </tr>`).join('')
     : emptyRow(11,
         _eloData.length ? 'NO RESULTS' : 'LOADING…',

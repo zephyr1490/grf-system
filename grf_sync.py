@@ -496,7 +496,7 @@ def sync_event(db: SupabaseClient, client,
     if not test and driver_info:
         existing = {r["name"] for r in db.select("drivers", "select=name")}
         new_drivers = [
-            {"name": name, "elo": 1000, "wins": 0, "starts": 0, "country": ""}
+            {"name": name, "elo": 1500, "wins": 0, "starts": 0, "country": ""}
             for name in driver_info
             if name and name not in existing
         ]

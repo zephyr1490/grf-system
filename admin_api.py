@@ -431,7 +431,7 @@ def _import_racenet_events(client, champ_id: str, racenet_champ_id: str, club_id
         name = f"Rd.{i} — {loc_name}"
 
         start_date = ev.get("startAt") or ev.get("startDate") or None
-        end_date   = ev.get("closeAt") or ev.get("endDate") or None
+        end_date   = ev.get("closeAt") or ev.get("endDate")   or None
         row = {
             "championship_id":  champ_id,
             "racenet_event_id": str(ev.get("id", ev.get("eventId", ""))),
@@ -872,29 +872,39 @@ def elo_update():
         from datetime import date, timedelta
         DECAY_PER_WEEK  = 8.0   # mu-Punkte pro Woche Richtung Baseline
         INACTIVE_WEEKS  = 4     # ab wann inaktiv
-        BASELINE_MU     = 1000.0
+        BASELINE_MU     = 1500.0
         today = date.today()
 
         overall_ratings = state.ratings.get("overall", {})
+        inactivity_log = []
         for driver_name, rating in overall_ratings.items():
             last_date_str = driver_last_event_date.get(driver_name)
             if not last_date_str:
+                inactivity_log.append(f"  {driver_name}: NO DATE (skipped)")
                 continue
             try:
                 last_date = date.fromisoformat(last_date_str[:10])
             except Exception:
                 continue
-            weeks_inactive = (today - last_date).days / 7.0
-            if weeks_inactive >= INACTIVE_WEEKS:
-                # Decay: mu bewegt sich Richtung Baseline
+            days_inactive  = (today - last_date).days
+            weeks_inactive = days_inactive / 7.0
+            is_now_inactive = weeks_inactive >= INACTIVE_WEEKS
+            inactivity_log.append(
+                f"  {driver_name}: last={last_date_str[:10]} "
+                f"days={days_inactive} "
+                f"{'→ INACTIVE' if is_now_inactive else '→ active'}"
+            )
+            if is_now_inactive:
                 decay = DECAY_PER_WEEK * weeks_inactive
                 if rating.mu > BASELINE_MU:
                     rating.mu = max(BASELINE_MU, rating.mu - decay)
                 elif rating.mu < BASELINE_MU:
                     rating.mu = min(BASELINE_MU, rating.mu + decay)
-                # Sigma leicht erhöhen (mehr Unsicherheit durch Inaktivität)
                 rating.sigma = min(rating.sigma * 1.02 ** weeks_inactive, 350.0)
                 state.driver_inactive[driver_name] = True
+        print("\n[INACTIVITY LOG]")
+        for line in sorted(inactivity_log):
+            print(line)
 
         # Summaries nach Decay neu berechnen (inkl. inaktive)
         summaries = summarize_track(state, "overall", include_inactive=True)
