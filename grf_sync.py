@@ -896,6 +896,16 @@ def main():
 
         log(f"  {club.get('clubName', club_id)}")
 
+        # Club-Namen in die clubs-Tabelle schreiben (für den Club-Filter im
+        # ELO-Tab auf der Website — vorher gab es nirgends eine Zuordnung
+        # club_id -> lesbarer Name, nur die rohe ID).
+        club_name = club.get("clubName") or f"Club {club_id}"
+        if not test_mode:
+            try:
+                db.upsert("clubs", {"club_id": club_id, "name": club_name}, on_conflict="club_id")
+            except Exception as ex:
+                log(f"  ⚠ Could not write club name: {ex}")
+
         if force_full:
             # Load every championship this club has ever run (current + historical),
             # not just currentChampionship. This is the actual fix for --full.
