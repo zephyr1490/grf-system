@@ -957,6 +957,9 @@ textarea.inp-std { resize:vertical; }
       <button class="ev-btn" onclick="eloFilter('established',this)">Established (5+ starts)</button>
       <button class="ev-btn" onclick="eloFilter('improved',this)">Most Improved</button>
       <div class="menu-sep" style="height:20px; margin:0 4px;"></div>
+      <span class="event-selector-lbl" style="font-size:12px;">CLUB:</span>
+      <button class="ev-btn active" id="elo-club-all" onclick="eloClub('all',this)">All Clubs</button>
+      <span id="elo-club-buttons" style="display:contents;"></span>
       <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
         <span class="event-selector-lbl" style="font-size:12px;">SEARCH:</span>
         <input id="elo-search" type="text" placeholder="driver name..." oninput="eloRender()"
@@ -1656,7 +1659,7 @@ textarea.inp-std { resize:vertical; }
 //   5. CLOCK & COUNTDOWN
 //   6. HOME PAGE   (loadHome, loadNextEvent, renderMostImproved)
 //   7. THEMED PAGE (loadThemedResults, loadStandings)
-//   8. ELO PAGE    (loadEloData, eloRender, eloFilter)
+//   8. ELO PAGE    (loadEloData, eloRender, eloFilter, eloClub)
 //   9. ADMIN PAGE  (adminLogin, adminLogout, initAdminPanel)
 //  10. ADMIN — CAR RATING CALCULATOR
 //  11. ADMIN — ELO UPDATE
@@ -2438,13 +2441,16 @@ async function loadCarRatings() {
 
 let _eloData       = [];
 let _eloFilterMode = 'all';
+let _eloClubFilter = 'all';
 
 async function loadEloData() {
   try {
-    const [drivers, allResults, deltaMap] = await Promise.all([
+    const [drivers, allResults, deltaMap, clubs, events] = await Promise.all([
       sb('drivers',    'select=*&order=elo.desc'),
-      sbAll('event_results', 'select=driver_name,position,is_dnf'),
+      sbAll('event_results', 'select=driver_name,event_id,position,is_dnf'),
       fetchEloDeltaMap(7),
+      sb('clubs',      'select=club_id,name'),
+      sbAll('events',  'select=id,club_id'),
     ]);
 
     if (!drivers.length) return;
@@ -2458,6 +2464,22 @@ async function loadEloData() {
       if (!bestPos[n] || pos < bestPos[n]) bestPos[n] = pos;
     });
 
+    // Fahrer-Club-Zugehörigkeit: club_id liegt bei euch am Event, nicht am
+    // Fahrer direkt (ein Fahrer kann in mehreren Clubs fahren) — deshalb
+    // über event_results.event_id -> events.club_id ermitteln, nicht über
+    // ein direktes drivers.club-Feld (das gibt's bei euch strukturell nicht).
+    const eventClubMap = {};
+    events.forEach(e => { eventClubMap[e.id] = e.club_id; });
+    const driverClubs = {};
+    allResults.forEach(r => {
+      const n = r.driver_name;
+      const clubId = eventClubMap[r.event_id];
+      if (!n || !clubId) return;
+      (driverClubs[n] || (driverClubs[n] = new Set())).add(String(clubId));
+    });
+    const clubNameById = {};
+    clubs.forEach(c => { clubNameById[String(c.club_id)] = c.name; });
+
     _eloData = drivers.map(d => {
       const past = deltaMap[d.name];
       return {
@@ -2470,10 +2492,25 @@ async function loadEloData() {
       starts:      d.starts || 0,
       wins:        d.wins || 0,
       best:        bestPos[d.name] && bestPos[d.name] < 999 ? `P${bestPos[d.name]}` : '—',
+      clubIds:     driverClubs[d.name] ? [...driverClubs[d.name]] : [],
       established: (d.starts || 0) >= 5,
       inactive:    !!d.elo_inactive,
       };
     });
+
+    // Club-Filter-Buttons: nur Clubs, die tatsächlich Fahrer im ELO-Datensatz
+    // haben, mit echtem Namen aus der clubs-Tabelle (Fallback auf die rohe ID
+    // falls ein Club noch keinen Namen hat, z.B. direkt nach dem ersten Sync).
+    const clubIdsInUse = [...new Set(_eloData.flatMap(d => d.clubIds))].sort(
+      (a, b) => (clubNameById[a] || a).localeCompare(clubNameById[b] || b)
+    );
+    const clubBtnContainer = $('elo-club-buttons');
+    if (clubBtnContainer) {
+      clubBtnContainer.innerHTML = clubIdsInUse.map(id => {
+        const label = clubNameById[id] || `Club ${id}`;
+        return `<button class="ev-btn" onclick="eloClub('${id}',this)">${escapeHtml(label)}</button>`;
+      }).join('');
+    }
 
     // elo_change am rohen drivers-Array anhängen (für renderMostImproved,
     // falls das Widget auch auf dieser Seite existiert — sonst no-op)
@@ -2488,6 +2525,15 @@ async function loadEloData() {
   } catch (err) {
     console.error('[loadEloData]', err);
   }
+}
+
+function eloClub(clubId, el) {
+  _eloClubFilter = clubId;
+  document.querySelectorAll('#page-elo .ev-btn').forEach(b => {
+    if (b.getAttribute('onclick')?.includes('eloClub')) b.classList.remove('active');
+  });
+  if (el) el.classList.add('active');
+  eloRender();
 }
 
 function eloFilter(mode, el) {
@@ -2507,6 +2553,7 @@ function eloRender() {
   if (_eloFilterMode === 'inactive')    data = data.filter(d => d.inactive);
   if (_eloFilterMode === 'established') data = data.filter(d => d.established);
   if (_eloFilterMode === 'improved')    data = data.filter(d => d.delta > 0).sort((a, b) => b.delta - a.delta);
+  if (_eloClubFilter !== 'all')         data = data.filter(d => d.clubIds.includes(_eloClubFilter));
   if (search)                           data = data.filter(d => d.name.toLowerCase().includes(search));
 
   const tbody = $('elo-full-tbody');
