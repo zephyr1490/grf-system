@@ -957,9 +957,6 @@ textarea.inp-std { resize:vertical; }
       <button class="ev-btn" onclick="eloFilter('established',this)">Established (5+ starts)</button>
       <button class="ev-btn" onclick="eloFilter('improved',this)">Most Improved</button>
       <div class="menu-sep" style="height:20px; margin:0 4px;"></div>
-      <span class="event-selector-lbl" style="font-size:12px;">CLUB:</span>
-      <button class="ev-btn active" id="elo-club-all" onclick="eloClub('all',this)">All Clubs</button>
-      <span id="elo-club-buttons" style="display:contents;"></span>
       <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
         <span class="event-selector-lbl" style="font-size:12px;">SEARCH:</span>
         <input id="elo-search" type="text" placeholder="driver name..." oninput="eloRender()"
@@ -983,7 +980,6 @@ textarea.inp-std { resize:vertical; }
               <th>STARTS</th>
               <th>WINS</th>
               <th>BEST</th>
-              <th>CLUB(S)</th>
               <th>STATUS</th>
             </tr>
           </thead>
@@ -1660,7 +1656,7 @@ textarea.inp-std { resize:vertical; }
 //   5. CLOCK & COUNTDOWN
 //   6. HOME PAGE   (loadHome, loadNextEvent, renderMostImproved)
 //   7. THEMED PAGE (loadThemedResults, loadStandings)
-//   8. ELO PAGE    (loadEloData, eloRender, eloFilter, eloClub)
+//   8. ELO PAGE    (loadEloData, eloRender, eloFilter)
 //   9. ADMIN PAGE  (adminLogin, adminLogout, initAdminPanel)
 //  10. ADMIN — CAR RATING CALCULATOR
 //  11. ADMIN — ELO UPDATE
@@ -1743,6 +1739,29 @@ async function sb(table, params = '') {
   }
 }
 
+/**
+ * Wie sb(), aber holt ALLE Zeilen via limit/offset-Pagination statt nur die
+ * ersten ~1000 (Supabase/PostgREST-Standard-Cap). Gleiches Muster wie
+ * select_all()/sb_get_all() im Backend (grf_sync.py/admin_api.py) — nötig
+ * z.B. für event_results (25k+ Zeilen), wo ein einzelner sb()-Call sonst nur
+ * eine zufällige, unvollständige Teilmenge liefert.
+ */
+async function sbAll(table, params = '', pageSize = 1000) {
+  const sep = params.includes('order=') ? '' : (params ? '&order=id.asc' : 'order=id.asc');
+  const baseParams = params + sep;
+  let all = [];
+  let offset = 0;
+  while (true) {
+    const pageSep = baseParams ? '&' : '';
+    const page = await sb(table, `${baseParams}${pageSep}limit=${pageSize}&offset=${offset}`);
+    if (!page.length) break;
+    all = all.concat(page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return all;
+}
+
 
 // ── 3. UTILS ─────────────────────────────────────────────────
 
@@ -1812,6 +1831,21 @@ function deltaHTML(delta) {
   if (delta > 0) return `<span class="eu">▲${delta}</span>`;
   if (delta < 0) return `<span class="ed">▼${Math.abs(delta)}</span>`;
   return `<span class="eq">—</span>`;
+}
+
+/**
+ * Lädt die ELO-Werte von exakt vor N Tagen aus elo_history und gibt
+ * {driver_name: elo_wert} zurück. Fehlt ein Snapshot für exakt dieses Datum
+ * (z.B. Fahrer ist neu, oder Feature läuft noch keine 7 Tage), taucht der
+ * Fahrer im Ergebnis-Objekt einfach nicht auf — Aufrufer behandelt das als
+ * "keine Daten", nicht als "Änderung = 0".
+ */
+async function fetchEloDeltaMap(days = 7) {
+  const cutoff = new Date(Date.now() - days * 86400 * 1000).toISOString().slice(0, 10);
+  const rows = await sb('elo_history', `select=driver_name,elo&snapshot_date=eq.${cutoff}`);
+  const map = {};
+  rows.forEach(r => { map[r.driver_name] = r.elo; });
+  return map;
 }
 
 /** "Established / Provisional"-Badge für ELO-Tabelle. */
@@ -1917,10 +1951,19 @@ function _setCountdownTarget(isoDate) {
 
 async function loadHome() {
   try {
-    const [drivers, allER] = await Promise.all([
+    const [drivers, allER, deltaMap] = await Promise.all([
       sb('drivers',       'select=*&order=elo.desc'),
       sb('event_results', 'select=driver_name,event_id,created_at&order=created_at.desc'),
+      fetchEloDeltaMap(7),
     ]);
+
+    // Delta 7 Tage direkt an jeden Fahrer anhängen — 'null' wenn kein
+    // Snapshot von vor genau 7 Tagen existiert (statt fälschlich 0 = "keine
+    // Änderung" anzuzeigen).
+    drivers.forEach(d => {
+      const past = deltaMap[d.name];
+      d.elo_change = (past != null && d.elo != null) ? Math.round(d.elo - past) : null;
+    });
 
     // Kachel: GRF Members (unique Fahrer über alle event_results)
     const uniqueDrivers = new Set(allER.map(r => r.driver_name).filter(Boolean));
@@ -1957,13 +2000,13 @@ async function loadHome() {
               <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
               <td>${escapeHtml(d.country || '')} ${escapeHtml(d.name)}</td>
               <td class="ev">${d.elo || '—'}</td>
-              <td class="eq">—</td>
+              <td>${deltaHTML(d.elo_change)}</td>
               <td>${d.starts || 0}</td>
             </tr>`).join('')
         : emptyRow(5, 'NO ELO DATA YET', 'ELO data will appear after the first events are processed.');
     }
 
-    // Most Improved (aus drivers.elo_change — falls Spalte vorhanden)
+    // Most Improved (jetzt mit echtem 7-Tage-Delta aus elo_history)
     renderMostImproved(drivers);
 
     // Nächstes Event
@@ -1974,7 +2017,7 @@ async function loadHome() {
   }
 }
 
-/** Rendert die "Most Improved"-Liste aus drivers.elo_change (falls Spalte vorhanden). */
+/** Rendert die "Most Improved"-Liste aus dem 7-Tage-Delta (elo_history). */
 function renderMostImproved(drivers) {
   const withChange = drivers
     .filter(d => d.elo_change && d.elo_change > 0)
@@ -1985,7 +2028,8 @@ function renderMostImproved(drivers) {
   if (!container) return;
 
   if (!withChange.length) {
-    // Kein elo_change-Feld in der DB — Liste leer lassen
+    // Keine Fahrer mit positivem 7-Tage-Delta (z.B. Feature läuft noch keine
+    // 7 Tage, oder niemand hat sich verbessert) — Liste leer lassen.
     return;
   }
 
@@ -2394,13 +2438,13 @@ async function loadCarRatings() {
 
 let _eloData       = [];
 let _eloFilterMode = 'all';
-let _eloClubFilter = 'all';
 
 async function loadEloData() {
   try {
-    const [drivers, allResults] = await Promise.all([
-      sb('drivers',       'select=*&order=elo.desc'),
-      sb('event_results', 'select=driver_name,position,is_dnf'),
+    const [drivers, allResults, deltaMap] = await Promise.all([
+      sb('drivers',    'select=*&order=elo.desc'),
+      sbAll('event_results', 'select=driver_name,position,is_dnf'),
+      fetchEloDeltaMap(7),
     ]);
 
     if (!drivers.length) return;
@@ -2414,29 +2458,29 @@ async function loadEloData() {
       if (!bestPos[n] || pos < bestPos[n]) bestPos[n] = pos;
     });
 
-    _eloData = drivers.map(d => ({
+    _eloData = drivers.map(d => {
+      const past = deltaMap[d.name];
+      return {
       name:        d.name,
       country:     d.country || '',
       elo:         d.elo || 1000,
       mu:          d.elo_mu != null ? d.elo_mu : (d.elo || 1000),
       sigma:       d.elo_sigma != null ? d.elo_sigma : 0,
-      delta:       d.elo_change || 0,
+      delta:       (past != null && d.elo != null) ? Math.round(d.elo - past) : null,
       starts:      d.starts || 0,
       wins:        d.wins || 0,
       best:        bestPos[d.name] && bestPos[d.name] < 999 ? `P${bestPos[d.name]}` : '—',
-      club:        d.club || '',
       established: (d.starts || 0) >= 5,
       inactive:    !!d.elo_inactive,
-    }));
+      };
+    });
 
-    // Club-Filter-Buttons dynamisch aufbauen
-    const clubs = [...new Set(_eloData.map(d => d.club).filter(Boolean))].sort();
-    const clubBtnContainer = $('elo-club-buttons');
-    if (clubBtnContainer) {
-      clubBtnContainer.innerHTML = clubs.map(c =>
-        `<button class="ev-btn" onclick="eloClub('${c.replace(/'/g,"\'")}',this)">${c}</button>`
-      ).join('');
-    }
+    // elo_change am rohen drivers-Array anhängen (für renderMostImproved,
+    // falls das Widget auch auf dieser Seite existiert — sonst no-op)
+    drivers.forEach(d => {
+      const past = deltaMap[d.name];
+      d.elo_change = (past != null && d.elo != null) ? Math.round(d.elo - past) : null;
+    });
 
     eloRender();
     renderMostImproved(drivers);
@@ -2455,15 +2499,6 @@ function eloFilter(mode, el) {
   eloRender();
 }
 
-function eloClub(club, el) {
-  _eloClubFilter = club;
-  document.querySelectorAll('#page-elo .ev-btn').forEach(b => {
-    if (b.getAttribute('onclick')?.includes('eloClub')) b.classList.remove('active');
-  });
-  if (el) el.classList.add('active');
-  eloRender();
-}
-
 function eloRender() {
   const search = ($('elo-search')?.value || '').toLowerCase();
   let data = [..._eloData];
@@ -2472,7 +2507,6 @@ function eloRender() {
   if (_eloFilterMode === 'inactive')    data = data.filter(d => d.inactive);
   if (_eloFilterMode === 'established') data = data.filter(d => d.established);
   if (_eloFilterMode === 'improved')    data = data.filter(d => d.delta > 0).sort((a, b) => b.delta - a.delta);
-  if (_eloClubFilter !== 'all')         data = data.filter(d => d.club.toLowerCase().includes(_eloClubFilter.toLowerCase()));
   if (search)                           data = data.filter(d => d.name.toLowerCase().includes(search));
 
   const tbody = $('elo-full-tbody');
@@ -2490,10 +2524,9 @@ function eloRender() {
           <td>${d.starts}</td>
           <td>${d.wins}</td>
           <td>${d.best}</td>
-          <td style="font-size:13px;color:#999;">${escapeHtml(d.club) || '—'}</td>
           <td>${d.inactive ? '<span style="color:#555;font-size:12px;">INACTIVE</span>' : (d.provisional ? '<span style="color:#888;font-size:12px;">PROVISIONAL</span>' : statusBadge(d.established))}</td>
         </tr>`).join('')
-    : emptyRow(11,
+    : emptyRow(10,
         _eloData.length ? 'NO RESULTS' : 'LOADING…',
         _eloData.length ? 'No drivers match the current filter.' : 'Fetching ELO data from Supabase…'
       );

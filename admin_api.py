@@ -10,7 +10,7 @@ Environment Variables (Railway):
 ════════════════════════════════════════════════════════════════════════════════
 """
 
-import os, statistics, requests
+import os, re, hmac, statistics, requests
 from flask import Flask, request, jsonify
 from functools import wraps
 from racenet_client import RacenetClient
@@ -50,12 +50,29 @@ def auth(f):
         if not ADMIN_PASSWORD:
             return jsonify({"error": "ADMIN_PASSWORD not set"}), 500
         pw = request.headers.get("X-Admin-Password") or (request.json or {}).get("password","")
-        if pw != ADMIN_PASSWORD:
+        # hmac.compare_digest() statt != — konstante Vergleichszeit, verhindert
+        # Timing-Angriffe auf das Admin-Passwort (Zeichen-für-Zeichen-Ableitung
+        # über Antwortzeit-Unterschiede bei frühem Abbruch von !=).
+        if not hmac.compare_digest(pw, ADMIN_PASSWORD):
             return jsonify({"error": "Unauthorized"}), 401
         return f(*a, **kw)
     return inner
 
 # ── SUPABASE HELPERS ──────────────────────────────────────────────────────────
+
+# IDs, die vor dem Einbau in einen PostgREST-Filter-String (f"id=eq.{value}")
+# geprüft werden müssen — verhindert Filter-Injection über Sonderzeichen wie
+# &, =, ,, (), Leerzeichen, Anführungszeichen, die PostgREST's Query-Syntax
+# manipulieren könnten (z.B. zusätzliche Filter-Parameter einschleusen und so
+# den Scope eines DELETE/PATCH unbeabsichtigt über die eine gemeinte Zeile
+# hinaus ausweiten). Deckt die realen ID-Formate im Schema ab: kurze
+# alphanumerische Strings wie "3uQ7Za9R6C4NL9oGk", UUIDs, numerische IDs.
+_ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+
+def valid_id(value) -> bool:
+    return isinstance(value, str) and bool(_ID_RE.match(value))
+
 
 def sb_get(table, qs=""):
     r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}?{qs}", headers=SB, timeout=10)
@@ -374,6 +391,8 @@ def cr_list_sets():
 @app.route("/cr/sets/<set_id>", methods=["DELETE"])
 @auth
 def cr_delete_set(set_id):
+    if not valid_id(set_id):
+        return jsonify({"error": "invalid set_id"}), 400
     try:
         sb_delete("cr_sets", f"id=eq.{set_id}")
         return jsonify({"deleted": set_id})
@@ -390,6 +409,8 @@ def cr_assign():
     cr_set  = body.get("cr_set_id")
     if not champ or not cr_set:
         return jsonify({"error": "championship_id and cr_set_id required"}), 400
+    if not valid_id(champ) or not valid_id(cr_set):
+        return jsonify({"error": "invalid championship_id or cr_set_id"}), 400
     try:
         sb_patch("championships", f"id=eq.{champ}", {"cr_set_id": cr_set})
         return jsonify({"ok": True})
@@ -554,6 +575,8 @@ def championship_alter():
     fields   = body.get("fields", {})
     if not champ_id or not fields:
         return jsonify({"error": "championship_id and fields required"}), 400
+    if not valid_id(champ_id):
+        return jsonify({"error": "invalid championship_id"}), 400
     ALLOWED = {"name","vehicle_class","season_number","start_date","end_date","narrative"}
     fields = {k: v for k, v in fields.items() if k in ALLOWED and v is not None}
     if not fields:
@@ -580,6 +603,8 @@ def teams_save():
     teams   = body.get("teams", [])
     if not champ:
         return jsonify({"error": "championship_id required"}), 400
+    if not valid_id(champ):
+        return jsonify({"error": "invalid championship_id"}), 400
     try:
         # Bestehende Teams löschen (cascade löscht team_members)
         sb_delete("teams", f"championship_id=eq.{champ}")
@@ -612,6 +637,8 @@ def teams_save():
 @auth
 def teams_get(champ_id):
     """Teams + Mitglieder einer Championship laden."""
+    if not valid_id(champ_id):
+        return jsonify({"error": "invalid championship_id"}), 400
     try:
         teams = sb_get("teams", f"championship_id=eq.{champ_id}&select=id,name,color,team_members(driver_name)")
         return jsonify(teams)
@@ -627,6 +654,8 @@ def bonus_add():
     body = request.json or {}
     for f in ["championship_id","event_id","driver_name","bonus_type","points"]:
         if not body.get(f): return jsonify({"error": f"{f} required"}), 400
+    if not valid_id(body["championship_id"]) or not valid_id(body["event_id"]):
+        return jsonify({"error": "invalid championship_id or event_id"}), 400
     try:
         sb_post("manual_bonuses", {
             "championship_id": body["championship_id"],
@@ -657,6 +686,8 @@ def bonus_add():
 @app.route("/bonus/delete/<bonus_id>", methods=["DELETE"])
 @auth
 def bonus_delete(bonus_id):
+    if not valid_id(bonus_id):
+        return jsonify({"error": "invalid bonus_id"}), 400
     try:
         sb_delete("manual_bonuses", f"id=eq.{bonus_id}")
         return jsonify({"deleted": bonus_id})
@@ -672,6 +703,7 @@ def narrative_championship():
     body = request.json or {}
     champ_id = body.get("championship_id")
     if not champ_id: return jsonify({"error": "championship_id required"}), 400
+    if not valid_id(champ_id): return jsonify({"error": "invalid championship_id"}), 400
     try:
         sb_patch("championships", f"id=eq.{champ_id}", {"narrative": body.get("narrative","")})
         return jsonify({"ok": True})
@@ -685,6 +717,7 @@ def narrative_event():
     body = request.json or {}
     ev_id = body.get("event_id")
     if not ev_id: return jsonify({"error": "event_id required"}), 400
+    if not valid_id(ev_id): return jsonify({"error": "invalid event_id"}), 400
     try:
         sb_patch("events", f"id=eq.{ev_id}", {"narrative": body.get("narrative","")})
         return jsonify({"ok": True})
@@ -706,6 +739,8 @@ def cr_manual_save():
     ratings = body.get("ratings", [])
     if not champ or not ratings:
         return jsonify({"error": "championship_id and ratings required"}), 400
+    if not valid_id(champ):
+        return jsonify({"error": "invalid championship_id"}), 400
     try:
         # Alte manuelle CR-Werte löschen (nur die ohne cr_set_id)
         sb_url = f"{SUPABASE_URL}/rest/v1/car_ratings"
@@ -739,6 +774,8 @@ def cr_vehicles():
     champ = request.args.get("championship_id","").strip()
     if not champ:
         return jsonify({"error": "championship_id required"}), 400
+    if not valid_id(champ):
+        return jsonify({"error": "invalid championship_id"}), 400
     try:
         # Aus stage_results alle vehicles sammeln
         rows = sb_get("stage_results", f"championship_id=eq.{champ}&select=vehicle")
@@ -1075,6 +1112,21 @@ def elo_update():
         log(f"ELO written: {matched} matched, {len(unmatched)} unmatched")
         if unmatched:
             log(f"Unmatched (not in drivers table): {', '.join(unmatched[:10])}")
+
+        # ── Tages-Snapshot für "Delta 7 Tage" schreiben ─────────────────────
+        # EIN Eintrag pro Fahrer pro Tag (on_conflict auf driver_name+
+        # snapshot_date) — bei mehreren Läufen am selben Tag überschreibt der
+        # neueste den Tageswert, kein Duplikat, keine unnötig wachsende
+        # Tabelle. Nutzt dieselben bereits berechneten Werte wie der
+        # drivers-Upsert oben, keine zusätzliche Berechnung nötig.
+        today_str = date.today().isoformat()
+        history_rows = [
+            {"driver_name": r["name"], "elo": r["elo"], "elo_mu": r["elo_mu"],
+             "snapshot_date": today_str}
+            for r in upsert_rows
+        ]
+        sb_upsert_all("elo_history", history_rows, on_conflict="driver_name,snapshot_date")
+        log(f"ELO history snapshot written: {len(history_rows)} drivers, date={today_str}")
 
         log(f"✓ ELO update complete. {drivers_updated} drivers updated.")
         return jsonify({"ok": True, "log": log_lines, "drivers": drivers_updated})
