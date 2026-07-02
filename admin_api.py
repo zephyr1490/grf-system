@@ -865,23 +865,62 @@ def elo_update():
         # Auch end_date der letzten Stage pro Fahrer für Decay-Berechnung
         driver_last_event_date: dict = {}  # {driver_name: "YYYY-MM-DD"}
 
+        # ── Events + Ergebnisse in Batches bulk-laden statt N+1 Einzel-Reads ──
+        # Vorher: 1 sb_get() pro Championship (Events) + 1 sb_get() pro
+        # abgeschlossenem Event (Results) — bei 822 Events across alle Clubs
+        # bis zu ~1064 sequenzielle HTTP-Roundtrips, dominanter Grund für die
+        # 120s-Timeouts trotz des Bulk-Upsert-Fixes auf der Schreibseite.
+        # Jetzt: gebündelt über PostgREST's `in.()`-Filter in Batches von 100
+        # IDs (URL bleibt bei den kurzen ID-Strings dieses Schemas komfortabel
+        # unter jedem Längenlimit), sb_get_all() paginiert innerhalb jedes
+        # Batches automatisch falls >1000 Zeilen zurückkommen.
+        BATCH = 100
+
+        champ_ids_list = [c["id"] for c in champ_rows]
+        all_events = []
+        for i in range(0, len(champ_ids_list), BATCH):
+            id_list = ",".join(str(x) for x in champ_ids_list[i:i + BATCH])
+            all_events.extend(sb_get_all(
+                "events",
+                f"championship_id=in.({id_list})&select=id,championship_id,name,"
+                f"location,status,start_date,end_date,round_number&"
+                f"order=championship_id.asc,round_number.asc"
+            ))
+        log(f"Found {len(all_events)} events across {len(champ_rows)} championships")
+
+        events_by_champ: dict = {}
+        for ev in all_events:
+            events_by_champ.setdefault(ev["championship_id"], []).append(ev)
+
+        completed_event_ids = [
+            ev["id"] for evs in events_by_champ.values() for ev in evs
+            if ev.get("status", 0) == 2
+        ]
+
+        results_by_event: dict = {}
+        for i in range(0, len(completed_event_ids), BATCH):
+            id_list = ",".join(str(x) for x in completed_event_ids[i:i + BATCH])
+            rows = sb_get_all(
+                "event_results",
+                f"event_id=in.({id_list})&select=event_id,driver_name,position,"
+                f"vehicle,is_dnf&order=event_id.asc,position.asc"
+            )
+            for r in rows:
+                results_by_event.setdefault(r["event_id"], []).append(r)
+        log(f"Loaded event_results for {len(completed_event_ids)} completed "
+            f"events in {-(-len(completed_event_ids) // BATCH) if completed_event_ids else 0} batch(es)")
+
         for champ in champ_rows:
             champ_id    = champ["id"]
             champ_start = champ.get("start_date") or ""
 
-            ev_rows = sb_get(
-                "events",
-                f"championship_id=eq.{champ_id}&select=id,name,location,status,start_date,end_date,round_number&order=round_number.asc"
-            )
+            ev_rows = events_by_champ.get(champ_id, [])
             for ev in ev_rows:
                 ev_id  = ev["id"]
                 if ev.get("status", 0) != 2:
                     continue
 
-                results = sb_get(
-                    "event_results",
-                    f"event_id=eq.{ev_id}&select=driver_name,position,vehicle,is_dnf&order=position.asc"
-                )
+                results = results_by_event.get(ev_id, [])
                 if not results:
                     continue
 
