@@ -635,6 +635,16 @@ def sync_event(db: SupabaseClient, client,
     n_dnf = len(dnfs)
     log(f"      ✅ {n_fin} finisher(s) | {n_dnf} DNF | CR: {bool(car_ratings)}")
 
+    # Nur im --test-Modus: volle Ergebnisliste loggen (Position, Fahrer, Zeit,
+    # Stages) — für gezielte Kontrolle einzelner Events (z.B. reload_single_
+    # events.py --test) ohne die Live-Logs bei normalen Cron-Läufen
+    # aufzublähen (die haben test=False, dieser Block feuert dort nie).
+    if test and event_rows:
+        for r in sorted(event_rows, key=lambda x: x["position"]):
+            log(f"         P{r['position']:>2}  {r['driver_name']:<20} "
+                f"{r['time']:>14}  stages={r['stages_completed']}"
+                f"{'  DNF' if r['is_dnf'] else ''}")
+
     # ── 4. Write event results ────────────────────────────────────────────────
     if not test and event_rows:
         try:
