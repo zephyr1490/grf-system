@@ -756,14 +756,9 @@ def sync_championship(db: SupabaseClient, client,
         # so it's safe to run even for events whose stage data we're skipping.
         # This is what fills in start_date/end_date for events that were
         # created earlier (e.g. via Admin's RaceNet import) without dates.
-        #
-        # Date extraction + log happen OUTSIDE the `if not test` guard (same
-        # pattern as the championship-level date log above) so --test shows
-        # you exactly what dates WOULD be written, per event, without writing.
         ev_settings_bf = event.get("eventSettings") or {}
         ev_location_bf = ev_settings_bf.get("location") or ev_settings_bf.get("locationName") or ""
         ev_start_bf, ev_end_bf = extract_dates(event)
-        log(f"      📅 Rd.{round_num} dates: {ev_start_bf or '?'} → {ev_end_bf or '?'}")
 
         if not test:
             db.upsert("events", {
@@ -776,27 +771,37 @@ def sync_championship(db: SupabaseClient, client,
 
         # Smart skip: only skip completed events that already have stage_results
         # Do NOT skip based on status==0 alone (unreliable per RaceNet client notes)
+        #
+        # Kein log() mehr pro geskipptem Event (vorher hier UND bei den Skip-
+        # Meldungen unten) — bei hunderten bereits synchronisierten Events in
+        # einem Lauf feuerte das ungebremst (kein time.sleep() im Skip-Pfad,
+        # der `continue` unten überspringt den Sleep am Ende der Schleife) und
+        # hat Railways 500-Logs/Sekunde-Limit gerissen. Skips zählen weiterhin
+        # still mit (`skipped`-Zähler), sichtbar über die vorhandene
+        # "📊 Synced: X | Skipped: Y"-Zusammenfassung am Ende. Der Date-Log
+        # bleibt nur für tatsächlich verarbeitete Events (aktiv/neu/force-reload).
         if not force_stage_reload:
             has_stage_results = db.exists("stage_results", f"event_id=eq.{ev_id}")
             ev_status = event.get("status", 0)
 
-            # Active event (status==1): always re-sync (live updates)
-            if ev_status == 1:
-                log(f"    🟢 Rd.{round_num} {ev_name} — active, syncing...")
-
             # Completed with data: skip stage-level reload (dates already backfilled above)
-            elif ev_status == 2 and has_stage_results:
-                log(f"    ✓  Rd.{round_num} {ev_name} — completed & synced, skipping stage reload")
+            if ev_status == 2 and has_stage_results:
                 skipped += 1
                 continue
             # Status==0 with data already: skip (past championship events)
             elif ev_status == 0 and has_stage_results:
-                log(f"    ✓  Rd.{round_num} {ev_name} — already synced, skipping stage reload")
                 skipped += 1
                 continue
+
+            log(f"      📅 Rd.{round_num} dates: {ev_start_bf or '?'} → {ev_end_bf or '?'}")
+            # Active event (status==1): always re-sync (live updates)
+            if ev_status == 1:
+                log(f"    🟢 Rd.{round_num} {ev_name} — active, syncing...")
             # No data yet: always try to sync
             else:
                 log(f"    ↻  Rd.{round_num} {ev_name} — loading...")
+        else:
+            log(f"      📅 Rd.{round_num} dates: {ev_start_bf or '?'} → {ev_end_bf or '?'}")
 
         ok = sync_event(db, client, club_id, event,
                         champ_id, car_ratings, round_number=round_num, test=test)
