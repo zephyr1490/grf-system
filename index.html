@@ -983,6 +983,7 @@ textarea.inp-std { resize:vertical; }
               <th>STARTS</th>
               <th>WINS</th>
               <th>BEST</th>
+              <th>DNF%</th>
               <th>STATUS</th>
             </tr>
           </thead>
@@ -1836,6 +1837,15 @@ function deltaHTML(delta) {
   return `<span class="eq">—</span>`;
 }
 
+/** Farbcodierte DNF-Rate: <5% grün (zuverlässig), 5-15% neutral, >15% rot. */
+function dnfRateHTML(rate) {
+  if (rate == null) return `<span class="eq">—</span>`;
+  const pct = rate.toFixed(1);
+  if (rate < 5)  return `<span style="color:var(--green);">${pct}%</span>`;
+  if (rate < 15) return `<span style="color:#999;">${pct}%</span>`;
+  return `<span style="color:var(--red);">${pct}%</span>`;
+}
+
 /**
  * Lädt die ELO-Werte von exakt vor N Tagen aus elo_history und gibt
  * {driver_name: elo_wert} zurück. Fehlt ein Snapshot für exakt dieses Datum
@@ -2464,6 +2474,19 @@ async function loadEloData() {
       if (!bestPos[n] || pos < bestPos[n]) bestPos[n] = pos;
     });
 
+    // DNF-Rate pro Fahrer (Zuverlässigkeit) — aus denselben, schon geladenen
+    // event_results-Daten, kein zusätzlicher Query nötig. is_dnf kommt 1:1
+    // aus RaceNet; ein DNF zählt hier als eigenes Event, unabhängig davon
+    // wie es im ELO-System gewichtet wird (dort: schlechtester Platz im Feld).
+    const dnfStats = {};
+    allResults.forEach(r => {
+      const n = r.driver_name;
+      if (!n) return;
+      const s = dnfStats[n] || (dnfStats[n] = { total: 0, dnf: 0 });
+      s.total++;
+      if (r.is_dnf) s.dnf++;
+    });
+
     // Fahrer-Club-Zugehörigkeit: club_id liegt bei euch am Event, nicht am
     // Fahrer direkt (ein Fahrer kann in mehreren Clubs fahren) — deshalb
     // über event_results.event_id -> events.club_id ermitteln, nicht über
@@ -2492,6 +2515,7 @@ async function loadEloData() {
       starts:      d.starts || 0,
       wins:        d.wins || 0,
       best:        bestPos[d.name] && bestPos[d.name] < 999 ? `P${bestPos[d.name]}` : '—',
+      dnfRate:     dnfStats[d.name] ? (100 * dnfStats[d.name].dnf / dnfStats[d.name].total) : null,
       clubIds:     driverClubs[d.name] ? [...driverClubs[d.name]] : [],
       established: (d.starts || 0) >= 5,
       inactive:    !!d.elo_inactive,
@@ -2571,9 +2595,10 @@ function eloRender() {
           <td>${d.starts}</td>
           <td>${d.wins}</td>
           <td>${d.best}</td>
+          <td>${dnfRateHTML(d.dnfRate)}</td>
           <td>${d.inactive ? '<span style="color:#555;font-size:12px;">INACTIVE</span>' : (d.provisional ? '<span style="color:#888;font-size:12px;">PROVISIONAL</span>' : statusBadge(d.established))}</td>
         </tr>`).join('')
-    : emptyRow(10,
+    : emptyRow(11,
         _eloData.length ? 'NO RESULTS' : 'LOADING…',
         _eloData.length ? 'No drivers match the current filter.' : 'Fetching ELO data from Supabase…'
       );
