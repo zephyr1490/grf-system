@@ -431,6 +431,13 @@ class RacenetClient:
         self._tm      = _TokenManager()
         self._session = requests.Session()
 
+        # Zählt 429/5xx-Retry-Ereignisse über die Laufzeit des Clients. Dient
+        # als Signal für adaptive Parallelität in grf_sync.py (siehe
+        # load_stage_leaderboards_adaptive) — kein bekanntes RaceNet-Rate-Limit
+        # dokumentiert, also reagieren statt raten: wird dieser Zähler während
+        # eines Parallel-Batches erhöht, war RaceNet erkennbar überlastet.
+        self.throttle_events = 0
+
     # ── HTTP ──────────────────────────────────────────────────────────────────
 
     def _headers(self) -> dict:
@@ -439,11 +446,42 @@ class RacenetClient:
             raise RuntimeError("Kein gültiger Access Token — Login fehlgeschlagen.")
         return {**HEADERS_BASE, "authorization": f"Bearer {token}"}
 
-    def _get(self, endpoint: str, params: dict = None) -> dict:
+    def _get(self, endpoint: str, params: dict = None, _max_retries: int = 3) -> dict:
+        """
+        GET mit automatischem Retry+Backoff bei 429 (Rate-Limit) und 5xx
+        (Server-Fehler) — RaceNet hat keine dokumentierte/bekannte Rate-Limit-
+        Angabe, deshalb reagieren statt einen Wert zu raten: bei 429 wird der
+        Retry-After-Header respektiert falls vorhanden, sonst exponentieller
+        Backoff (1s, 2s, 4s). Nach _max_retries erfolglosen Versuchen wird wie
+        bisher eine Exception geworfen (kein Verhaltensunterschied für
+        bestehende try/except-Aufrufer). Jeder Retry erhöht self.throttle_events
+        — externes Signal für adaptive Parallelität, hier bewusst nicht
+        selbst gedrosselt (das passiert eine Ebene höher, in grf_sync.py).
+        """
         url = BASE_URL + endpoint
-        r   = self._session.get(url, headers=self._headers(), params=params, timeout=20)
-        r.raise_for_status()
-        return r.json()
+        backoff = 1.0
+        last_response = None
+        for attempt in range(_max_retries + 1):
+            r = self._session.get(url, headers=self._headers(), params=params, timeout=20)
+            last_response = r
+            if r.status_code == 429 or r.status_code >= 500:
+                self.throttle_events += 1
+                if attempt == _max_retries:
+                    break  # Retries aufgebraucht — unten wie bisher raise_for_status()
+                retry_after = r.headers.get("Retry-After")
+                try:
+                    wait = float(retry_after) if retry_after else backoff
+                except ValueError:
+                    wait = backoff
+                print(f"  ⚠ RaceNet {r.status_code} auf {endpoint} — "
+                      f"Retry {attempt + 1}/{_max_retries} in {wait:.1f}s")
+                time.sleep(wait)
+                backoff *= 2
+                continue
+            r.raise_for_status()
+            return r.json()
+        last_response.raise_for_status()
+        return last_response.json()  # unreachable falls raise_for_status() wirft, hier nur für Typklarheit
 
     # ── Identity ──────────────────────────────────────────────────────────────
 

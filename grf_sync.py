@@ -44,6 +44,7 @@ import os
 import time
 import requests
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CONFIG
@@ -311,6 +312,79 @@ def load_stage_leaderboard(client, club_id: str, lb_id: str) -> list[dict]:
         return []
 
 
+def load_stage_leaderboards_adaptive(
+    client, club_id: str, stage_specs: list[tuple],
+    start_concurrency: int = 3, min_concurrency: int = 1,
+) -> dict:
+    """
+    Lädt mehrere Stage-Leaderboards eines Events parallel — mit schrumpfender
+    (nie wieder wachsender) Parallelität innerhalb dieses Laufs. "Variante A":
+    einfacher, sicherer Startpunkt, kein Hochregeln — jeder neue Sync-Lauf
+    startet wieder frisch bei start_concurrency.
+
+    RaceNet hat keine dokumentierte/bekannte Rate-Limit-Angabe (inoffizielle,
+    interne API — nachrecherchiert, nichts gefunden), deshalb reagieren statt
+    raten: die Parallelität wird nach jedem Batch verkleinert, wenn eines von
+    zwei Signalen auftritt:
+      - RaceNet hat während des Batches mit 429/5xx geantwortet
+        (client.throttle_events ist gestiegen, siehe racenet_client.py._get())
+        → Parallelität halbieren.
+      - Die durchschnittliche Antwortzeit des Batches ist > 2x so hoch wie die
+        des allerersten Batches dieses Events (RaceNet wird spürbar langsamer,
+        auch OHNE Fehlercode — deckt z.B. tageszeit-/wochentagsbedingt hohe
+        Gesamtlast auf RaceNet ab, nicht nur unsere eigene Anfragerate)
+        → Parallelität um 1 verringern.
+    Sinkt nie unter min_concurrency, steigt nie über start_concurrency zurück.
+
+    stage_specs: Liste von (i, stage_dict, lb_id) in der Original-Reihenfolge.
+    Rückgabe: {lb_id: [entries]} — Verarbeitung/Logging der Ergebnisse bleibt
+    beim Aufrufer in Original-Reihenfolge, nur der Netzwerk-Teil läuft parallel.
+    """
+    results: dict = {}
+    concurrency = start_concurrency
+    baseline_avg = None
+    remaining = list(stage_specs)
+
+    def _fetch(spec):
+        _, _, lb_id = spec
+        t0 = time.time()
+        entries = load_stage_leaderboard(client, club_id, lb_id)
+        return lb_id, entries, time.time() - t0
+
+    while remaining:
+        batch, remaining = remaining[:concurrency], remaining[concurrency:]
+        throttle_before = client.throttle_events
+        batch_times = []
+
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            futures = [pool.submit(_fetch, spec) for spec in batch]
+            for fut in as_completed(futures):
+                lb_id, entries, elapsed = fut.result()
+                results[lb_id] = entries
+                batch_times.append(elapsed)
+
+        avg_time = sum(batch_times) / len(batch_times) if batch_times else 0
+        if baseline_avg is None:
+            baseline_avg = avg_time
+
+        throttled = client.throttle_events > throttle_before
+        new_concurrency = concurrency
+        if throttled:
+            new_concurrency = max(min_concurrency, concurrency // 2)
+            if new_concurrency != concurrency:
+                log(f"        ⚠ RaceNet-Throttling erkannt (429/5xx) — "
+                    f"parallele Anfragen {concurrency} → {new_concurrency}")
+        elif baseline_avg > 0 and avg_time > baseline_avg * 2:
+            new_concurrency = max(min_concurrency, concurrency - 1)
+            if new_concurrency != concurrency:
+                log(f"        ⚠ RaceNet-Antworten werden langsamer "
+                    f"({avg_time:.1f}s vs {baseline_avg:.1f}s Baseline) — "
+                    f"parallele Anfragen {concurrency} → {new_concurrency}")
+        concurrency = new_concurrency
+
+    return results
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  SYNC: single event (all stages)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -358,6 +432,10 @@ def sync_event(db: SupabaseClient, client,
     # stage_data[stage_index] = list of raw entries from RaceNet
     stage_data: list[tuple[dict, list[dict]]] = []
 
+    # Phase A: Stage-Metadaten schreiben (schnell, reine DB-Writes, bleibt
+    # sequenziell — keine RaceNet-Calls hier) + Liste der zu holenden
+    # Leaderboards für Phase B sammeln.
+    stage_specs = []  # (i, stage, lb_id) — nur Stages MIT leaderboardID
     for i, stage in enumerate(stages, start=1):
         lb_id      = stage.get("leaderboardID")
         stage_id   = stage.get("id") or lb_id or f"{ev_id}_s{i}"
@@ -368,7 +446,6 @@ def sync_event(db: SupabaseClient, client,
             stage_data.append((stage, []))
             continue
 
-        # Write stage metadata
         if not test:
             db.upsert("stages", {
                 "id":              stage_id,
@@ -381,7 +458,25 @@ def sync_event(db: SupabaseClient, client,
                 "status":          stage.get("status", 0),
             }, on_conflict="id")
 
-        entries = load_stage_leaderboard(client, club_id, lb_id)
+        stage_specs.append((i, stage, lb_id))
+
+    # Phase B: RaceNet-Leaderboards parallel laden (schrumpfende Parallelität,
+    # startet bei 3, reagiert auf 429/5xx oder spürbare Verlangsamung — siehe
+    # load_stage_leaderboards_adaptive). Ersetzt das alte strikt-sequenzielle
+    # Laden + festes time.sleep(0.3) pro Stage; die Drosselung passiert jetzt
+    # dynamisch statt über eine blind feste Pause.
+    leaderboards = (
+        load_stage_leaderboards_adaptive(client, club_id, stage_specs)
+        if stage_specs else {}
+    )
+
+    # Phase C: Ergebnisse in Original-Reihenfolge verarbeiten (Logging + DB-
+    # Writes) — unabhängig davon, in welcher Reihenfolge die parallelen
+    # RaceNet-Calls in Phase B tatsächlich fertig wurden.
+    for i, stage, lb_id in stage_specs:
+        stage_id   = stage.get("id") or lb_id or f"{ev_id}_s{i}"
+        stage_name = stage.get("name") or f"Stage {i}"
+        entries    = leaderboards.get(lb_id, [])
         stage_data.append((stage, entries))
 
         if entries:
@@ -419,8 +514,6 @@ def sync_event(db: SupabaseClient, client,
                           stage_rows[batch_start:batch_start+50],
                           on_conflict="id")
                 time.sleep(0.05)
-
-        time.sleep(0.3)
 
     # ── 3. Calculate event results from stage data ────────────────────────────
     # Collect all drivers and their info (vehicle, driver_id, platform)
