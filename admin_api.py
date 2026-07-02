@@ -1010,9 +1010,12 @@ def elo_update():
                     rating.mu = min(BASELINE_MU, rating.mu + decay)
                 rating.sigma = min(rating.sigma * 1.02 ** weeks_inactive, 350.0)
                 state.driver_inactive[driver_name] = True
-        print("\n[INACTIVITY LOG]")
-        for line in sorted(inactivity_log):
-            print(line)
+        # EIN print() für das gesamte Log statt einem pro Fahrer — bei ~2219
+        # Fahrern hat das vorher Railways 500-Logs/Sekunde-Limit gerissen
+        # (Messages dropped), seit der Pagination-Fix korrekt ALLE Fahrer statt
+        # nur den ersten ~1000 verarbeitet. Inhalt/Reihenfolge unverändert,
+        # nur als ein zusammenhängender String statt N einzelner print()-Calls.
+        print("\n[INACTIVITY LOG]\n" + "\n".join(sorted(inactivity_log)))
 
         # Summaries nach Decay neu berechnen (inkl. inaktive)
         summaries = summarize_track(state, "overall", include_inactive=True)
