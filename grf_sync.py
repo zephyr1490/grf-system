@@ -245,6 +245,33 @@ class SupabaseClient:
             headers=h, json=data, timeout=15,
         )
 
+    def upsert_all(self, table: str, rows: list, on_conflict: str, chunk_size: int = 500) -> None:
+        """
+        Bulk-Upsert in Chunks statt N sequenzieller PATCH-Calls — ein POST pro
+        Chunk (Prefer: resolution=merge-duplicates → nur mitgeschickte Spalten
+        werden überschrieben, alle anderen bleiben unangetastet).
+
+        Gleiches Muster/gleicher Grund wie admin_api.py's sb_upsert_all():
+        seit dem Pagination-Fix (select_all) werden korrekt ALLE Fahrer aus
+        event_results für starts/wins verarbeitet statt nur den ersten ~1000 —
+        das macht die alte, sequenzielle requests.patch()-Schleife (ein Call
+        pro Fahrer) zum dominanten Kostenfaktor in Step 6. Chunked Bulk-Upsert
+        macht daraus wenige Calls statt hunderte/tausende.
+        """
+        if not rows:
+            return
+        h = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
+        for i in range(0, len(rows), chunk_size):
+            chunk = rows[i:i + chunk_size]
+            r = requests.post(
+                f"{self.url}/rest/v1/{table}?on_conflict={on_conflict}",
+                headers=h, json=chunk, timeout=30,
+            )
+            if not r.ok:
+                print(f"[upsert_all ERROR] {table} chunk {i}-{i+len(chunk)} → "
+                      f"HTTP {r.status_code}: {r.text}")
+            r.raise_for_status()
+
     def delete(self, table: str, filters: str) -> None:
         r = requests.delete(
             f"{self.url}/rest/v1/{table}?{filters}",
@@ -528,16 +555,24 @@ def sync_event(db: SupabaseClient, client,
             time.sleep(0.1)
 
     # ── 5. Ensure drivers exist in drivers table ──────────────────────────────
-    if not test and driver_info:
-        existing = {r["name"] for r in db.select("drivers", "select=name")}
-        new_drivers = [
-            {"name": name, "elo": 1000, "wins": 0, "starts": 0, "country": ""}
-            for name in driver_info
-            if name and name not in existing
-        ]
-        if new_drivers:
-            db.insert_ignore("drivers", new_drivers, on_conflict="name")
-            log(f"      👤 {len(new_drivers)} new driver(s) added")
+    existing_drivers: set = set()
+    if not test:
+        # Paginiert (select_all) statt select — bei 2219+ Fahrern schnitt der
+        # alte unpaginierte Read hier still bei ~1000 ab (gleiche Cap-Bug-Klasse
+        # wie Step 6 vor dem Fix), was neue Fahrer fälschlich als "neu" markiert
+        # hätte (harmlos dank insert_ignore) und v.a. dem Upsert unten in Step 6
+        # eine unvollständige Referenzliste gegeben hätte.
+        existing_drivers = {r["name"] for r in db.select_all("drivers", "select=name")}
+        if driver_info:
+            new_drivers = [
+                {"name": name, "elo": 1000, "wins": 0, "starts": 0, "country": ""}
+                for name in driver_info
+                if name and name not in existing_drivers
+            ]
+            if new_drivers:
+                db.insert_ignore("drivers", new_drivers, on_conflict="name")
+                log(f"      👤 {len(new_drivers)} new driver(s) added")
+                existing_drivers |= {d["name"] for d in new_drivers}
 
     # ── 6. Update driver stats (starts, wins) ──────────────────────────────────
     if not test:
@@ -553,14 +588,15 @@ def sync_event(db: SupabaseClient, client,
                     s["starts"] += 1
                     if r.get("position") == 1:
                         s["wins"] += 1
-            for name, s in stats.items():
-                requests.patch(
-                    f"{db.url}/rest/v1/drivers",
-                    headers={**db.headers, "Prefer": "return=minimal"},
-                    params={"name": f"eq.{name}"},
-                    json={"starts": s["starts"], "wins": s["wins"]},
-                    timeout=10,
-                )
+            upsert_rows = [
+                {"name": name, "starts": s["starts"], "wins": s["wins"]}
+                for name, s in stats.items()
+                if name in existing_drivers
+            ]
+            skipped = len(stats) - len(upsert_rows)
+            db.upsert_all("drivers", upsert_rows, on_conflict="name")
+            if skipped:
+                log(f"      ⚠ Stats: {skipped} driver name(s) not in drivers table, skipped")
         except Exception as e:
             log(f"      ⚠ Stats update failed: {e}")
 
