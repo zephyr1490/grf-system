@@ -984,24 +984,35 @@ def elo_update():
         today = date.today()
 
         overall_ratings = state.ratings.get("overall", {})
-        inactivity_log = []
+        # Nur Übergänge loggen (aktiv→inaktiv oder umgekehrt), nicht mehr alle
+        # ~2219 Fahrer bei jedem Lauf. Der vorherige Fix (ein print() statt N)
+        # hat das Problem NICHT gelöst — Railway zählt vermutlich Zeilen im
+        # Ausgabestrom (newline-getrennt), nicht Python-print()-Aufrufe, daher
+        # blieb die tatsächliche Zeilenzahl identisch. Diesmal wird die Zahl
+        # der Zeilen selbst reduziert: im Normalfall ändern pro Lauf nur eine
+        # Handvoll Fahrer ihren Status, nicht alle. Zähler für alle Kategorien
+        # bleiben trotzdem vollständig sichtbar (no_date/active/inactive-Summe).
+        transition_log = []
+        no_date_count = 0
         for driver_name, rating in overall_ratings.items():
             last_date_str = driver_last_event_date.get(driver_name)
             if not last_date_str:
-                inactivity_log.append(f"  {driver_name}: NO DATE (skipped)")
+                no_date_count += 1
                 continue
             try:
                 last_date = date.fromisoformat(last_date_str[:10])
             except Exception:
                 continue
-            days_inactive  = (today - last_date).days
-            weeks_inactive = days_inactive / 7.0
+            days_inactive   = (today - last_date).days
+            weeks_inactive  = days_inactive / 7.0
             is_now_inactive = weeks_inactive >= INACTIVE_WEEKS
-            inactivity_log.append(
-                f"  {driver_name}: last={last_date_str[:10]} "
-                f"days={days_inactive} "
-                f"{'→ INACTIVE' if is_now_inactive else '→ active'}"
-            )
+            was_inactive    = state.driver_inactive.get(driver_name, False)
+
+            if is_now_inactive != was_inactive:
+                transition_log.append(
+                    f"  {driver_name}: last={last_date_str[:10]} days={days_inactive} "
+                    f"{'active → INACTIVE' if is_now_inactive else 'INACTIVE → active'}"
+                )
             if is_now_inactive:
                 decay = DECAY_PER_WEEK * weeks_inactive
                 if rating.mu > BASELINE_MU:
@@ -1010,12 +1021,13 @@ def elo_update():
                     rating.mu = min(BASELINE_MU, rating.mu + decay)
                 rating.sigma = min(rating.sigma * 1.02 ** weeks_inactive, 350.0)
                 state.driver_inactive[driver_name] = True
-        # EIN print() für das gesamte Log statt einem pro Fahrer — bei ~2219
-        # Fahrern hat das vorher Railways 500-Logs/Sekunde-Limit gerissen
-        # (Messages dropped), seit der Pagination-Fix korrekt ALLE Fahrer statt
-        # nur den ersten ~1000 verarbeitet. Inhalt/Reihenfolge unverändert,
-        # nur als ein zusammenhängender String statt N einzelner print()-Calls.
-        print("\n[INACTIVITY LOG]\n" + "\n".join(sorted(inactivity_log)))
+            else:
+                state.driver_inactive[driver_name] = False
+
+        print(f"\n[INACTIVITY LOG] {len(overall_ratings)} drivers checked, "
+              f"{no_date_count} no date, {len(transition_log)} status change(s)")
+        if transition_log:
+            print("\n".join(sorted(transition_log)))
 
         # Summaries nach Decay neu berechnen (inkl. inaktive)
         summaries = summarize_track(state, "overall", include_inactive=True)
