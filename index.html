@@ -460,19 +460,6 @@ body.font-space-grotesk           { --ui-font: 'Space Grotesk', sans-serif; }
 .cr-check-row input[type=checkbox] { accent-color:var(--red); width:13px; height:13px; cursor:pointer; flex-shrink:0; }
 
 /* CHAMPIONSHIP SETUP */
-.cs-mode-btn {
-  flex:1; background:var(--gray-dark); color:#555; border:none; border-right:1px solid #111;
-  font-family:'Oswald',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px;
-  padding:9px 12px; cursor:pointer; transition:background .15s;
-}
-.cs-mode-btn:last-child { border-right:none; }
-.cs-mode-active { background:var(--black); color:var(--red); border-bottom:2px solid var(--red); }
-.cs-alter-tab {
-  background:transparent; color:#555; border:none; border-bottom:2px solid transparent;
-  font-family:'Oswald',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px;
-  padding:6px 14px; cursor:pointer;
-}
-.cs-alter-active { color:var(--red); border-bottom-color:var(--red); }
 .rule-row {
   background:#252729; border:1px solid #1a1a1a; padding:9px 12px;
   display:flex; align-items:center; gap:10px;
@@ -2405,7 +2392,7 @@ async function loadStandings() {
     const theadRow = document.querySelector('#tab-standings table thead tr');
     if (theadRow) {
       const roundHdrs = evs.map(ev =>
-        `<th title="${ev.name || ev.location || ''}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
+        `<th title="${escapeHtml(ev.name || ev.location || '')}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
       ).join('');
       theadRow.innerHTML = `<th>#</th><th>DRIVER</th><th>CAR</th>${roundHdrs}<th>TOTAL</th><th>LOYALTY</th>`;
     }
@@ -2504,7 +2491,7 @@ async function renderTeamStandings(teams, driverMap, evs, evOrder) {
   const theadRow = document.querySelector('#tab-standings table thead tr');
   if (theadRow) {
     const roundHdrs = evs.map(ev =>
-      `<th title="${ev.name || ev.location || ''}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
+      `<th title="${escapeHtml(ev.name || ev.location || '')}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
     ).join('');
     theadRow.innerHTML = `<th>#</th><th>TEAM</th><th>MEMBERS</th>${roundHdrs}<th>TOTAL</th><th>LOYALTY</th>`;
   }
@@ -2986,16 +2973,9 @@ async function crLoadFilters() {
   }
 }
 
-function _buildCheckboxList(containerId, inputName, items, onchange) {
-  const el = $(containerId);
-  if (!el || el.dataset.built) return;
-  el.innerHTML = items.map(v => `
-    <label class="cr-check-row">
-      <input type="checkbox" name="${inputName}" value="${v}" onchange="${onchange}">
-      ${v}
-    </label>`).join('');
-  el.dataset.built = '1';
-}
+// (_buildCheckboxList wurde hier entfernt — definiert aber nirgends
+// aufgerufen, totes Code, gefunden beim Security/Bug-Audit vor dem
+// öffentlichen Launch.)
 
 async function _buildEloClubList() {
   const el = $('elo-club-list');
@@ -3192,7 +3172,7 @@ async function crLoadExisting() {
       <tr>
         <td style="text-align:left;">${escapeHtml(s.name)}</td>
         <td style="font-size:11px;color:#888;">${s.vehicle_count} vehicle(s)</td>
-        <td><button onclick="crDeleteSet('${s.name.replace(/'/g,"\\'")}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
+        <td><button data-set-name="${escapeHtml(s.name)}" onclick="crDeleteSet(this.dataset.setName)" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
       </tr>`).join('');
 
     // Auch CR-Set Dropdown in Championship Setup befüllen
@@ -3744,7 +3724,7 @@ function csDriverSearch(input) {
     try {
       const names = await adminFetch(`/drivers/search?q=${encodeURIComponent(q)}`, null, 'GET');
       if (!names.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-      box.innerHTML = names.map(n => `<div onclick="csDriverPick(this, '${n.replace(/'/g,"\\'")}')">${escapeHtml(n)}</div>`).join('');
+      box.innerHTML = names.map(n => `<div data-driver-name="${escapeHtml(n)}" onclick="csDriverPick(this, this.dataset.driverName)">${escapeHtml(n)}</div>`).join('');
       box.style.display = 'block';
     } catch (e) { box.style.display = 'none'; }
   }, 250);
@@ -3887,7 +3867,7 @@ async function mbLoadDrivers() {
   const results = await sb('event_results', `event_id=eq.${eventId}&select=driver_name&order=driver_name`);
   const names = [...new Set(results.map(r => r.driver_name))];
   sel.innerHTML = '<option value="">— select driver —</option>' +
-    names.map(n => `<option value="${n}">${n}</option>`).join('');
+    names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
   mbLoadExisting();
 }
 

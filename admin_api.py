@@ -639,12 +639,6 @@ def championship_racenet_list():
         for cid in ids:
             try:
                 c = client.get_championship(club_id, cid)
-                # TEMPORÄR (Session 3 Debugging) — rohe RaceNet-Antwort einmal
-                # loggen, um die echten Feldnamen für Datum/Fahrzeugklasse zu
-                # sehen (start_at/close_at kamen bisher leer zurück). Nach
-                # Bestätigung der richtigen Keys wieder entfernen.
-                import json as _json
-                print(f"[DEBUG championship {cid}] {_json.dumps(c)[:2000]}")
                 result.append({
                     "racenet_id": str(c.get("id", cid)),
                     "name":       c.get("name", ""),
