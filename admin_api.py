@@ -18,6 +18,23 @@ from vehicle_classes_data import VEHICLE_CLASSES
 
 app = Flask(__name__)
 
+
+def _err_detail(e):
+    """
+    requests' raise_for_status() nur "400 Client Error: Bad Request for url: ..."
+    zurueckgibt — die eigentliche PostgREST-Fehlermeldung (z.B. welche Spalte
+    fehlt oder welcher Constraint verletzt wurde) steht im Response-Body, den
+    str(e) nicht zeigt. Dieser Helper holt den echten Body raus, falls vorhanden.
+    """
+    resp = getattr(e, "response", None)
+    if resp is not None:
+        try:
+            return resp.json()
+        except Exception:
+            return resp.text
+    return str(e)
+
+
 ADMIN_PASSWORD   = os.environ.get("ADMIN_PASSWORD", "")
 SUPABASE_URL     = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SVC_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
@@ -678,7 +695,7 @@ def teams_save():
 
         return jsonify({"teams": created_teams})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": _err_detail(e)}), 500
 
 
 @app.route("/teams/<champ_id>", methods=["GET"])
@@ -870,7 +887,7 @@ def cr_manual_save():
         sb_patch("championships", f"id=eq.{champ}", {"cr_set_id": None})
         return jsonify({"ok": True, "saved": len(rows)})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": _err_detail(e)}), 500
 
 
 @app.route("/cr/vehicles", methods=["GET"])
