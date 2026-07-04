@@ -699,9 +699,16 @@ textarea.inp-std { resize:vertical; }
     <!-- KACHELN -->
     <div class="kacheln">
       <div class="kachel">
-        <div class="kachel-num">2</div>
+        <!--
+          TODO (nicht gebaut, Owner-Entscheidung Session 3): sollte eigentlich
+          alle Clubs zählen, die im RaceNet-Dummy-Account verknüpft sind UND
+          gerade eine laufende Championship haben (status=1 auf mind. einem
+          Event). Aktuell bewusst nur "Coming Soon" statt hartcodierter
+          falscher Zahl — echte Logik erst bauen, wenn's gebraucht wird.
+        -->
+        <div class="kachel-num" style="font-size:20px;">—</div>
         <div class="kachel-lbl">Active Clubs</div>
-        <div class="kachel-sub">Themed · Teamed</div>
+        <div class="kachel-sub">Coming Soon</div>
       </div>
       <div class="kachel">
         <div class="kachel-num" id="k-members">—</div>
@@ -1777,6 +1784,21 @@ function escapeHtml(value) {
 }
 
 /**
+ * Punkte-Anzeige NUR fürs Auge auf ganze Zahlen runden — Owner-Wunsch,
+ * seit CR-Werte echte Nachkommastellen in die Punkte bringen (0.87er-CR
+ * etc.). Rechnung/Speicherung bleibt überall float, das hier betrifft
+ * AUSSCHLIESSLICH die Darstellung. Bewusste Konsequenz (vom Owner
+ * bestätigt): einzeln angezeigte, gerundete Werte aufsummiert können vom
+ * tatsächlichen (float-basierten) Gesamt-Total in den Standings leicht
+ * abweichen — das ist gewollt, keine Inkonsistenz zum Beheben.
+ */
+function fmtPts(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  return isNaN(n) ? '—' : String(Math.round(n));
+}
+
+/**
  * safe`...` — Tagged Template, escaped automatisch JEDEN interpolierten Wert.
  * Verwendung: statt `<td>${r.driver_name}</td>` einfach safe`<td>${r.driver_name}</td>`
  * — exakt dieselbe Schreibweise, nur ein Zeichen davor. Kein manuelles
@@ -1941,9 +1963,16 @@ function _setCountdownTarget(isoDate) {
 
 async function loadHome() {
   try {
+    // WICHTIG: sbAll() statt sb() für drivers/event_results — beide Tabellen
+    // haben weit über 1000 Zeilen (2221 bzw. 25k+), sb() kappt unpaginiert
+    // bei Supabase/PostgREST's Default-Limit von 1000 (Known Issue #5,
+    // gleiche Bug-Klasse wie im Backend schon in Session 2 gefixt — hier im
+    // Frontend war sie noch nicht behoben). Ohne diesen Fix: "GRF Members"
+    // und "Most Events" zählen nur aus den neuesten ~1000 event_results-
+    // Zeilen statt aus allen.
     const [drivers, allER, deltaMap] = await Promise.all([
-      sb('drivers',       'select=*&order=elo.desc'),
-      sb('event_results', 'select=driver_name,event_id,created_at&order=created_at.desc'),
+      sbAll('drivers',       'select=*&order=elo.desc'),
+      sbAll('event_results', 'select=driver_name,event_id,created_at&order=created_at.desc'),
       fetchEloDeltaMap(7),
     ]);
 
@@ -2040,10 +2069,13 @@ function renderMostImproved(drivers) {
 /** Lädt das nächste/aktive Event und befüllt den Hero-Bereich auf der Home-Seite. */
 async function loadNextEvent() {
   try {
+    // WICHTIG: club_id=eq.23799 (GRF Themed) ergänzt — fehlte komplett,
+    // dadurch kam hier irgendein Event von irgendeinem Club im RaceNet-
+    // Dummy-Account (auch Teamed etc.), nicht spezifisch Themed.
     const today = new Date().toISOString().split('T')[0];
-    let evs = await sb('events', 'select=*&status=eq.1&order=start_date.asc&limit=1');
+    let evs = await sb('events', 'select=*&club_id=eq.23799&status=eq.1&order=start_date.asc&limit=1');
     if (!evs.length) {
-      evs = await sb('events', `select=*&status=eq.0&start_date=gte.${today}&order=start_date.asc&limit=1`);
+      evs = await sb('events', `select=*&club_id=eq.23799&status=eq.0&start_date=gte.${today}&order=start_date.asc&limit=1`);
     }
     if (!evs.length) return;
 
@@ -2262,8 +2294,8 @@ async function _fetchAndRenderResults(eventId) {
           <td>${r.time || '—'}</td>
           <td>${r.base_points ?? '—'}</td>
           <td class="ev">${crStr}</td>
-          <td class="ev">${r.cr_points ?? '—'}</td>
-          <td class="ev" style="color:var(--green);">${r.total_points ?? '—'}</td>
+          <td class="ev">${fmtPts(r.cr_points)}</td>
+          <td class="ev" style="color:var(--green);">${fmtPts(r.total_points)}</td>
         </tr>${stageRow}`;
     }).join('');
 
@@ -2389,7 +2421,7 @@ async function loadStandings() {
         const roundCells = evOrder.map(evId => {
           const pts = d.roundPts[evId];
           return pts != null
-            ? `<td style="font-size:12px;color:#ccc;">${pts}</td>`
+            ? `<td style="font-size:12px;color:#ccc;">${fmtPts(pts)}</td>`
             : `<td style="font-size:12px;color:#555;">—</td>`;
         }).join('');
 
@@ -2399,7 +2431,7 @@ async function loadStandings() {
             <td>${escapeHtml(d.name)}</td>
             <td style="font-size:12px;color:#aaa;">${escapeHtml(carStr)}</td>
             ${roundCells}
-            <td class="ev" style="color:var(--green);font-weight:bold;">${d.total}</td>
+            <td class="ev" style="color:var(--green);font-weight:bold;">${fmtPts(d.total)}</td>
             <td class="ev">${loyal}</td>
           </tr>`;
       }).join('');
@@ -2487,7 +2519,7 @@ async function renderTeamStandings(teams, driverMap, evs, evOrder) {
       const roundCells = evOrder.map(evId => {
         const pts = t.roundPts[evId];
         return pts != null
-          ? `<td style="font-size:12px;color:#ccc;">${pts}</td>`
+          ? `<td style="font-size:12px;color:#ccc;">${fmtPts(pts)}</td>`
           : `<td style="font-size:12px;color:#555;">—</td>`;
       }).join('');
 
@@ -2497,7 +2529,7 @@ async function renderTeamStandings(teams, driverMap, evs, evOrder) {
           <td style="${t.isUnassigned ? '' : `border-left:3px solid ${t.color};padding-left:8px;`}">${escapeHtml(t.name)}</td>
           <td style="font-size:11px;color:#aaa;">${escapeHtml(membersStr)}</td>
           ${roundCells}
-          <td class="ev" style="color:var(--green);font-weight:bold;">${t.total}</td>
+          <td class="ev" style="color:var(--green);font-weight:bold;">${fmtPts(t.total)}</td>
           <td class="ev">${loyal}</td>
         </tr>`;
     }).join('');
@@ -2650,8 +2682,11 @@ let _eloClubFilter = 'all';
 
 async function loadEloData() {
   try {
+    // sbAll() statt sb() für drivers — 2221 Zeilen, war unpaginiert bei
+    // Supabase's 1000er-Default-Cap gekappt (gleicher Fund wie in loadHome(),
+    // siehe Kommentar dort). Betraf u.a. die "Rated Drivers"-Anzeige hier.
     const [drivers, allResults, deltaMap, clubs, events] = await Promise.all([
-      sb('drivers',    'select=*&order=elo.desc'),
+      sbAll('drivers',    'select=*&order=elo.desc'),
       sbAll('event_results', 'select=driver_name,event_id,position,is_dnf'),
       fetchEloDeltaMap(7),
       sb('clubs',      'select=club_id,name'),
