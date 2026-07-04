@@ -1365,9 +1365,10 @@ textarea.inp-std { resize:vertical; }
             </div>
           </div>
 
-          <div style="padding:14px 20px; display:flex; gap:8px; align-items:center; border-bottom:2px solid var(--gray-dark);">
-            <button onclick="csSaveAll()" class="btn-red">✓ SAVE ALL</button>
-            <div id="cs-save-status" style="font-size:12px;color:#555;"></div>
+          <div style="padding:14px 20px; background:#151515; border-top:2px solid var(--red); border-bottom:2px solid var(--gray-dark); display:flex; gap:12px; align-items:center;">
+            <button onclick="csSaveAll()" class="btn-red" style="font-size:14px;padding:10px 20px;">✓ SAVE CHAMPIONSHIP SETUP</button>
+            <span style="font-size:10px;color:#666;">speichert Name, Klasse, CR, Regeln, Narrative &amp; Teams zusammen</span>
+            <div id="cs-save-status" style="font-size:12px;color:#555;margin-left:auto;"></div>
           </div>
 
           <!-- EVENTS -->
@@ -2359,6 +2360,28 @@ async function loadStandings() {
       driverMap[name].total += pts;
     });
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // TEMPORÄRER TEAM-STANDINGS-ZWEIG (Session 3, Owner-Anweisung)
+    // ─────────────────────────────────────────────────────────────────────
+    // GRF Themed hostet normalerweise NIE Team-Championships — dieser Zweig
+    // existiert nur, weil die AKTUELL laufende Championship zufällig Teams
+    // hat und präsentierbare Ergebnisse gebraucht werden, bevor die künftige
+    // GRF-Teamed-Struktur (eigener Club, eigener Tab, aktuell leer) steht.
+    //
+    // TODO (nur auf explizite Owner-Anweisung, sobald diese Championship
+    // vorbei ist): diesen kompletten Zweig (renderTeamStandings-Aufruf +
+    // Funktion darunter) HIER ENTFERNEN und stattdessen im GRF-Teamed-Tab
+    // neu verdrahten — dort gehört die Logik langfristig hin. Der normale
+    // Einzelfahrer-Zweig unten bleibt für Themed unverändert bestehen.
+    // ═══════════════════════════════════════════════════════════════════════
+    const _teamsForThisChamp = await sb('teams', `championship_id=eq.${_themedChampId}&select=id,name,color,team_members(driver_name)`);
+    if (_teamsForThisChamp.length) {
+      await renderTeamStandings(_teamsForThisChamp, driverMap, evs, evOrder);
+      setText('champ-drivers', Object.keys(driverMap).length);
+      return;
+    }
+    // ═══════════════════════════════════════════ ENDE TEAM-STANDINGS-ZWEIG ═
+
     const sorted = Object.values(driverMap).sort((a, b) => b.total - a.total);
 
     // Header
@@ -2411,6 +2434,97 @@ async function loadStandings() {
     setHTML('standings-tbody', emptyRow(10, 'ERROR', 'Could not load standings.'));
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// TEMPORÄR — siehe Marker in loadStandings() oben. Gehört langfristig zum
+// GRF-Teamed-Tab, nicht hierher. Beim Verschieben: komplette Funktion +
+// den Aufruf-Block in loadStandings() zusammen umziehen.
+// ═══════════════════════════════════════════════════════════════════════
+async function renderTeamStandings(teams, driverMap, evs, evOrder) {
+  // Fahrer -> Team-Zuordnung
+  const memberToTeam = {};
+  teams.forEach(t => (t.team_members || []).forEach(m => { memberToTeam[m.driver_name] = t.id; }));
+
+  const teamMap = {};
+  teams.forEach(t => {
+    teamMap[t.id] = {
+      name: t.name, color: t.color || '#c0392b',
+      members: (t.team_members || []).map(m => m.driver_name),
+      roundPts: {}, total: 0,
+      loyal: true, // wird unten ggf. auf false gesetzt
+    };
+  });
+  const UNASSIGNED_ID = '__unassigned__';
+  teamMap[UNASSIGNED_ID] = { name: 'Unassigned', color: '#555', members: [], roundPts: {}, total: 0, loyal: false, isUnassigned: true };
+
+  Object.values(driverMap).forEach(d => {
+    const teamId = memberToTeam[d.name] || UNASSIGNED_ID;
+    const bucket = teamMap[teamId];
+    if (teamId === UNASSIGNED_ID) bucket.members.push(d.name);
+
+    evOrder.forEach(evId => {
+      const pts = d.roundPts[evId];
+      if (pts != null) bucket.roundPts[evId] = (bucket.roundPts[evId] || 0) + pts;
+    });
+    bucket.total += d.total;
+
+    // Team-Loyalty-Annahme (Owner nicht final bestätigt, siehe Chat):
+    // Team gilt nur als "loyal" wenn JEDES Mitglied individuell die ganze
+    // Saison über ein Auto gefahren ist. Falls das anders gemeint war,
+    // einfach die Bedingung unten anpassen (z.B. "irgendein Mitglied" statt
+    // "alle").
+    if (d.vehicles.size !== 1) bucket.loyal = false;
+  });
+
+  // Loyalty-Bonus: einmalig +50 fürs ganze Team (nicht pro Fahrer), nur
+  // wenn es ueberhaupt Mitglieder hat und alle die Bedingung erfuellen.
+  Object.values(teamMap).forEach(t => {
+    if (!t.isUnassigned && t.members.length && t.loyal) t.total += 50;
+  });
+
+  const rows = Object.values(teamMap).filter(t => t.members.length);
+  rows.sort((a, b) => b.total - a.total);
+
+  const champs = await sb('championships', `select=name,season_number&id=eq.${_themedChampId}&limit=1`);
+  const champName = champs[0]?.name || 'CHAMPIONSHIP';
+  setText('standings-hdr', `${champName} — TEAM STANDINGS`);
+  setText('standings-hdr-right', `${evOrder.length} ROUNDS`);
+
+  const theadRow = document.querySelector('#tab-standings table thead tr');
+  if (theadRow) {
+    const roundHdrs = evs.map(ev =>
+      `<th title="${ev.name || ev.location || ''}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
+    ).join('');
+    theadRow.innerHTML = `<th>#</th><th>TEAM</th><th>MEMBERS</th>${roundHdrs}<th>TOTAL</th><th>LOYALTY</th>`;
+  }
+
+  const tbody = $('standings-tbody');
+  if (tbody) {
+    tbody.innerHTML = rows.map((t, i) => {
+      const membersStr = t.members.join(', ');
+      const loyal = (!t.isUnassigned && t.loyal && t.members.length)
+        ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+
+      const roundCells = evOrder.map(evId => {
+        const pts = t.roundPts[evId];
+        return pts != null
+          ? `<td style="font-size:12px;color:#ccc;">${pts}</td>`
+          : `<td style="font-size:12px;color:#555;">—</td>`;
+      }).join('');
+
+      return `
+        <tr${t.isUnassigned ? ' style="opacity:0.6;"' : ''}>
+          <td class="${t.isUnassigned ? '' : rankClass(i)}">${t.isUnassigned ? '—' : String(i + 1).padStart(2, '0')}</td>
+          <td style="${t.isUnassigned ? '' : `border-left:3px solid ${t.color};padding-left:8px;`}">${escapeHtml(t.name)}</td>
+          <td style="font-size:11px;color:#aaa;">${escapeHtml(membersStr)}</td>
+          ${roundCells}
+          <td class="ev" style="color:var(--green);font-weight:bold;">${t.total}</td>
+          <td class="ev">${loyal}</td>
+        </tr>`;
+    }).join('');
+  }
+}
+// ═══════════════════════════════════ ENDE TEMPORÄRE TEAM-STANDINGS-LOGIK ═
 
 /**
  * Car Ratings für aktive Championship laden.
@@ -3586,19 +3700,28 @@ async function csSaveAll() {
 async function csLoadEvents(champId) {
   const list = $('cs-events-list');
   if (!list) return;
-  const events = await sb('events', `championship_id=eq.${champId}&select=id,name,round_number,status&order=round_number.asc`);
+  const events = await sb('events', `championship_id=eq.${champId}&select=id,name,location,round_number,status&order=round_number.asc`);
   if (!events.length) {
     list.innerHTML = '<div style="color:#444;font-size:11px;padding:10px;">Keine Events geladen — werden automatisch synct, sobald RaceNet sie kennt.</div>';
     return;
   }
-  list.innerHTML = events.map(e => `
+  // grf_sync.py fällt bei fehlendem RaceNet-eventSettings.name auf "Event
+  // {id}" zurück (sieht wie eine rohe ID aus) — location ist zuverlässiger,
+  // daher hier als Default "Rd.N — Location" statt der Auto-ID zeigen.
+  const looksAutoGenerated = n => !n || /^Event\s+\S+$/.test(n.trim());
+  list.innerHTML = events.map(e => {
+    const defaultName = looksAutoGenerated(e.name)
+      ? `Rd.${e.round_number ?? '?'} — ${e.location || 'Unknown Location'}`
+      : e.name;
+    return `
     <div class="cs-event-row">
       <span style="color:#555;">Rd.${e.round_number ?? '—'}</span>
-      <input type="text" value="${escapeHtml(e.name || '')}" data-event-name="${e.id}"
+      <input type="text" value="${escapeHtml(defaultName)}" data-event-name="${e.id}"
         style="background:#1a1a1a;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:4px 6px;outline:none;">
       <button onclick="csSaveEventName('${e.id}')" class="btn-gray" style="padding:4px 8px;font-size:10px;">✓ SAVE NAME</button>
       <button onclick="csGoToBonuses('${champId}','${e.id}')" class="btn-gray" style="padding:4px 8px;font-size:10px;">→ BONUSES</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function csSaveEventName(eventId) {

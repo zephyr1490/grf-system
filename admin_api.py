@@ -576,6 +576,12 @@ def championship_racenet_list():
         for cid in ids:
             try:
                 c = client.get_championship(club_id, cid)
+                # TEMPORÄR (Session 3 Debugging) — rohe RaceNet-Antwort einmal
+                # loggen, um die echten Feldnamen für Datum/Fahrzeugklasse zu
+                # sehen (start_at/close_at kamen bisher leer zurück). Nach
+                # Bestätigung der richtigen Keys wieder entfernen.
+                import json as _json
+                print(f"[DEBUG championship {cid}] {_json.dumps(c)[:2000]}")
                 result.append({
                     "racenet_id": str(c.get("id", cid)),
                     "name":       c.get("name", ""),
@@ -695,10 +701,12 @@ def teams_save():
 
             members = [m.strip() for m in t.get("members",[]) if m.strip()]
             if members:
+                # HINWEIS: team_members hat KEINE championship_id-Spalte
+                # (bestätigt per Railway-Log: PGRST204) — braucht sie auch
+                # nicht, haengt schon ueber team_id an einer Championship.
                 sb_post("team_members", [{
-                    "team_id":        team_id,
-                    "championship_id": champ,
-                    "driver_name":    m,
+                    "team_id":     team_id,
+                    "driver_name": m,
                 } for m in members])
 
             created_teams.append({"id": team_id, "name": t.get("name"), "members": members})
