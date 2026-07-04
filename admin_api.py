@@ -888,11 +888,14 @@ def cr_manual_save():
     try:
         # Alte manuelle CR-Werte löschen (nur die ohne cr_set_id)
         sb_url = f"{SUPABASE_URL}/rest/v1/car_ratings"
-        requests.delete(
+        r_del = requests.delete(
             sb_url,
             headers=SB,
             params={"championship_id": f"eq.{champ}", "cr_set_id": "is.null"},
         )
+        if not r_del.ok:
+            print(f"[cr_manual_save DELETE ERROR] {r_del.status_code}: {r_del.text}")
+            r_del.raise_for_status()
         # Neue einfügen
         rows = [
             {"championship_id": champ, "vehicle": r["vehicle"],
@@ -900,7 +903,10 @@ def cr_manual_save():
             for r in ratings if r.get("vehicle") and r.get("cr_value") is not None
         ]
         if rows:
-            requests.post(sb_url, headers=SB, json=rows)
+            r_post = requests.post(sb_url, headers=SB, json=rows)
+            if not r_post.ok:
+                print(f"[cr_manual_save POST ERROR] {r_post.status_code}: {r_post.text}")
+                r_post.raise_for_status()
         # HINWEIS: hier stand vorher noch ein sb_patch("championships", ...,
         # {"cr_set_id": None}) — championships hat aber gar keine cr_set_id-
         # Spalte (bestätigt per Railway-Log: PGRST204 "Could not find the
