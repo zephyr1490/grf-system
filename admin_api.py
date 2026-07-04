@@ -367,8 +367,14 @@ def cr_calculate():
 @auth
 def cr_save():
     """
-    Speichert CR-Set + Werte in Supabase (unabhängig von Championship).
-    Body: { name, route_ids, class_ids, top_pct, min_n, exponent, results }
+    Speichert ein berechnetes CR-Set wiederverwendbar, UNABHÄNGIG von einer
+    Championship. Es gibt keine eigene cr_sets-Tabelle (existiert nicht in
+    Supabase) — Sets sind schlicht car_ratings-Zeilen mit championship_id
+    = NULL und einem gemeinsamen set_name. /cr/assign kopiert sie später auf
+    eine konkrete Championship (siehe unten).
+    Body: { name, results: [{vehicle, cr}, ...] }
+    (Rezept-Parameter wie top_pct/exponent werden NICHT mitgespeichert —
+    Owner-Entscheidung: bei Bedarf im set-Namen selbst vermerken.)
     """
     body    = request.json or {}
     name    = body.get("name","").strip()
@@ -377,53 +383,86 @@ def cr_save():
         return jsonify({"error": "name and results required"}), 400
 
     try:
-        # cr_sets Eintrag erstellen
-        cr_set = sb_post("cr_sets", {
-            "name":           name,
-            "vehicle_classes": body.get("vehicle_classes", []),
-            "route_ids":      body.get("route_ids", []),
-            "class_ids":      body.get("class_ids", []),
-            "top_pct":        body.get("top_pct", 25),
-            "min_n":          body.get("min_n", 10),
-            "exponent":       body.get("exponent", 1.5),
-        })
-        cr_set_id = cr_set[0]["id"] if isinstance(cr_set, list) else cr_set["id"]
+        sb_url = f"{SUPABASE_URL}/rest/v1/car_ratings"
+        # Falls unter diesem Namen schon ein Set existiert: ersetzen statt duplizieren
+        r_del = requests.delete(
+            sb_url, headers=SB,
+            params={"championship_id": "is.null", "set_name": f"eq.{name}"},
+        )
+        if not r_del.ok:
+            print(f"[cr_save DELETE ERROR] {r_del.status_code}: {r_del.text}")
+            r_del.raise_for_status()
 
-        # car_ratings Einträge
         rows = [{
-            "cr_set_id":   cr_set_id,
-            "vehicle":     r["vehicle"],
-            "cr_value":    r["cr"],
-            "n_entries":   r.get("n"),
-            "car_avg_ms":  r.get("car_avg_ms"),
-            "ref_time_ms": r.get("ref_time_ms"),
-        } for r in results]
-        sb_post("car_ratings", rows)
+            "championship_id": None,
+            "set_name":  name,
+            "vehicle":   r["vehicle"],
+            "cr_value":  r["cr"],
+        } for r in results if r.get("vehicle") and r.get("cr") is not None]
 
-        return jsonify({"cr_set_id": cr_set_id, "name": name, "saved": len(rows)})
+        if rows:
+            r_post = requests.post(sb_url, headers=SB, json=rows)
+            if not r_post.ok:
+                print(f"[cr_save POST ERROR] {r_post.status_code}: {r_post.text}")
+                r_post.raise_for_status()
+
+        return jsonify({"name": name, "saved": len(rows)})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": _err_detail(e)}), 500
 
 
 @app.route("/cr/sets", methods=["GET"])
 @auth
 def cr_list_sets():
-    """Alle CR-Sets laden."""
+    """
+    Alle gespeicherten CR-Sets auflisten (gruppiert nach set_name, nur
+    Zeilen mit championship_id IS NULL — das sind per Definition die Sets).
+    """
     try:
-        sets = sb_get("cr_sets", "order=created_at.desc&select=*")
-        return jsonify(sets)
+        rows = sb_get_all("car_ratings", "championship_id=is.null&select=set_name,vehicle,cr_value")
+        sets: dict = {}
+        for r in rows:
+            n = r.get("set_name")
+            if not n:
+                continue
+            sets.setdefault(n, []).append({"vehicle": r["vehicle"], "cr_value": r["cr_value"]})
+        result = [{"name": n, "vehicle_count": len(v)} for n, v in sets.items()]
+        result.sort(key=lambda x: x["name"])
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/cr/sets/<set_id>", methods=["DELETE"])
+@app.route("/cr/sets/values", methods=["GET"])
 @auth
-def cr_delete_set(set_id):
-    if not valid_id(set_id):
-        return jsonify({"error": "invalid set_id"}), 400
+def cr_set_values():
+    """Die einzelnen Fahrzeug/CR-Werte eines gespeicherten Sets. Query: ?name=..."""
+    name = request.args.get("name","").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
     try:
-        sb_delete("cr_sets", f"id=eq.{set_id}")
-        return jsonify({"deleted": set_id})
+        rows = sb_get("car_ratings", f"championship_id=is.null&set_name=eq.{requests.utils.quote(name)}&select=vehicle,cr_value")
+        return jsonify(rows)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/cr/sets/delete", methods=["POST"])
+@auth
+def cr_delete_set():
+    """
+    Löscht ein CR-Set komplett. POST statt DELETE-mit-Pfad-Parameter, weil
+    set_name Freitext ist (Leerzeichen/Sonderzeichen) — keine gültige
+    valid_id()-ID wie sonst überall in diesem File.
+    Body: { name }
+    """
+    body = request.json or {}
+    name = body.get("name","").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    try:
+        sb_delete("car_ratings", f"championship_id=is.null&set_name=eq.{requests.utils.quote(name)}")
+        return jsonify({"deleted": name})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -431,19 +470,43 @@ def cr_delete_set(set_id):
 @app.route("/cr/assign", methods=["POST"])
 @auth
 def cr_assign():
-    """CR-Set einer Championship zuordnen. Body: { championship_id, cr_set_id }"""
-    body    = request.json or {}
-    champ   = body.get("championship_id")
-    cr_set  = body.get("cr_set_id")
-    if not champ or not cr_set:
-        return jsonify({"error": "championship_id and cr_set_id required"}), 400
-    if not valid_id(champ) or not valid_id(cr_set):
-        return jsonify({"error": "invalid championship_id or cr_set_id"}), 400
+    """
+    Kopiert die Werte eines gespeicherten CR-Sets auf eine konkrete
+    Championship — schreibt frische car_ratings-Zeilen mit der Ziel-
+    championship_id (macht das Set fuer die echte Punkteberechnung wirksam,
+    die in grf_sync.py ausschließlich über championship_id liest).
+    Ersetzt vorhandene car_ratings dieser Championship komplett (gleiches
+    Verhalten wie /cr/manual-save).
+    Body: { championship_id, set_name }
+    """
+    body     = request.json or {}
+    champ    = body.get("championship_id")
+    set_name = body.get("set_name","").strip()
+    if not champ or not set_name:
+        return jsonify({"error": "championship_id and set_name required"}), 400
+    if not valid_id(champ):
+        return jsonify({"error": "invalid championship_id"}), 400
     try:
-        sb_patch("championships", f"id=eq.{champ}", {"cr_set_id": cr_set})
-        return jsonify({"ok": True})
+        sb_url = f"{SUPABASE_URL}/rest/v1/car_ratings"
+
+        set_rows = sb_get("car_ratings", f"championship_id=is.null&set_name=eq.{requests.utils.quote(set_name)}&select=vehicle,cr_value")
+        if not set_rows:
+            return jsonify({"error": f"CR-Set '{set_name}' nicht gefunden oder leer"}), 404
+
+        r_del = requests.delete(sb_url, headers=SB, params={"championship_id": f"eq.{champ}"})
+        if not r_del.ok:
+            print(f"[cr_assign DELETE ERROR] {r_del.status_code}: {r_del.text}")
+            r_del.raise_for_status()
+
+        new_rows = [{"championship_id": champ, "vehicle": r["vehicle"], "cr_value": r["cr_value"]} for r in set_rows]
+        r_post = requests.post(sb_url, headers=SB, json=new_rows)
+        if not r_post.ok:
+            print(f"[cr_assign POST ERROR] {r_post.status_code}: {r_post.text}")
+            r_post.raise_for_status()
+
+        return jsonify({"ok": True, "assigned": len(new_rows)})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": _err_detail(e)}), 500
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -886,12 +949,17 @@ def cr_manual_save():
     if not valid_id(champ):
         return jsonify({"error": "invalid championship_id"}), 400
     try:
-        # Alte manuelle CR-Werte löschen (nur die ohne cr_set_id)
+        # Alte manuelle CR-Werte fuer diese Championship löschen.
+        # HINWEIS: car_ratings hat KEINE cr_set_id-Spalte (bestätigt per
+        # Railway-Log: "column car_ratings.cr_set_id does not exist") — das
+        # ganze cr_set_id-Konzept fehlt im echten Schema. Fuer die manuelle
+        # Direkteingabe pro Championship wird es auch nicht gebraucht, daher
+        # hier komplett entfernt statt zu versuchen es nachzubilden.
         sb_url = f"{SUPABASE_URL}/rest/v1/car_ratings"
         r_del = requests.delete(
             sb_url,
             headers=SB,
-            params={"championship_id": f"eq.{champ}", "cr_set_id": "is.null"},
+            params={"championship_id": f"eq.{champ}"},
         )
         if not r_del.ok:
             print(f"[cr_manual_save DELETE ERROR] {r_del.status_code}: {r_del.text}")
@@ -899,7 +967,7 @@ def cr_manual_save():
         # Neue einfügen
         rows = [
             {"championship_id": champ, "vehicle": r["vehicle"],
-             "cr_value": float(r["cr_value"]), "cr_set_id": None}
+             "cr_value": float(r["cr_value"])}
             for r in ratings if r.get("vehicle") and r.get("cr_value") is not None
         ]
         if rows:
@@ -907,16 +975,12 @@ def cr_manual_save():
             if not r_post.ok:
                 print(f"[cr_manual_save POST ERROR] {r_post.status_code}: {r_post.text}")
                 r_post.raise_for_status()
-        # HINWEIS: hier stand vorher noch ein sb_patch("championships", ...,
-        # {"cr_set_id": None}) — championships hat aber gar keine cr_set_id-
-        # Spalte (bestätigt per Railway-Log: PGRST204 "Could not find the
-        # 'cr_set_id' column of 'championships'"). War ohnehin unnötig: die
-        # eigentliche "manuell, kein Set"-Markierung sitzt schon auf den
-        # einzelnen car_ratings-Zeilen selbst (cr_set_id=None dort oben).
-        # /cr/assign (Zeile ~433) hat denselben Fehler noch — eigener,
-        # vorbestehender Bug, absichtlich hier nicht mitgefixt, da unklar ob
-        # dort eine echte Spalte im Supabase-Schema fehlt oder die Logik
-        # anders gedacht war.
+        # (Frühere sb_patch("championships", ..., {"cr_set_id": None}) hier
+        # entfernt — championships hat ebenfalls keine cr_set_id-Spalte, war
+        # ohnehin wirkungslos/unnötig für die manuelle Eingabe.)
+        # /cr/assign hat ein separates, tieferes Problem (siehe Chat) — dort
+        # absichtlich nicht mitgefixt, da unklar ob das CR-Set-Feature aktiv
+        # genutzt wird und wie es eigentlich funktionieren soll.
         return jsonify({"ok": True, "saved": len(rows)})
     except Exception as e:
         return jsonify({"error": _err_detail(e)}), 500

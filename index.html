@@ -1201,14 +1201,14 @@ textarea.inp-std { resize:vertical; }
           </div>
         </div>
 
-        <!-- EXISTING CR ENTRIES -->
+        <!-- SAVED CR SETS -->
         <div style="padding:8px; background:var(--gray); border-top:2px solid var(--gray-dark);">
-          <div class="col-hdr" style="margin-bottom:6px;">EXISTING CR ENTRIES FOR SELECTED CHAMPIONSHIP</div>
+          <div class="col-hdr" style="margin-bottom:6px;">SAVED CR SETS <span style="color:#555;font-weight:normal;font-size:11px;">— unabhängig von Championships, Zuordnung im Championship-Setup-Tab</span></div>
           <div class="elo-wrap" style="margin:0;">
             <table class="cr-table">
-              <thead><tr><th>VEHICLE</th><th>CR VALUE</th><th>SURFACE</th><th>ERA</th><th>ACTION</th></tr></thead>
+              <thead><tr><th>NAME</th><th>VEHICLES</th><th>ACTION</th></tr></thead>
               <tbody id="cr-existing-tbody">
-                <tr><td colspan="5"><div class="empty"><div class="empty-title">SELECT A CHAMPIONSHIP</div></div></td></tr>
+                <tr><td colspan="3"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -1334,6 +1334,13 @@ textarea.inp-std { resize:vertical; }
               </div>
               <div>
                 <label class="inp-lbl">CAR RATINGS <span style="color:#555;font-weight:normal;">— Fahrzeuge der gewählten Klasse</span></label>
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                  <select id="cs-cr-set-select" class="inp-std" style="flex:1;">
+                    <option value="">— no CR set —</option>
+                  </select>
+                  <button onclick="csAssignCrSet()" class="btn-gray" style="white-space:nowrap;">ASSIGN SET</button>
+                </div>
+                <div style="font-size:10px;color:#444;margin-bottom:8px;">Überschreibt die manuell eingegebenen Werte unten mit dem gewählten Set — oder trag einzelne Werte manuell ein, falls kein passendes Set existiert.</div>
                 <div id="cs-e-cr-list" style="max-height:260px; overflow-y:auto; background:#111; border:1px solid #1a1a1a; padding:6px 10px;">
                   <div style="color:#444;font-size:11px;padding:8px;">Klasse wählen, um Fahrzeuge zu laden.</div>
                 </div>
@@ -3041,19 +3048,8 @@ async function crSave() {
   setText('cr-status', '⏳ Saving CR set…');
   if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'none';
 
-  const routeIds  = [...document.querySelectorAll('input[name="cr-route"]:checked')].map(c => parseInt(c.value));
-  const classIds  = [...document.querySelectorAll('input[name="cr-cls"]:checked')].map(c => parseInt(c.value));
-
   try {
-    const res = await adminFetch('/cr/save', {
-      name,
-      route_ids:  routeIds,
-      class_ids:  classIds,
-      top_pct:    parseFloat($('cr-top-pct')?.value) || 25,
-      min_n:      parseInt($('cr-min-n')?.value) || 10,
-      exponent:   parseFloat($('cr-exponent')?.value) || 1.5,
-      results:    _crLastResults,
-    });
+    const res = await adminFetch('/cr/save', { name, results: _crLastResults });
     setText('cr-status', `✓ CR Set "${res.name}" saved — ${res.saved} vehicles. Assign to a championship in the Championship Setup tab.`);
     _crLastResults = [];
     if ($('cr-set-name')) $('cr-set-name').value = '';
@@ -3072,27 +3068,25 @@ function crCancelConfirm() {
 async function crLoadExisting() {
   const tbody = $('cr-existing-tbody');
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#555;padding:10px;">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#555;padding:10px;">Loading…</td></tr>`;
 
   try {
     const sets = await adminFetch('/cr/sets', null, 'GET');
     if (!sets.length) {
-      tbody.innerHTML = emptyRow(5, 'NO CR SETS', 'Calculate and save a CR Set above.');
+      tbody.innerHTML = emptyRow(3, 'NO CR SETS', 'Calculate and save a CR Set above.');
       return;
     }
     tbody.innerHTML = sets.map(s => `
       <tr>
-        <td style="text-align:left;">${s.name}</td>
-        <td style="font-size:11px;color:#888;">${(s.vehicle_classes || []).join(', ') || '—'}</td>
-        <td style="color:#888;">${s.exponent || '—'}</td>
-        <td style="font-size:11px;color:#555;">${s.created_at?.split('T')[0] || '—'}</td>
-        <td><button onclick="crDeleteSet('${s.id}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
+        <td style="text-align:left;">${escapeHtml(s.name)}</td>
+        <td style="font-size:11px;color:#888;">${s.vehicle_count} vehicle(s)</td>
+        <td><button onclick="crDeleteSet('${s.name.replace(/'/g,"\\'")}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
       </tr>`).join('');
 
     // Auch CR-Set Dropdown in Championship Setup befüllen
     _crPopulateSetDropdowns(sets);
   } catch (e) {
-    tbody.innerHTML = emptyRow(5, 'ERROR', e.message);
+    tbody.innerHTML = emptyRow(3, 'ERROR', e.message);
   }
 }
 
@@ -3101,13 +3095,13 @@ function _crPopulateSetDropdowns(sets) {
   const sel = $('cs-cr-set-select');
   if (!sel) return;
   sel.innerHTML = '<option value="">— no CR set —</option>' +
-    sets.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    sets.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)} (${s.vehicle_count})</option>`).join('');
 }
 
-async function crDeleteSet(id) {
-  if (!confirm('Delete this CR set and all its car ratings?')) return;
+async function crDeleteSet(name) {
+  if (!confirm(`Delete CR set "${name}" and all its saved values?`)) return;
   try {
-    await adminFetch(`/cr/sets/${id}`, null, 'DELETE');
+    await adminFetch('/cr/sets/delete', { name });
     crLoadExisting();
   } catch (e) { setText('cr-status', `❌ ${e.message}`); }
 }
@@ -3279,6 +3273,7 @@ let _csVehicleClasses  = null; // Cache: {className: [{name,drivetrain,era},...]
 function csInit() {
   csLoadChampDropdown();
   csLoadVehicleClassNames();
+  crLoadExisting(); // befüllt u.a. cs-cr-set-select, egal ob der Car-Rating-Calc-Tab schon besucht wurde
 }
 
 // ── Championship-Dropdown befuellen (neueste zuoberst, wie ueberall sonst) ──
@@ -3519,6 +3514,19 @@ function csClassChanged() {
   const isOther = $('cs-e-class')?.value === '__other__';
   $('cs-e-class-custom').style.display = isOther ? 'block' : 'none';
   if (_csCurrentChampId) csLoadCrForClass(_csCurrentChampId, csGetSelectedClass());
+}
+
+async function csAssignCrSet() {
+  const setName = $('cs-cr-set-select')?.value;
+  if (!setName) { setText('cs-save-status', '⚠ Kein CR-Set ausgewählt.'); return; }
+  if (!_csCurrentChampId) return;
+  try {
+    const res = await adminFetch('/cr/assign', { championship_id: _csCurrentChampId, set_name: setName });
+    setText('cs-save-status', `✓ CR-Set "${setName}" zugewiesen (${res.assigned} Fahrzeuge).`);
+    await csLoadCrForClass(_csCurrentChampId, csGetSelectedClass());
+  } catch (e) {
+    setText('cs-save-status', `❌ ${e.message}`);
+  }
 }
 
 async function csLoadCrForClass(champId, className) {
