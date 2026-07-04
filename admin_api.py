@@ -25,11 +25,19 @@ def _err_detail(e):
     zurueckgibt — die eigentliche PostgREST-Fehlermeldung (z.B. welche Spalte
     fehlt oder welcher Constraint verletzt wurde) steht im Response-Body, den
     str(e) nicht zeigt. Dieser Helper holt den echten Body raus, falls vorhanden.
+    Gibt IMMER einen String zurueck (nicht ein dict) — sonst zeigt das Frontend
+    nur "[object Object]" an, da jsonify(error=dict) dort als Objekt ankommt.
     """
     resp = getattr(e, "response", None)
     if resp is not None:
         try:
-            return resp.json()
+            body = resp.json()
+            # PostgREST-Fehler haben fast immer ein "message"-Feld — das ist
+            # der eigentlich lesbare Teil, details/hint/code nur als Zusatz.
+            if isinstance(body, dict) and body.get("message"):
+                extra = f" ({body['details']})" if body.get("details") else ""
+                return f"{body['message']}{extra}"
+            return str(body)
         except Exception:
             return resp.text
     return str(e)
@@ -129,6 +137,8 @@ def sb_get_all(table, qs="", page_size=1000):
 
 def sb_post(table, data):
     r = requests.post(f"{SUPABASE_URL}/rest/v1/{table}", headers=SB, json=data, timeout=10)
+    if not r.ok:
+        print(f"[sb_post ERROR] {table} → HTTP {r.status_code}: {r.text}")
     r.raise_for_status(); return r.json()
 
 def sb_patch(table, qs, data):
@@ -883,8 +893,16 @@ def cr_manual_save():
         ]
         if rows:
             requests.post(sb_url, headers=SB, json=rows)
-        # Championship cr_set_id auf null (manuell, kein Set)
-        sb_patch("championships", f"id=eq.{champ}", {"cr_set_id": None})
+        # HINWEIS: hier stand vorher noch ein sb_patch("championships", ...,
+        # {"cr_set_id": None}) — championships hat aber gar keine cr_set_id-
+        # Spalte (bestätigt per Railway-Log: PGRST204 "Could not find the
+        # 'cr_set_id' column of 'championships'"). War ohnehin unnötig: die
+        # eigentliche "manuell, kein Set"-Markierung sitzt schon auf den
+        # einzelnen car_ratings-Zeilen selbst (cr_set_id=None dort oben).
+        # /cr/assign (Zeile ~433) hat denselben Fehler noch — eigener,
+        # vorbestehender Bug, absichtlich hier nicht mitgefixt, da unklar ob
+        # dort eine echte Spalte im Supabase-Schema fehlt oder die Logik
+        # anders gedacht war.
         return jsonify({"ok": True, "saved": len(rows)})
     except Exception as e:
         return jsonify({"error": _err_detail(e)}), 500
