@@ -1299,6 +1299,10 @@ textarea.inp-std { resize:vertical; }
               Select a championship from the list. Auch "upcoming" Championships
               (Zukunfts-Startdatum) tauchen hier auf, sobald RaceNet sie kennt.
             </div>
+            <div>
+              <label class="inp-lbl">NAME <span style="color:#555;font-weight:normal;">— manche "upcoming" Championships haben bei RaceNet noch keinen Namen, dann Pflichtfeld</span></label>
+              <input id="cs-rn-name" type="text" placeholder="Leave empty to use RaceNet name" class="inp-std">
+            </div>
             <button onclick="csCreateRacenet()" class="btn-red">IMPORT &amp; CREATE</button>
             <div id="cs-rn-status" style="font-size:12px;color:#555;min-height:18px;"></div>
           </div>
@@ -3254,10 +3258,16 @@ function csRnSelect(el, champ) {
   setText('cs-rn-preview',
     `${champ.name}\nStart: ${champ.start_at?.split('T')[0] || '—'}\nClose: ${champ.close_at?.split('T')[0] || '—'}\nRaceNet ID: ${champ.racenet_id}`);
   $('cs-rn-preview').style.whiteSpace = 'pre-line';
+  if ($('cs-rn-name')) $('cs-rn-name').value = '';
 }
 
 async function csCreateRacenet() {
   if (!_csSelectedRnChamp) { setText('cs-rn-status', '⚠ Select a championship from the list.'); return; }
+  const name = $('cs-rn-name')?.value.trim() || _csSelectedRnChamp.name;
+  if (!name) {
+    setText('cs-rn-status', '⚠ RaceNet liefert für diese Championship keinen Namen — bitte oben im NAME-Feld einen eintragen.');
+    return;
+  }
   setText('cs-rn-status', '⏳ Importing…');
   try {
     const res = await adminFetch('/championship/create', {
@@ -3265,7 +3275,7 @@ async function csCreateRacenet() {
       championship: {
         club_id:    $('cs-rn-club')?.value,
         racenet_id: _csSelectedRnChamp.racenet_id,
-        name:       _csSelectedRnChamp.name,
+        name,
         start_date: _csSelectedRnChamp.start_at?.split('T')[0] || null,
         end_date:   _csSelectedRnChamp.close_at?.split('T')[0] || null,
       },
