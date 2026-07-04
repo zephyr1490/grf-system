@@ -916,38 +916,9 @@ textarea.inp-std { resize:vertical; }
 
     <!-- TAB: CHALLENGES -->
     <div class="themed-tab" id="tab-challenges">
-      <div class="challenge-box">
-        <div class="col-hdr" style="margin-bottom:10px;">ACTIVE CHALLENGES — SEASON 4</div>
-
-        <div class="challenge-item">
-          <div class="ch-name">Loyalty Bonus <span class="ch-badge ch-auto">AUTO</span></div>
-          <div class="ch-desc">Use the same vehicle in every event of the championship. Checked automatically at season end.</div>
-          <div class="ch-reward">+50 points — applied to final standings</div>
-        </div>
-
-        <div class="challenge-item">
-          <div class="ch-name">Stage Improvement <span class="ch-badge ch-auto">AUTO</span></div>
-          <div class="ch-desc">Post a faster time in your second attempt than your first on any stage. Bonus applied per event.</div>
-          <div class="ch-reward">+10 points per event where improvement is recorded</div>
-        </div>
-
-        <div class="challenge-item">
-          <div class="ch-name">Penalty Challenge <span class="ch-badge ch-auto">AUTO</span></div>
-          <div class="ch-desc">Finish an event despite receiving a time penalty of 60 seconds or more. Points awarded to all qualifying finishers.</div>
-          <div class="ch-reward">+25 points</div>
-        </div>
-
-        <div class="challenge-item">
-          <div class="ch-name">Livery Challenge <span class="ch-badge ch-manual">MANUAL</span></div>
-          <div class="ch-desc">Submit a screenshot of a historically accurate livery for the event's era. Judged by admin after each round.</div>
-          <div class="ch-reward">+15 points — manually awarded</div>
-        </div>
-
-        <div class="challenge-item inactive">
-          <div class="ch-name">Survivor Bonus <span class="ch-badge ch-auto">AUTO</span> <span style="font-size:10px;color:#444;margin-left:8px;">— NOT ACTIVE THIS SEASON</span></div>
-          <div class="ch-desc">Last non-DNF finisher receives a survivor bonus.</div>
-          <div class="ch-reward">+30 points</div>
-        </div>
+      <div class="challenge-box" id="challenges-box">
+        <div class="col-hdr" style="margin-bottom:10px;" id="challenges-hdr">ACTIVE CHALLENGES — LOADING…</div>
+        <div id="challenges-list"></div>
       </div>
     </div>
 
@@ -1916,6 +1887,7 @@ function showSubTab(name, el) {
 
   if (name === 'standings')  loadStandings();
   if (name === 'carratings') loadCarRatings();
+  if (name === 'challenges') loadChallenges();
 }
 
 /**
@@ -2561,6 +2533,111 @@ async function loadCarRatings() {
     setText('cr-hdr', `CAR RATINGS — ${ratings.length} VEHICLES`);
   } catch (err) {
     console.error('[loadCarRatings]', err);
+  }
+}
+
+// Statische Beschreibungstexte pro Regeltyp — nur Anzeige-Text, keine
+// Punktewerte (die kommen live aus championship_rules). "loyalty" ist kein
+// eigener rule_type in championship_rules, sondern ein permanentes,
+// immer aktives Feature (siehe loadStandings()/Loyalty-Check) — deshalb
+// hier separat behandelt, nicht aus der DB geladen.
+const CHALLENGE_INFO = {
+  loyalty: {
+    name: 'Loyalty Bonus',
+    desc: 'Use the same vehicle in every event of the championship. Checked automatically at season end.',
+    badge: 'auto',
+  },
+  stage_improvement: {
+    name: 'Stage Improvement',
+    desc: 'Post a faster time in your second attempt than your first on any stage. Bonus applied per event.',
+    badge: 'auto',
+  },
+  penalty_challenge: {
+    name: 'Penalty Challenge',
+    desc: 'Finish an event despite receiving a time penalty of 60 seconds or more. Points awarded to all qualifying finishers.',
+    badge: 'auto',
+  },
+  survivor_bonus: {
+    name: 'Survivor Bonus',
+    desc: 'Last non-DNF finisher receives a survivor bonus.',
+    badge: 'auto',
+  },
+  livery_challenge: {
+    name: 'Livery Challenge',
+    desc: "Submit a screenshot of a historically accurate livery for the event's era. Judged by admin after each round.",
+    badge: 'manual',
+  },
+  custom: {
+    name: null, // kommt aus rules.description
+    desc: 'Custom challenge — details set by the admin for this championship.',
+    badge: 'manual',
+  },
+};
+
+async function loadChallenges() {
+  const hdr  = $('challenges-hdr');
+  const list = $('challenges-list');
+  if (!list) return;
+
+  if (!_themedChampId) await loadThemedResults();
+
+  try {
+    const rules = await sb('championship_rules', `championship_id=eq.${_themedChampId}&select=rule_type,is_active,points,description`);
+    const byType = {};
+    rules.forEach(r => { byType[r.rule_type] = r; });
+
+    const champs    = await sb('championships', `select=name&id=eq.${_themedChampId}&limit=1`);
+    const champName = champs[0]?.name || 'CHAMPIONSHIP';
+    setText('challenges-hdr', `${champName} — ACTIVE CHALLENGES`);
+
+    const items = [];
+
+    // Loyalty: permanent, immer aktiv, +50 fest (siehe loadStandings())
+    items.push({ ...CHALLENGE_INFO.loyalty, points: 50, active: true, name: CHALLENGE_INFO.loyalty.name });
+
+    ['stage_improvement', 'penalty_challenge', 'survivor_bonus', 'livery_challenge'].forEach(type => {
+      const rule = byType[type];
+      const info = CHALLENGE_INFO[type];
+      items.push({
+        ...info,
+        points: rule?.points ?? null,
+        active: !!rule?.is_active,
+      });
+    });
+
+    // Custom-Regel(n), falls konfiguriert
+    rules.filter(r => r.rule_type === 'custom' && r.is_active).forEach(r => {
+      items.push({
+        name: r.description || 'Custom Challenge',
+        desc: CHALLENGE_INFO.custom.desc,
+        badge: CHALLENGE_INFO.custom.badge,
+        points: r.points,
+        active: true,
+      });
+    });
+
+    if (!items.some(i => i.active)) {
+      list.innerHTML = `<div class="empty"><div class="empty-title">NO CHALLENGES CONFIGURED</div><div class="empty-sub">Set up rules in Admin → Championship Setup.</div></div>`;
+      return;
+    }
+
+    list.innerHTML = items.map(i => {
+      const badgeClass = i.badge === 'auto' ? 'ch-auto' : 'ch-manual';
+      const badgeLabel = i.badge === 'auto' ? 'AUTO' : 'MANUAL';
+      const inactiveTag = i.active ? '' : ' <span style="font-size:10px;color:#444;margin-left:8px;">— NOT ACTIVE THIS SEASON</span>';
+      const rewardTxt = i.points != null
+        ? `+${i.points} points${i.badge === 'manual' ? ' — manually awarded' : ''}`
+        : '—';
+      return `
+        <div class="challenge-item${i.active ? '' : ' inactive'}">
+          <div class="ch-name">${escapeHtml(i.name)} <span class="ch-badge ${badgeClass}">${badgeLabel}</span>${inactiveTag}</div>
+          <div class="ch-desc">${escapeHtml(i.desc)}</div>
+          <div class="ch-reward">${rewardTxt}</div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('[loadChallenges]', err);
+    list.innerHTML = `<div class="empty"><div class="empty-title">ERROR</div><div class="empty-sub">Could not load challenges.</div></div>`;
   }
 }
 
