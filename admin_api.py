@@ -14,6 +14,7 @@ import os, re, hmac, statistics, requests
 from flask import Flask, request, jsonify
 from functools import wraps
 from racenet_client import RacenetClient
+from vehicle_classes_data import VEHICLE_CLASSES
 
 app = Flask(__name__)
 
@@ -588,6 +589,53 @@ def championship_alter():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/rules/save", methods=["POST"])
+@auth
+def rules_save():
+    """
+    Speichert die globalen Championship-Regeln (championship_rules) für
+    eine BEREITS EXISTIERENDE Championship. War bisher nur beim initialen
+    /championship/create moeglich, nicht nachtraeglich fuer eine schon
+    angelegte (z.B. "upcoming") Championship editierbar.
+    Loescht bestehende Regeln zuerst, dann neu anlegen (gleiches Muster wie
+    /teams/save und /cr/manual-save).
+    Body: { championship_id, rules: [{rule_type, is_active, points, description}, ...] }
+    """
+    body     = request.json or {}
+    champ_id = body.get("championship_id")
+    rules    = body.get("rules", [])
+    if not champ_id:
+        return jsonify({"error": "championship_id required"}), 400
+    if not valid_id(champ_id):
+        return jsonify({"error": "invalid championship_id"}), 400
+    try:
+        sb_delete("championship_rules", f"championship_id=eq.{champ_id}")
+        if rules:
+            for r in rules:
+                r["championship_id"] = champ_id
+            sb_post("championship_rules", rules)
+        return jsonify({"ok": True, "saved": len(rules)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/rules/<champ_id>", methods=["GET"])
+@auth
+def rules_get(champ_id):
+    """
+    Bestehende Regeln einer Championship laden — ueber den service_role-Key
+    (nicht den anon-Key), da championship_rules aktuell keine SELECT-Policy
+    fuer public hat (gleiches Muster wie /teams/<champ_id>).
+    """
+    if not valid_id(champ_id):
+        return jsonify({"error": "invalid championship_id"}), 400
+    try:
+        rules = sb_get("championship_rules", f"championship_id=eq.{champ_id}&select=rule_type,is_active,points,description")
+        return jsonify(rules)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Teams ─────────────────────────────────────────────────────────────────────
 
 @app.route("/teams/save", methods=["POST"])
@@ -642,6 +690,44 @@ def teams_get(champ_id):
     try:
         teams = sb_get("teams", f"championship_id=eq.{champ_id}&select=id,name,color,team_members(driver_name)")
         return jsonify(teams)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Drivers ───────────────────────────────────────────────────────────────────
+
+@app.route("/drivers/search", methods=["GET"])
+@auth
+def drivers_search():
+    """
+    Teilstring-Suche gegen die kanonische `drivers`-Tabelle (dieselbe
+    Namensbasis, die auch ELO/Standings/event_results verwenden). Genutzt
+    fuer die Team-Mitglieder-Zuordnung im Championship Setup, wo man
+    Fahrernamen sonst nicht auswaehlen koennte bevor sie in der Championship
+    Ergebnisse haben.
+    Query: ?q=<teilname>  (mind. 2 Zeichen, sonst leeres Ergebnis)
+    Gibt mehrere Treffer zurueck falls der Teilname mehrdeutig ist — die
+    Auswahl der richtigen Person passiert im Admin selbst, kein Auto-Match.
+    """
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    try:
+        # PostgREST ilike-Wildcard: %text% -> muss selbst URL-encoded werden,
+        # requests uebernimmt das ueber params.
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/drivers",
+            headers=SB,
+            params={
+                "name": f"ilike.*{q}*",
+                "select": "name",
+                "order": "name.asc",
+                "limit": "20",
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
+        return jsonify([row["name"] for row in r.json()])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -725,6 +811,29 @@ def narrative_event():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/event/alter", methods=["POST"])
+@auth
+def event_alter():
+    """
+    Erlaubt das nachtraegliche Umbenennen eines Events (z.B. wenn der
+    auto-generierte "Rd.N — Location"-Name nicht passt). Gab es bisher
+    nirgends, nur /narrative/event existierte fuer Events.
+    Body: { event_id, name }
+    """
+    body  = request.json or {}
+    ev_id = body.get("event_id")
+    name  = (body.get("name") or "").strip()
+    if not ev_id or not name:
+        return jsonify({"error": "event_id and name required"}), 400
+    if not valid_id(ev_id):
+        return jsonify({"error": "invalid event_id"}), 400
+    try:
+        sb_patch("events", f"id=eq.{ev_id}", {"name": name})
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── CR MANUAL SAVE ───────────────────────────────────────────────────────────
 
 @app.route("/cr/manual-save", methods=["POST"])
@@ -786,6 +895,33 @@ def cr_vehicles():
         return jsonify([{"vehicle": v, "cr_value": cr_map.get(v)} for v in vehicles])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Vehicle Classes (statische Referenzliste, siehe vehicle_classes_data.py) ──
+
+@app.route("/vehicles/classes", methods=["GET"])
+@auth
+def vehicles_classes():
+    """
+    Statische Klasse->Fahrzeug-Liste (vehicle_classes_data.py, aus
+    vehicles_by_class.csv). Genutzt im Championship Setup, damit CR-Werte
+    ueber ein Dropdown ausgewaehlt statt frei getippt werden (verhindert
+    Namens-Mismatches gegenueber echten RaceNet/stage_results-Werten).
+
+    Ohne Query-Param: gibt alle Klassennamen zurueck (fuer das Klassen-Dropdown).
+    Mit ?class=<Name>: gibt nur die Fahrzeuge dieser einen Klasse zurueck.
+
+    HINWEIS: einige Fahrzeuge tauchen absichtlich in mehreren Klassen auf
+    (z.B. Rally2 + WRC2/WRC3/WRC4, siehe vehicle_classes_data.py-Docstring) —
+    kein Bug, noch nicht dedupliziert, betrifft nur aktuell ungenutzte
+    moderne Klassen.
+    """
+    cls = request.args.get("class", "").strip()
+    if cls:
+        if cls not in VEHICLE_CLASSES:
+            return jsonify({"error": f"unknown class '{cls}'"}), 404
+        return jsonify(VEHICLE_CLASSES[cls])
+    return jsonify(sorted(VEHICLE_CLASSES.keys()))
 
 
 # ── ELO CLUBS ────────────────────────────────────────────────────────────────

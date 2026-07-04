@@ -504,6 +504,31 @@ textarea.inp-std { resize:vertical; }
 .rn-champ-row:hover { background:#151515; color:var(--gray-light); }
 .rn-champ-row.selected { background:#1a1010; color:var(--red); border-left:2px solid var(--red); }
 
+/* CHAMPIONSHIP SETUP — unified mask additions (Session 3) */
+.cs-driver-search-wrap { position:relative; }
+.cs-driver-suggestions {
+  position:absolute; z-index:20; background:#111; border:1px solid #333;
+  max-height:160px; overflow-y:auto; width:100%; box-shadow:0 4px 10px rgba(0,0,0,.5);
+}
+.cs-driver-suggestions div { padding:5px 8px; font-size:12px; color:#ccc; cursor:pointer; }
+.cs-driver-suggestions div:hover { background:#1a1010; color:var(--red); }
+.cs-chip {
+  display:inline-flex; align-items:center; gap:5px; background:#1a1a1a; border:1px solid #333;
+  color:var(--gray-light); font-size:11px; padding:3px 6px; margin:2px 4px 2px 0;
+}
+.cs-chip button { background:none; border:none; color:#c44; cursor:pointer; font-size:11px; padding:0; line-height:1; }
+.cs-status-badge { font-size:10px; padding:2px 6px; letter-spacing:1px; text-transform:uppercase; margin-left:8px; }
+.cs-status-upcoming  { background:rgba(255,193,7,0.15); color:#ffc107; }
+.cs-status-running   { background:rgba(0,255,65,0.15);  color:var(--green); }
+.cs-status-completed { background:#252729; color:#777; }
+.cs-vehicle-cr-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid #1a1a1a; }
+.cs-vehicle-cr-row input[type=number] { width:70px; }
+.cs-event-row {
+  display:grid; grid-template-columns:50px 1fr 140px 120px; gap:10px; align-items:center;
+  padding:7px 8px; border-bottom:1px solid #1a1a1a; font-size:12px;
+}
+.cs-event-row:nth-child(even) { background:#0d0d0d; }
+
 /* EMPTY STATE */
 .empty {
   background:var(--black); padding:24px; text-align:center;
@@ -1218,167 +1243,134 @@ textarea.inp-std { resize:vertical; }
         </div>
       </div>
 
-      <div class="admin-tab" id="atab-champ-setup" style="display:none;">
+      <div class="admin-tab" id="atab-champ-setup" style="display:none;" onshow="csInit()">
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
           <div class="col-hdr" style="margin-bottom:0;">CHAMPIONSHIP SETUP</div>
         </div>
 
-        <!-- MODE SELECTOR -->
-        <div style="display:flex; gap:0; background:var(--gray-dark); border-bottom:2px solid #111;">
-          <button onclick="csModeSwitch('manual',this)"   id="cs-mode-manual"   class="cs-mode-btn cs-mode-active">① CREATE — WITHOUT RACENET</button>
-          <button onclick="csModeSwitch('racenet',this)"  id="cs-mode-racenet"  class="cs-mode-btn">② CREATE — FROM RACENET</button>
-          <button onclick="csModeSwitch('alter',this)"    id="cs-mode-alter"    class="cs-mode-btn">③ ALTER RUNNING</button>
+        <!-- ─── STEP 1: SELECT OR CREATE ─────────────────────────────────── -->
+        <div style="background:var(--black); padding:16px 20px; border-bottom:2px solid var(--gray-dark); display:flex; align-items:flex-end; gap:12px;">
+          <div style="flex:1; max-width:420px;">
+            <label class="inp-lbl">CHAMPIONSHIP</label>
+            <select id="cs-champ" onchange="csChampPicked()" class="inp-std">
+              <option value="">— select —</option>
+              <option value="__new_manual__">+ NEW — without RaceNet</option>
+              <option value="__new_racenet__">+ NEW — from RaceNet</option>
+            </select>
+          </div>
+          <span id="cs-status-badge"></span>
         </div>
 
-        <!-- ─── MODE 1: MANUAL CREATE ─────────────────────────────────────── -->
-        <div id="cs-panel-manual" style="background:var(--black); padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            <div>
-              <label class="inp-lbl">RACENET CLUB</label>
-              <select id="cs-club" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-                <option value="23799">GRF Themed (23799)</option>
-                <option value="23834">GRF Teamed (23834)</option>
-              </select>
-              <div style="font-size:10px;color:#444;margin-top:3px;">Nur als Referenz — RaceNet wird nicht kontaktiert</div>
-            </div>
-            <div>
-              <label class="inp-lbl">CHAMPIONSHIP NAME</label>
-              <input id="cs-name" type="text" placeholder="e.g. GRF Themed Season 5 — Golden Era" class="inp-std">
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-              <div><label class="inp-lbl">SEASON</label><input id="cs-season" type="number" placeholder="5" min="1" class="inp-std"></div>
-              <div><label class="inp-lbl">VEHICLE CLASS</label><input id="cs-class" type="text" placeholder="e.g. Group B" class="inp-std"></div>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-              <div><label class="inp-lbl">START DATE</label><input id="cs-start" type="date" class="inp-std" style="color-scheme:dark;"></div>
-              <div><label class="inp-lbl">END DATE</label><input id="cs-end" type="date" class="inp-std" style="color-scheme:dark;"></div>
-            </div>
-            <div>
-              <label class="inp-lbl">NARRATIVE</label>
-              <textarea id="cs-narrative" rows="4" placeholder="Championship description…" class="inp-std" style="resize:vertical;"></textarea>
-            </div>
+        <!-- ─── NEW: MANUAL sub-panel ─────────────────────────────────────── -->
+        <div id="cs-new-manual" style="display:none; background:var(--black); padding:16px 20px; border-bottom:2px solid var(--gray-dark); display:none; grid-template-columns:280px 1fr; gap:20px;">
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <label class="inp-lbl">RACENET CLUB (Referenz)</label>
+            <select id="cs-nm-club" class="inp-std">
+              <option value="23799">GRF Themed (23799)</option>
+              <option value="23834">GRF Teamed (23834)</option>
+            </select>
+            <label class="inp-lbl">CHAMPIONSHIP NAME</label>
+            <input id="cs-nm-name" type="text" placeholder="e.g. GRF Themed Season 5 — Golden Era" class="inp-std">
+            <button onclick="csCreateManual()" class="btn-red">CREATE CHAMPIONSHIP</button>
+            <div id="cs-nm-status" style="font-size:12px;color:#555;min-height:18px;"></div>
           </div>
-
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            <label class="inp-lbl">RULES / CHALLENGES</label>
-            <div style="display:flex; flex-direction:column; gap:5px;">
-              <div style="background:#1a2a1a; border:1px solid #1a3a1a; padding:9px 12px; display:flex; align-items:center; gap:10px;">
-                <span style="color:var(--green);">✓</span><span style="flex:1;font-size:13px;color:var(--gray-light);">Loyalty Bonus</span>
-                <span class="ch-badge ch-auto">AUTO</span><span style="font-size:10px;color:#555;">+50 pts · always</span>
-              </div>
-              <div class="rule-row"><input type="checkbox" id="cr-rule-improvement"><span class="rule-name">Stage Improvement</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="10" id="cr-rule-improvement-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
-              <div class="rule-row"><input type="checkbox" id="cr-rule-penalty"><span class="rule-name">Penalty Challenge</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="10" id="cr-rule-penalty-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
-              <div class="rule-row"><input type="checkbox" id="cr-rule-survivor"><span class="rule-name">Survivor Bonus</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="5" id="cr-rule-survivor-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
-              <div class="rule-row"><input type="checkbox" id="cr-rule-livery"><span class="rule-name">Livery Challenge</span><span class="ch-badge ch-manual">MANUAL</span><input type="number" value="15" id="cr-rule-livery-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
-              <div class="rule-row"><input type="checkbox" id="cr-rule-custom"><input type="text" id="cr-rule-custom-name" placeholder="Custom rule…" style="flex:1;background:#1a1a1a;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:3px 6px;outline:none;"><span class="ch-badge ch-manual">MANUAL</span><input type="number" value="10" id="cr-rule-custom-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
-            </div>
-            <div style="display:flex; gap:8px; margin-top:auto;">
-              <button onclick="csCreate('manual')" class="btn-red" style="flex:1;">CREATE CHAMPIONSHIP</button>
-              <button onclick="csReset()" class="btn-gray">RESET</button>
-            </div>
-            <div id="cs-status" style="font-size:12px;color:#555;min-height:18px;"></div>
+          <div style="font-size:11px;color:#555;line-height:1.6;">
+            Legt eine Championship ohne RaceNet-Verknüpfung an. Alle weiteren
+            Felder (Klasse, CR, Boni, Narrative, Teams, Events) trägst du im
+            nächsten Schritt direkt unten ein, sobald sie erstellt ist.
           </div>
         </div>
 
-        <!-- ─── MODE 2: CREATE FROM RACENET ──────────────────────────────── -->
-        <div id="cs-panel-racenet" style="display:none; background:var(--black); padding:16px 20px; display:none; grid-template-columns:280px 1fr; gap:20px;">
+        <!-- ─── NEW: RACENET sub-panel ──────────────────────────────────── -->
+        <div id="cs-new-racenet" style="display:none; background:var(--black); padding:16px 20px; border-bottom:2px solid var(--gray-dark); grid-template-columns:280px 1fr; gap:20px;">
           <div style="display:flex; flex-direction:column; gap:12px;">
-            <div>
-              <label class="inp-lbl">CLUB</label>
-              <select id="cs-rn-club" onchange="csRnLoadChamps()" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-                <option value="23799">GRF Themed (23799)</option>
-                <option value="23834">GRF Teamed (23834)</option>
-              </select>
-            </div>
+            <label class="inp-lbl">CLUB</label>
+            <select id="cs-rn-club" onchange="csRnLoadChamps()" class="inp-std">
+              <option value="23799">GRF Themed (23799)</option>
+              <option value="23834">GRF Teamed (23834)</option>
+            </select>
             <button onclick="csRnLoadChamps()" class="btn-gray" style="width:100%;">▶ LOAD FROM RACENET</button>
             <div id="cs-rn-list" style="background:#111; border:1px solid #1a1a1a; min-height:120px; max-height:280px; overflow-y:auto; padding:4px;">
               <div style="color:#444;font-size:11px;padding:10px;text-align:center;">Click Load to fetch championships</div>
             </div>
           </div>
-          <div style="display:flex; flex-direction:column; gap:12px;" id="cs-rn-detail" style="display:none;">
+          <div style="display:flex; flex-direction:column; gap:12px;" id="cs-rn-detail">
             <div style="background:#1a1a1a; border:1px solid #252729; padding:12px; font-size:12px; color:#888; line-height:1.8;" id="cs-rn-preview">
-              Select a championship from the list.
+              Select a championship from the list. Auch "upcoming" Championships
+              (Zukunfts-Startdatum) tauchen hier auf, sobald RaceNet sie kennt.
             </div>
-            <div>
-              <label class="inp-lbl">OVERRIDE NAME (optional)</label>
-              <input id="cs-rn-name" type="text" placeholder="Leave empty to use RaceNet name" class="inp-std">
-            </div>
-            <div>
-              <label class="inp-lbl">SEASON NUMBER</label>
-              <input id="cs-rn-season" type="number" placeholder="5" class="inp-std">
-            </div>
-            <div>
-              <label class="inp-lbl">VEHICLE CLASS</label>
-              <input id="cs-rn-class" type="text" placeholder="e.g. Group B" class="inp-std">
-            </div>
-            <div style="display:flex; gap:8px; margin-top:auto;">
-              <button onclick="csCreate('racenet')" class="btn-red" style="flex:1;">IMPORT &amp; CREATE</button>
-            </div>
+            <button onclick="csCreateRacenet()" class="btn-red">IMPORT &amp; CREATE</button>
             <div id="cs-rn-status" style="font-size:12px;color:#555;min-height:18px;"></div>
           </div>
         </div>
 
-        <!-- ─── MODE 3: ALTER RUNNING ─────────────────────────────────────── -->
-        <div id="cs-panel-alter" style="display:none; background:var(--black); padding:16px 20px;">
-          <div style="display:grid; grid-template-columns:260px 1fr; gap:20px;">
+        <!-- ─── STEP 2: EDIT PANEL (existing or freshly created championship) ── -->
+        <div id="cs-edit-panel" style="display:none; background:var(--black);">
 
-            <!-- LEFT: Championship auswählen -->
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              <label class="inp-lbl">CHAMPIONSHIP</label>
-              <select id="cs-alter-champ" onchange="csAlterLoad()" style="width:100%; background:#252729; border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none;">
-                <option value="">— select —</option>
-              </select>
-              <div style="font-size:10px; color:#444;">Wähle die zu bearbeitende Championship</div>
+          <!-- CHAMPIONSHIP-LEVEL FIELDS -->
+          <div style="padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:24px; border-bottom:2px solid var(--gray-dark);">
+
+            <!-- LEFT COL: basics + CR -->
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div>
+                <label class="inp-lbl">NAME</label>
+                <input id="cs-e-name" type="text" class="inp-std">
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div><label class="inp-lbl">START DATE</label><input id="cs-e-start" type="date" class="inp-std" style="color-scheme:dark;"></div>
+                <div><label class="inp-lbl">END DATE</label><input id="cs-e-end" type="date" class="inp-std" style="color-scheme:dark;"></div>
+              </div>
+              <div>
+                <label class="inp-lbl">KLASSE</label>
+                <select id="cs-e-class" onchange="csClassChanged()" class="inp-std">
+                  <option value="">— select —</option>
+                  <option value="__other__">Other / not listed…</option>
+                </select>
+                <input id="cs-e-class-custom" type="text" placeholder="Klassenname eingeben…" class="inp-std" style="display:none; margin-top:6px;">
+              </div>
+              <div>
+                <label class="inp-lbl">CAR RATINGS <span style="color:#555;font-weight:normal;">— Fahrzeuge der gewählten Klasse</span></label>
+                <div id="cs-e-cr-list" style="max-height:260px; overflow-y:auto; background:#111; border:1px solid #1a1a1a; padding:6px 10px;">
+                  <div style="color:#444;font-size:11px;padding:8px;">Klasse wählen, um Fahrzeuge zu laden.</div>
+                </div>
+              </div>
             </div>
 
-            <!-- RIGHT: Edit Tabs -->
-            <div id="cs-alter-panel" style="display:none;">
-              <div style="display:flex; gap:0; border-bottom:1px solid #1a1a1a; margin-bottom:12px;">
-                <button onclick="csAlterTab('teams',this)"    class="cs-alter-tab cs-alter-active">TEAMS</button>
-                <button onclick="csAlterTab('bonuses',this)"  class="cs-alter-tab">BONUSES</button>
-                <button onclick="csAlterTab('details',this)"  class="cs-alter-tab">DETAILS</button>
+            <!-- RIGHT COL: rules + narrative -->
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <label class="inp-lbl">GLOBALE BONI / REGELN <span style="color:#555;font-weight:normal;">— championship-weit</span></label>
+              <div style="display:flex; flex-direction:column; gap:5px;">
+                <div style="background:#1a2a1a; border:1px solid #1a3a1a; padding:9px 12px; display:flex; align-items:center; gap:10px;">
+                  <span style="color:var(--green);">✓</span><span style="flex:1;font-size:13px;color:var(--gray-light);">Loyalty Bonus</span>
+                  <span class="ch-badge ch-auto">AUTO</span><span style="font-size:10px;color:#555;">+50 pts · always</span>
+                </div>
+                <div class="rule-row"><input type="checkbox" id="cs-rule-improvement"><span class="rule-name">Stage Improvement</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="10" id="cs-rule-improvement-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+                <div class="rule-row"><input type="checkbox" id="cs-rule-penalty"><span class="rule-name">Penalty Challenge</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="10" id="cs-rule-penalty-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+                <div class="rule-row"><input type="checkbox" id="cs-rule-survivor"><span class="rule-name">Survivor Bonus</span><span class="ch-badge ch-auto">AUTO</span><input type="number" value="5" id="cs-rule-survivor-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+                <div class="rule-row"><input type="checkbox" id="cs-rule-livery"><span class="rule-name">Livery Challenge</span><span class="ch-badge ch-manual">MANUAL</span><input type="number" value="15" id="cs-rule-livery-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+                <div class="rule-row"><input type="checkbox" id="cs-rule-custom"><input type="text" id="cs-rule-custom-name" placeholder="Custom rule…" style="flex:1;background:#1a1a1a;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:3px 6px;outline:none;"><span class="ch-badge ch-manual">MANUAL</span><input type="number" value="10" id="cs-rule-custom-pts" class="rule-pts"><span class="rule-unit">pts</span></div>
+                <div style="font-size:10px;color:#444;margin-top:2px;">MANUAL-Regeln vergibst du weiterhin einzeln im Tab <span style="color:#777;">Manual Bonuses</span> (Livery, Custom) — hier legst du nur fest, ob/wie viele Punkte die Regel wert ist.</div>
               </div>
 
-              <!-- TEAMS -->
-              <div id="cs-alter-teams">
-                <div style="font-size:11px;color:#555;margin-bottom:10px;">Fahrer einem Team zuordnen. Ein Fahrer kann nur in einem Team sein.</div>
-                <div id="cs-teams-builder" style="display:flex; flex-direction:column; gap:8px;">
-                  <!-- dynamisch -->
-                </div>
-                <button onclick="csAddTeam()" style="margin-top:8px; background:#252729; color:#888; border:1px solid #333; font-family:var(--ui-font); font-size:12px; padding:5px 12px; cursor:pointer;">+ ADD TEAM</button>
-                <div style="display:flex; gap:8px; margin-top:12px;">
-                  <button onclick="csTeamsSave()" class="btn-red">SAVE TEAMS</button>
-                </div>
-                <div id="cs-teams-status" style="font-size:11px;color:#555;margin-top:6px;min-height:16px;"></div>
-              </div>
+              <label class="inp-lbl" style="margin-top:6px;">NARRATIVE</label>
+              <textarea id="cs-e-narrative" rows="4" placeholder="Championship description…" class="inp-std" style="resize:vertical;"></textarea>
 
-              <!-- BONUSES (link to bonus tab) -->
-              <div id="cs-alter-bonuses" style="display:none; font-size:13px; color:#888; padding:20px 0;">
-                Manual Bonuses werden im Tab <strong style="color:var(--gray-light);">Manual Bonuses</strong> verwaltet.<br>
-                Die Championship ist dort bereits vorausgewählt wenn du von hier wechselst.
-                <div style="margin-top:12px;">
-                  <button onclick="showAdminTab('manual-bonuses', document.querySelector('.sub-tab:nth-child(4)'))" class="btn-gray">→ OPEN MANUAL BONUSES</button>
-                </div>
-              </div>
+              <label class="inp-lbl" style="margin-top:6px;">TEAMS <span style="color:#555;font-weight:normal;">— optional</span></label>
+              <div id="cs-teams-builder" style="display:flex; flex-direction:column; gap:8px;"></div>
+              <button onclick="csAddTeam()" class="btn-gray" style="align-self:flex-start;">+ ADD TEAM</button>
+            </div>
+          </div>
 
-              <!-- DETAILS -->
-              <div id="cs-alter-details" style="display:none; display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                  <div><label class="inp-lbl">NAME</label><input id="cs-alter-name" type="text" class="inp-std"></div>
-                  <div><label class="inp-lbl">VEHICLE CLASS</label><input id="cs-alter-class" type="text" class="inp-std"></div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                    <div><label class="inp-lbl">START</label><input id="cs-alter-start" type="date" class="inp-std" style="color-scheme:dark;"></div>
-                    <div><label class="inp-lbl">END</label><input id="cs-alter-end" type="date" class="inp-std" style="color-scheme:dark;"></div>
-                  </div>
-                </div>
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                  <div><label class="inp-lbl">NARRATIVE</label><textarea id="cs-alter-narrative" rows="5" class="inp-std" style="resize:vertical;"></textarea></div>
-                </div>
-                <div style="grid-column:1/-1; display:flex; gap:8px;">
-                  <button onclick="csAlterSave()" class="btn-red">SAVE CHANGES</button>
-                </div>
-                <div id="cs-alter-status" style="grid-column:1/-1; font-size:12px;color:#555;min-height:18px;"></div>
-              </div>
+          <div style="padding:14px 20px; display:flex; gap:8px; align-items:center; border-bottom:2px solid var(--gray-dark);">
+            <button onclick="csSaveAll()" class="btn-red">✓ SAVE ALL</button>
+            <div id="cs-save-status" style="font-size:12px;color:#555;"></div>
+          </div>
+
+          <!-- EVENTS -->
+          <div style="padding:16px 20px;">
+            <div class="col-hdr" style="margin-bottom:10px;">EVENTS <span style="color:#555;font-weight:normal;font-size:11px;">— Name pro Event, lokale Boni via Manual Bonuses</span></div>
+            <div id="cs-events-list" style="background:#111; border:1px solid #1a1a1a;">
+              <div style="color:#444;font-size:11px;padding:10px;">Keine Events geladen.</div>
             </div>
           </div>
         </div>
@@ -1929,7 +1921,8 @@ function showAdminTab(name, el) {
   if (el)  el.classList.add('active');
 
   // Tab-specific init
-  if (name === 'cr-manual') crManualLoad();
+  if (name === 'cr-manual')   crManualLoad();
+  if (name === 'champ-setup') csInit();
 }
 
 
@@ -2518,6 +2511,7 @@ async function loadEloData() {
       dnfRate:     dnfStats[d.name] ? (100 * dnfStats[d.name].dnf / dnfStats[d.name].total) : null,
       clubIds:     driverClubs[d.name] ? [...driverClubs[d.name]] : [],
       established: (d.starts || 0) >= 5,
+      provisional: !!d.elo_provisional,
       inactive:    !!d.elo_inactive,
       };
     });
@@ -2797,7 +2791,7 @@ async function _buildEloClubList() {
 async function adminLoadChampionships() {
   const champs = await sb('championships', 'select=id,name,season_number&order=start_date.desc');
 
-  const selects = ['mb-champ','nav-champ','nav-ev-champ','cs-alter-champ'];
+  const selects = ['mb-champ','nav-champ','nav-ev-champ'];
   selects.forEach(id => {
     const el = $(id);
     if (!el) return;
@@ -3151,114 +3145,82 @@ async function crManualSave() {
 }
 
 
-// ── 12. ADMIN — CHAMPIONSHIP SETUP ───────────────────────────
+// ── 12. ADMIN — CHAMPIONSHIP SETUP (unified mask, Session 3) ─────────────
+//
+// Ersetzt die alten 3 Modi (Manual Create / RaceNet Create / Alter Running)
+// durch EINE Maske: Championship waehlen ODER neu anlegen (2 Unterwege),
+// danach ein gemeinsames Edit-Panel fuer Name/Klasse/CR/Regeln/Narrative/
+// Teams + Events darunter. Andere Admin-Tabs (CR Manual, Manual Bonuses,
+// Narratives, Car Rating Calc, ELO Update, Font Switcher) bleiben
+// unveraendert, siehe Briefing.
 
-// ── 12. ADMIN — CHAMPIONSHIP SETUP (3 Modi) ──────────────────
+let _csCurrentChampId  = null;
+let _csSelectedRnChamp = null;
+let _csVehicleClasses  = null; // Cache: {className: [{name,drivetrain,era},...]}
 
-let _csSelectedRnChamp = null; // ausgewählte RaceNet Championship
-
-function csModeSwitch(mode, btn) {
-  ['manual','racenet','alter'].forEach(m => {
-    const p = $(`cs-panel-${m}`);
-    const b = $(`cs-mode-${m}`);
-    if (p) p.style.display = 'none';
-    if (b) b.classList.remove('cs-mode-active');
-  });
-  const panel = $(`cs-panel-${mode}`);
-  if (panel) panel.style.display = mode === 'manual' ? 'grid' : (mode === 'racenet' ? 'grid' : 'block');
-  if (btn) btn.classList.add('cs-mode-active');
+function csInit() {
+  csLoadChampDropdown();
+  csLoadVehicleClassNames();
 }
 
-// ── MODUS 1: MANUAL CREATE ────────────────────────────────────
+// ── Championship-Dropdown befuellen (neueste zuoberst, wie ueberall sonst) ──
+async function csLoadChampDropdown() {
+  const champs = await sb('championships', 'select=id,name,start_date,end_date&order=start_date.desc');
+  const sel = $('cs-champ');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML =
+    '<option value="">— select —</option>' +
+    '<option value="__new_manual__">+ NEW — without RaceNet</option>' +
+    '<option value="__new_racenet__">+ NEW — from RaceNet</option>' +
+    champs.map(c => `<option value="${c.id}" data-start="${c.start_date||''}" data-end="${c.end_date||''}">${escapeHtml(c.name)}</option>`).join('');
+  if (prev) sel.value = prev;
+}
 
-async function csCreate(mode) {
-  mode = mode || 'manual';
+function csChampPicked() {
+  const val = $('cs-champ')?.value;
+  $('cs-new-manual').style.display  = val === '__new_manual__'  ? 'grid' : 'none';
+  $('cs-new-racenet').style.display = val === '__new_racenet__' ? 'grid' : 'none';
 
-  // Gemeinsame Daten
-  const rules = _csCollectRules();
-
-  if (mode === 'manual') {
-    const name  = $('cs-name')?.value.trim();
-    const clubId= $('cs-club')?.value;
-    if (!name) { setText('cs-status', '⚠ Name required.'); return; }
-    setText('cs-status', '⏳ Creating…');
-
-    try {
-      const res = await adminFetch('/championship/create', {
-        mode: 'manual',
-        championship: {
-          club_id:       clubId,
-          name,
-          season_number: parseInt($('cs-season')?.value) || null,
-          vehicle_class: $('cs-class')?.value.trim() || null,
-          start_date:    $('cs-start')?.value || null,
-          end_date:      $('cs-end')?.value   || null,
-          narrative:     $('cs-narrative')?.value.trim() || null,
-        },
-        rules,
-      });
-      setText('cs-status', `✓ "${res.name}" created! ID: ${res.id}`);
-      adminLoadChampionships();
-    } catch (e) { setText('cs-status', `❌ ${e.message}`); }
-
-  } else if (mode === 'racenet') {
-    if (!_csSelectedRnChamp) { setText('cs-rn-status', '⚠ Select a championship from the list.'); return; }
-    const name = $('cs-rn-name')?.value.trim() || _csSelectedRnChamp.name;
-    setText('cs-rn-status', '⏳ Importing…');
-
-    try {
-      const res = await adminFetch('/championship/create', {
-        mode: 'racenet',
-        championship: {
-          club_id:       $('cs-rn-club')?.value,
-          racenet_id:    _csSelectedRnChamp.racenet_id,
-          name,
-          season_number: parseInt($('cs-rn-season')?.value) || null,
-          vehicle_class: $('cs-rn-class')?.value.trim() || null,
-          start_date:    _csSelectedRnChamp.start_at?.split('T')[0] || null,
-          end_date:      _csSelectedRnChamp.close_at?.split('T')[0] || null,
-        },
-        rules: [],
-      });
-      const msg = res.warning
-        ? `⚠ ${res.name} created — ${res.warning}`
-        : `✓ "${res.name}" created with ${res.events_imported} events imported!`;
-      setText('cs-rn-status', msg);
-      adminLoadChampionships();
-    } catch (e) { setText('cs-rn-status', `❌ ${e.message}`); }
+  if (!val || val === '__new_manual__' || val === '__new_racenet__') {
+    $('cs-edit-panel').style.display = 'none';
+    setText('cs-status-badge', '');
+    _csCurrentChampId = null;
+    return;
   }
+  csLoadExistingChampionship(val);
 }
 
-function _csCollectRules() {
-  const rules = [];
-  const map = [
-    { id: 'improvement', type: 'stage_improvement', ptsId: 'cr-rule-improvement-pts' },
-    { id: 'penalty',     type: 'penalty_challenge',  ptsId: 'cr-rule-penalty-pts' },
-    { id: 'survivor',    type: 'survivor_bonus',      ptsId: 'cr-rule-survivor-pts' },
-    { id: 'livery',      type: 'livery_challenge',    ptsId: 'cr-rule-livery-pts' },
-    { id: 'custom',      type: 'custom',              ptsId: 'cr-rule-custom-pts' },
-  ];
-  map.forEach(r => {
-    const cb = $(`cr-rule-${r.id}`);
-    if (!cb?.checked) return;
-    rules.push({ rule_type: r.type, is_active: true,
-                 points: parseInt($(r.ptsId)?.value) || 10,
-                 description: r.id === 'custom' ? $('cr-rule-custom-name')?.value.trim() : null });
-  });
-  return rules;
+// ── Status-Badge: upcoming / running / completed — rein abgeleitet, ─────────
+// kein gespeichertes Feld noetig (siehe Briefing, Championship-Status-Punkt)
+function csComputeStatusBadge(startDate, endDate) {
+  if (!startDate) return '';
+  const today = new Date().toISOString().slice(0,10);
+  if (today < startDate) return '<span class="cs-status-badge cs-status-upcoming">Upcoming</span>';
+  if (endDate && today > endDate) return '<span class="cs-status-badge cs-status-completed">Completed</span>';
+  return '<span class="cs-status-badge cs-status-running">Running</span>';
 }
 
-function csReset() {
-  ['cs-name','cs-season','cs-class','cs-start','cs-end','cs-narrative'].forEach(id => {
-    const el = $(id); if (el) el.value = '';
-  });
-  ['cr-rule-improvement','cr-rule-penalty','cr-rule-survivor','cr-rule-livery','cr-rule-custom']
-    .forEach(id => { const el = $(id); if (el) el.checked = false; });
-  setText('cs-status', '');
+// ── STEP 1b: NEW — MANUAL ────────────────────────────────────────────────
+async function csCreateManual() {
+  const name   = $('cs-nm-name')?.value.trim();
+  const clubId = $('cs-nm-club')?.value;
+  if (!name) { setText('cs-nm-status', '⚠ Name required.'); return; }
+  setText('cs-nm-status', '⏳ Creating…');
+  try {
+    const res = await adminFetch('/championship/create', {
+      mode: 'manual',
+      championship: { club_id: clubId, name },
+      rules: [],
+    });
+    setText('cs-nm-status', `✓ "${res.name}" created!`);
+    await csLoadChampDropdown();
+    $('cs-champ').value = res.id;
+    csChampPicked();
+  } catch (e) { setText('cs-nm-status', `❌ ${e.message}`); }
 }
 
-// ── MODUS 2: RACENET IMPORT ───────────────────────────────────
-
+// ── STEP 1c: NEW — FROM RACENET ──────────────────────────────────────────
 async function csRnLoadChamps() {
   const clubId = $('cs-rn-club')?.value;
   const list   = $('cs-rn-list');
@@ -3274,7 +3236,7 @@ async function csRnLoadChamps() {
     }
     list.innerHTML = champs.map(c => `
       <div class="rn-champ-row" onclick="csRnSelect(this, ${JSON.stringify(c).replace(/"/g,'&quot;')})">
-        <div style="color:var(--gray-light);font-weight:bold;">${c.name}</div>
+        <div style="color:var(--gray-light);font-weight:bold;">${escapeHtml(c.name)}</div>
         <div style="font-size:10px;color:#555;margin-top:2px;">
           ${c.start_at ? c.start_at.split('T')[0] : '?'} → ${c.close_at ? c.close_at.split('T')[0] : '?'}
           · ID: ${c.racenet_id}
@@ -3289,74 +3251,196 @@ function csRnSelect(el, champ) {
   document.querySelectorAll('.rn-champ-row').forEach(r => r.classList.remove('selected'));
   el.classList.add('selected');
   _csSelectedRnChamp = champ;
-
-  const detail  = $('cs-rn-detail');
-  const preview = $('cs-rn-preview');
-  if (detail)  detail.style.display  = 'flex';
-  if (preview) preview.innerHTML =
-    `<span style="color:var(--gray-light);font-size:13px;">${champ.name}</span><br>` +
-    `<span>Start: ${champ.start_at?.split('T')[0] || '—'}</span><br>` +
-    `<span>Close: ${champ.close_at?.split('T')[0] || '—'}</span><br>` +
-    `<span>RaceNet ID: ${champ.racenet_id}</span>`;
-  if ($('cs-rn-name')) $('cs-rn-name').value = '';
+  setText('cs-rn-preview',
+    `${champ.name}\nStart: ${champ.start_at?.split('T')[0] || '—'}\nClose: ${champ.close_at?.split('T')[0] || '—'}\nRaceNet ID: ${champ.racenet_id}`);
+  $('cs-rn-preview').style.whiteSpace = 'pre-line';
 }
 
-// ── MODUS 3: ALTER ────────────────────────────────────────────
-
-function csAlterTab(tab, btn) {
-  ['teams','bonuses','details'].forEach(t => {
-    const p = $(`cs-alter-${t}`);
-    if (p) p.style.display = 'none';
-  });
-  document.querySelectorAll('.cs-alter-tab').forEach(b => b.classList.remove('cs-alter-active'));
-  const panel = $(`cs-alter-${tab}`);
-  if (panel) panel.style.display = tab === 'details' ? 'grid' : 'block';
-  if (btn) btn.classList.add('cs-alter-active');
+async function csCreateRacenet() {
+  if (!_csSelectedRnChamp) { setText('cs-rn-status', '⚠ Select a championship from the list.'); return; }
+  setText('cs-rn-status', '⏳ Importing…');
+  try {
+    const res = await adminFetch('/championship/create', {
+      mode: 'racenet',
+      championship: {
+        club_id:    $('cs-rn-club')?.value,
+        racenet_id: _csSelectedRnChamp.racenet_id,
+        name:       _csSelectedRnChamp.name,
+        start_date: _csSelectedRnChamp.start_at?.split('T')[0] || null,
+        end_date:   _csSelectedRnChamp.close_at?.split('T')[0] || null,
+      },
+      rules: [],
+    });
+    const msg = res.warning
+      ? `⚠ ${res.name} created — ${res.warning}`
+      : `✓ "${res.name}" created with ${res.events_imported} events imported!`;
+    setText('cs-rn-status', msg);
+    await csLoadChampDropdown();
+    $('cs-champ').value = res.id;
+    csChampPicked();
+  } catch (e) { setText('cs-rn-status', `❌ ${e.message}`); }
 }
 
-async function csAlterLoad() {
-  const champId = $('cs-alter-champ')?.value;
-  const panel   = $('cs-alter-panel');
-  if (!champId) { if (panel) panel.style.display = 'none'; return; }
-  if (panel) panel.style.display = 'block';
+// ── STEP 2: EDIT PANEL — bestehende (oder frisch erstellte) Championship ──
+async function csLoadExistingChampionship(champId) {
+  _csCurrentChampId = champId;
+  $('cs-edit-panel').style.display = 'block';
+  $('cs-new-manual').style.display  = 'none';
+  $('cs-new-racenet').style.display = 'none';
 
-  // Championship Details laden
   const rows = await sb('championships', `id=eq.${champId}&select=*`);
-  if (rows.length) {
-    const c = rows[0];
-    if ($('cs-alter-name'))      $('cs-alter-name').value      = c.name || '';
-    if ($('cs-alter-class'))     $('cs-alter-class').value     = c.vehicle_class || '';
-    if ($('cs-alter-start'))     $('cs-alter-start').value     = c.start_date || '';
-    if ($('cs-alter-end'))       $('cs-alter-end').value       = c.end_date || '';
-    if ($('cs-alter-narrative')) $('cs-alter-narrative').value = c.narrative || '';
+  if (!rows.length) return;
+  const c = rows[0];
+
+  $('cs-e-name').value      = c.name || '';
+  $('cs-e-start').value     = c.start_date || '';
+  $('cs-e-end').value       = c.end_date || '';
+  $('cs-e-narrative').value = c.narrative || '';
+  setText('cs-status-badge', '');
+  $('cs-status-badge').innerHTML = csComputeStatusBadge(c.start_date, c.end_date);
+
+  // Klasse setzen (Dropdown falls bekannt, sonst "Other" + Freitext)
+  await csLoadVehicleClassNames();
+  const classSel = $('cs-e-class');
+  const known = [...classSel.options].some(o => o.value === c.vehicle_class);
+  if (c.vehicle_class && known) {
+    classSel.value = c.vehicle_class;
+    $('cs-e-class-custom').style.display = 'none';
+  } else if (c.vehicle_class) {
+    classSel.value = '__other__';
+    $('cs-e-class-custom').style.display = 'block';
+    $('cs-e-class-custom').value = c.vehicle_class;
+  } else {
+    classSel.value = '';
+    $('cs-e-class-custom').style.display = 'none';
   }
+  await csLoadCrForClass(champId, csGetSelectedClass());
+
+  // Regeln laden
+  try {
+    const rules = await adminFetch(`/rules/${champId}`, null, 'GET');
+    _csApplyRules(rules);
+  } catch (e) { _csApplyRules([]); }
 
   // Teams laden
   csTeamsLoad(champId);
+
+  // Events laden
+  csLoadEvents(champId);
 }
 
-async function csAlterSave() {
-  const champId = $('cs-alter-champ')?.value;
-  if (!champId) return;
-  setText('cs-alter-status', '⏳ Saving…');
+function csGetSelectedClass() {
+  const sel = $('cs-e-class');
+  if (!sel) return '';
+  if (sel.value === '__other__') return $('cs-e-class-custom')?.value.trim() || '';
+  return sel.value;
+}
+
+function _csApplyRules(rules) {
+  const map = {
+    stage_improvement: 'improvement',
+    penalty_challenge:  'penalty',
+    survivor_bonus:      'survivor',
+    livery_challenge:    'livery',
+    custom:              'custom',
+  };
+  // erst alles zuruecksetzen
+  ['improvement','penalty','survivor','livery','custom'].forEach(id => {
+    const cb = $(`cs-rule-${id}`); if (cb) cb.checked = false;
+  });
+  rules.forEach(r => {
+    const id = map[r.rule_type];
+    if (!id) return;
+    const cb  = $(`cs-rule-${id}`);
+    const pts = $(`cs-rule-${id}-pts`);
+    if (cb)  cb.checked = !!r.is_active;
+    if (pts && r.points != null) pts.value = r.points;
+    if (id === 'custom' && r.description) $('cs-rule-custom-name').value = r.description;
+  });
+}
+
+function _csCollectRules() {
+  const rules = [];
+  const map = [
+    { id: 'improvement', type: 'stage_improvement', ptsId: 'cs-rule-improvement-pts' },
+    { id: 'penalty',     type: 'penalty_challenge',  ptsId: 'cs-rule-penalty-pts' },
+    { id: 'survivor',    type: 'survivor_bonus',      ptsId: 'cs-rule-survivor-pts' },
+    { id: 'livery',      type: 'livery_challenge',    ptsId: 'cs-rule-livery-pts' },
+    { id: 'custom',      type: 'custom',              ptsId: 'cs-rule-custom-pts' },
+  ];
+  map.forEach(r => {
+    const cb = $(`cs-rule-${r.id}`);
+    if (!cb?.checked) return;
+    rules.push({ rule_type: r.type, is_active: true,
+                 points: parseInt($(r.ptsId)?.value) || 10,
+                 description: r.id === 'custom' ? $('cs-rule-custom-name')?.value.trim() : null });
+  });
+  return rules;
+}
+
+// ── VEHICLE CLASSES + CR ─────────────────────────────────────────────────
+async function csLoadVehicleClassNames() {
+  const sel = $('cs-e-class');
+  if (!sel || sel.dataset.built) return;
   try {
-    await adminFetch('/championship/alter', {
-      championship_id: champId,
-      fields: {
-        name:          $('cs-alter-name')?.value.trim(),
-        vehicle_class: $('cs-alter-class')?.value.trim(),
-        start_date:    $('cs-alter-start')?.value || null,
-        end_date:      $('cs-alter-end')?.value   || null,
-        narrative:     $('cs-alter-narrative')?.value.trim(),
-      }
-    });
-    setText('cs-alter-status', '✓ Saved.');
-    adminLoadChampionships();
-  } catch (e) { setText('cs-alter-status', `❌ ${e.message}`); }
+    const names = await adminFetch('/vehicles/classes', null, 'GET');
+    sel.innerHTML = '<option value="">— select —</option>' +
+      names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('') +
+      '<option value="__other__">Other / not listed…</option>';
+    sel.dataset.built = '1';
+  } catch (e) { /* still usable via "Other" fallback */ }
 }
 
-// ── TEAMS ─────────────────────────────────────────────────────
+function csClassChanged() {
+  const isOther = $('cs-e-class')?.value === '__other__';
+  $('cs-e-class-custom').style.display = isOther ? 'block' : 'none';
+  if (_csCurrentChampId) csLoadCrForClass(_csCurrentChampId, csGetSelectedClass());
+}
 
+async function csLoadCrForClass(champId, className) {
+  const list = $('cs-e-cr-list');
+  if (!list) return;
+  if (!className) {
+    list.innerHTML = '<div style="color:#444;font-size:11px;padding:8px;">Klasse wählen, um Fahrzeuge zu laden.</div>';
+    return;
+  }
+  list.innerHTML = '<div style="color:#555;font-size:11px;padding:8px;">⏳ Loading…</div>';
+
+  let vehicles = [];
+  try {
+    vehicles = await adminFetch(`/vehicles/classes?class=${encodeURIComponent(className)}`, null, 'GET');
+  } catch (e) {
+    // "Other"-Klasse ohne feste Liste — Fahrer/CR-History als Fallback nutzen
+  }
+
+  // Bestehende CR-Werte (aus car_ratings, falls schon welche existieren) laden
+  let existing = {};
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/cr/vehicles?championship_id=${champId}`, { headers: { 'X-Admin-Password': _adminPassword } });
+    if (res.ok) {
+      (await res.json()).forEach(v => { existing[v.vehicle] = v.cr_value; });
+      // Fahrzeuge, die schon CR-Werte haben aber nicht in der statischen Liste
+      // stehen (z.B. Klasse "Other"), trotzdem mit anzeigen
+      Object.keys(existing).forEach(v => {
+        if (!vehicles.some(x => x.name === v)) vehicles.push({ name: v });
+      });
+    }
+  } catch (e) { /* stage_results evtl. noch leer (upcoming Championship) — ok */ }
+
+  if (!vehicles.length) {
+    list.innerHTML = '<div style="color:#444;font-size:11px;padding:8px;">Keine Fahrzeuge für diese Klasse bekannt.</div>';
+    return;
+  }
+
+  list.innerHTML = vehicles.map(v => `
+    <div class="cs-vehicle-cr-row">
+      <span style="flex:1;">${escapeHtml(v.name)}</span>
+      <input type="number" step="0.01" min="0" placeholder="1.00" data-cr-vehicle="${escapeHtml(v.name)}"
+             value="${existing[v.name] != null ? existing[v.name] : ''}">
+    </div>`).join('');
+}
+
+// ── TEAMS — mit Fahrer-Suche statt Freitext ──────────────────────────────
 async function csTeamsLoad(champId) {
   const builder = $('cs-teams-builder');
   if (!builder) return;
@@ -3366,9 +3450,10 @@ async function csTeamsLoad(champId) {
     if (teams.length) {
       teams.forEach(t => csAddTeam(t.name, t.color, (t.team_members || []).map(m => m.driver_name)));
     } else {
-      csAddTeam(); // ein leeres Team als Start
+      csAddTeam();
     }
   } catch (e) {
+    builder.innerHTML = '';
     csAddTeam();
   }
 }
@@ -3376,7 +3461,6 @@ async function csTeamsLoad(champId) {
 function csAddTeam(name='', color='#c0392b', members=[]) {
   const builder = $('cs-teams-builder');
   if (!builder) return;
-  const idx = builder.children.length;
   const div = document.createElement('div');
   div.className = 'cs-team-row';
   div.style.cssText = 'background:#1a1a1a; border:1px solid #252729; padding:10px; display:grid; grid-template-columns:1fr 80px auto; gap:8px; align-items:start;';
@@ -3384,8 +3468,15 @@ function csAddTeam(name='', color='#c0392b', members=[]) {
     <div>
       <input type="text" value="${escapeHtml(name)}" placeholder="Team name…" data-team-name
         style="width:100%;background:#252729;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:13px;padding:5px 8px;outline:none;margin-bottom:6px;">
-      <textarea placeholder="Members (one per line)…" data-team-members rows="3"
-        style="width:100%;background:#252729;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:5px 8px;outline:none;resize:vertical;">${escapeHtml(members.join('\n'))}</textarea>
+      <div class="cs-driver-search-wrap">
+        <input type="text" placeholder="Fahrer suchen (min. 2 Zeichen)…" data-team-search
+          style="width:100%;background:#252729;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:5px 8px;outline:none;"
+          oninput="csDriverSearch(this)">
+        <div class="cs-driver-suggestions" data-team-suggestions style="display:none;"></div>
+      </div>
+      <div data-team-chips style="margin-top:6px;">
+        ${members.map(m => csChipHtml(m)).join('')}
+      </div>
     </div>
     <div>
       <label class="inp-lbl">COLOR</label>
@@ -3395,24 +3486,129 @@ function csAddTeam(name='', color='#c0392b', members=[]) {
   builder.appendChild(div);
 }
 
-async function csTeamsSave() {
-  const champId = $('cs-alter-champ')?.value;
-  if (!champId) return;
-  setText('cs-teams-status', '⏳ Saving…');
-
-  const rows   = document.querySelectorAll('.cs-team-row');
-  const teams  = [...rows].map(row => ({
-    name:    row.querySelector('[data-team-name]')?.value.trim(),
-    color:   row.querySelector('[data-team-color]')?.value,
-    members: row.querySelector('[data-team-members]')?.value
-                .split('\n').map(s => s.trim()).filter(Boolean),
-  })).filter(t => t.name);
-
-  try {
-    const res = await adminFetch('/teams/save', { championship_id: champId, teams });
-    setText('cs-teams-status', `✓ ${res.teams.length} teams saved.`);
-  } catch (e) { setText('cs-teams-status', `❌ ${e.message}`); }
+function csChipHtml(name) {
+  return `<span class="cs-chip" data-chip="${escapeHtml(name)}">${escapeHtml(name)}<button onclick="this.parentElement.remove()">✕</button></span>`;
 }
+
+let _csDriverSearchTimer = null;
+function csDriverSearch(input) {
+  clearTimeout(_csDriverSearchTimer);
+  const q   = input.value.trim();
+  const box = input.parentElement.querySelector('[data-team-suggestions]');
+  if (q.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  _csDriverSearchTimer = setTimeout(async () => {
+    try {
+      const names = await adminFetch(`/drivers/search?q=${encodeURIComponent(q)}`, null, 'GET');
+      if (!names.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      box.innerHTML = names.map(n => `<div onclick="csDriverPick(this, '${n.replace(/'/g,"\\'")}')">${escapeHtml(n)}</div>`).join('');
+      box.style.display = 'block';
+    } catch (e) { box.style.display = 'none'; }
+  }, 250);
+}
+
+function csDriverPick(el, name) {
+  const row   = el.closest('.cs-team-row');
+  const chips = row.querySelector('[data-team-chips]');
+  const search = row.querySelector('[data-team-search]');
+  const box   = row.querySelector('[data-team-suggestions]');
+  if (![...chips.querySelectorAll('[data-chip]')].some(c => c.dataset.chip === name)) {
+    chips.insertAdjacentHTML('beforeend', csChipHtml(name));
+  }
+  search.value = '';
+  box.style.display = 'none';
+  box.innerHTML = '';
+}
+
+// ── SAVE ALL — Championship-Felder + CR + Regeln + Narrative + Teams ────
+async function csSaveAll() {
+  if (!_csCurrentChampId) return;
+  const champId = _csCurrentChampId;
+  setText('cs-save-status', '⏳ Saving…');
+  const errors = [];
+
+  // 1) Championship-Felder
+  try {
+    await adminFetch('/championship/alter', {
+      championship_id: champId,
+      fields: {
+        name:          $('cs-e-name')?.value.trim(),
+        vehicle_class: csGetSelectedClass(),
+        start_date:    $('cs-e-start')?.value || null,
+        end_date:      $('cs-e-end')?.value   || null,
+        narrative:     $('cs-e-narrative')?.value.trim(),
+      }
+    });
+  } catch (e) { errors.push(`Championship: ${e.message}`); }
+
+  // 2) CR-Werte
+  try {
+    const ratings = [...document.querySelectorAll('[data-cr-vehicle]')]
+      .filter(inp => inp.value !== '')
+      .map(inp => ({ vehicle: inp.dataset.crVehicle, cr_value: parseFloat(inp.value) }));
+    if (ratings.length) await adminFetch('/cr/manual-save', { championship_id: champId, ratings });
+  } catch (e) { errors.push(`CR: ${e.message}`); }
+
+  // 3) Regeln
+  try {
+    await adminFetch('/rules/save', { championship_id: champId, rules: _csCollectRules() });
+  } catch (e) { errors.push(`Rules: ${e.message}`); }
+
+  // 4) Teams
+  try {
+    const rows  = document.querySelectorAll('.cs-team-row');
+    const teams = [...rows].map(row => ({
+      name:    row.querySelector('[data-team-name]')?.value.trim(),
+      color:   row.querySelector('[data-team-color]')?.value,
+      members: [...row.querySelectorAll('[data-chip]')].map(c => c.dataset.chip),
+    })).filter(t => t.name);
+    await adminFetch('/teams/save', { championship_id: champId, teams });
+  } catch (e) { errors.push(`Teams: ${e.message}`); }
+
+  if (errors.length) {
+    setText('cs-save-status', `⚠ Teilweise gespeichert — Fehler: ${errors.join(' · ')}`);
+  } else {
+    setText('cs-save-status', '✓ Alles gespeichert.');
+  }
+  csLoadChampDropdown();
+}
+
+// ── EVENTS — Liste + Name umbenennen + Link zu Manual Bonuses ───────────
+async function csLoadEvents(champId) {
+  const list = $('cs-events-list');
+  if (!list) return;
+  const events = await sb('events', `championship_id=eq.${champId}&select=id,name,round_number,status&order=round_number.asc`);
+  if (!events.length) {
+    list.innerHTML = '<div style="color:#444;font-size:11px;padding:10px;">Keine Events geladen — werden automatisch synct, sobald RaceNet sie kennt.</div>';
+    return;
+  }
+  list.innerHTML = events.map(e => `
+    <div class="cs-event-row">
+      <span style="color:#555;">Rd.${e.round_number ?? '—'}</span>
+      <input type="text" value="${escapeHtml(e.name || '')}" data-event-name="${e.id}"
+        style="background:#1a1a1a;border:1px solid #333;color:var(--gray-light);font-family:var(--ui-font);font-size:12px;padding:4px 6px;outline:none;">
+      <button onclick="csSaveEventName('${e.id}')" class="btn-gray" style="padding:4px 8px;font-size:10px;">✓ SAVE NAME</button>
+      <button onclick="csGoToBonuses('${champId}','${e.id}')" class="btn-gray" style="padding:4px 8px;font-size:10px;">→ BONUSES</button>
+    </div>`).join('');
+}
+
+async function csSaveEventName(eventId) {
+  const input = document.querySelector(`[data-event-name="${eventId}"]`);
+  if (!input) return;
+  try {
+    await adminFetch('/event/alter', { event_id: eventId, name: input.value.trim() });
+  } catch (e) { alert(`❌ ${e.message}`); }
+}
+
+function csGoToBonuses(champId, eventId) {
+  showAdminTab('manual-bonuses', document.querySelector('.sub-tab:nth-child(4)'));
+  setTimeout(async () => {
+    $('mb-champ').value = champId;
+    await mbLoadEvents();
+    $('mb-event').value = eventId;
+    mbLoadDrivers();
+  }, 50);
+}
+
 
 
 // ── 13. ADMIN — MANUAL BONUSES ───────────────────────────────
