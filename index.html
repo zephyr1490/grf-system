@@ -404,12 +404,13 @@ body::after {
 .statusbar {
   background:var(--black);
   border-top:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
-  padding:4px 8px; display:flex; align-items:center; gap:10px; font-size:13px;
+  padding:6px 8px;
+  display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;
 }
 .sb-panel {
   border:1px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
-  padding:2px 10px; color:var(--gray-light);
-  display:flex; align-items:center; gap:5px; font-size:12px;
+  padding:5px 10px; color:var(--gray-light);
+  display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px;
   background:rgba(0,0,0,0.2);
 }
 .led { width:6px; height:6px; border-radius:50%; }
@@ -417,14 +418,21 @@ body::after {
 .lr { background:var(--red); box-shadow:0 0 5px var(--red); animation:blink 1.5s infinite; }
 .ly { background:#FFD700; box-shadow:0 0 5px #FFD700; }
 .clock-box {
-  margin-left:auto;
-  border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
-  background:var(--black); padding:1px 10px;
-  font-family:'VT323',monospace; font-size:20px;
-  color:var(--green); text-shadow:0 0 5px var(--green); letter-spacing:2px;
-  display:flex; align-items:center; gap:12px;
+  border:1px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  background:rgba(0,0,0,0.2); padding:5px 10px;
+  font-family:'VT323',monospace; font-size:18px;
+  color:var(--green); text-shadow:0 0 5px var(--green); letter-spacing:1px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
 }
-#clock-date { font-size:14px; color:#3a8a50; letter-spacing:1px; }
+#clock-date { font-size:13px; color:#3a8a50; letter-spacing:1px; }
+.views-box {
+  border:1px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  background:rgba(0,0,0,0.2); padding:5px 10px;
+  font-family:'VT323',monospace; font-size:18px;
+  color:var(--green); text-shadow:0 0 5px var(--green); letter-spacing:1px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.views-lbl { font-size:11px; color:#3a8a50; letter-spacing:1px; font-family:var(--ui-font); }
 
 /* ── FONT THEMES ── */
 body                              { --ui-font: 'Share Tech Mono', monospace; }
@@ -684,9 +692,9 @@ textarea.inp-std { resize:vertical; }
   #admin-panel > div[style*="grid-template-columns:320px"] { display:flex !important; flex-direction:column !important; }
 
   /* STATUSBAR — 2x2 panels + clock right */
-  .statusbar { flex-wrap:wrap; gap:4px; padding:4px 6px; align-items:stretch; }
-  .sb-panel { font-size:11px; padding:2px 6px; flex:1 1 calc(50% - 8px); }
-  .clock-box { width:100%; margin-left:0; font-size:28px; display:flex; align-items:center; justify-content:center; gap:16px; padding:6px 10px; }
+  .statusbar { grid-template-columns:repeat(2, 1fr); gap:4px; padding:4px 6px; }
+  .sb-panel { font-size:11px; padding:4px 6px; }
+  .clock-box, .views-box { font-size:16px; padding:4px 6px; }
 
   /* COUNTDOWN */
   .cd-digits { font-size:28px; }
@@ -1770,7 +1778,8 @@ textarea.inp-std { resize:vertical; }
     <div class="sb-panel"><div class="led lg"></div> RaceNet: OK</div>
     <div class="sb-panel"><div class="led lr"></div> Event Active</div>
     <div class="sb-panel"><div class="led ly"></div> Entries Open</div>
-    <div class="clock-box" id="clock"><span id="clock-date"></span><span id="clock-time">00:00:00</span></div>
+    <div class="clock-box" id="clock"><span id="clock-date"></span><span id="clock-time">00:00</span></div>
+    <div class="views-box"><span class="views-lbl">VIEWS</span><span id="page-views">—</span></div>
   </div>
 
 </div>
@@ -2168,10 +2177,21 @@ function showAdminTab(name, el) {
 
 // ── 5. CLOCK & COUNTDOWN ──────────────────────────────────────
 
+function _ordinal(n) {
+  if (n % 100 >= 11 && n % 100 <= 13) return n + 'th';
+  switch (n % 10) {
+    case 1: return n + 'st';
+    case 2: return n + 'nd';
+    case 3: return n + 'rd';
+    default: return n + 'th';
+  }
+}
+
 function updateClock() {
-  const n    = new Date();
-  const time = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
-  const date = `${DAYS[n.getDay()]} ${String(n.getDate()).padStart(2,'0')} ${MONTHS[n.getMonth()]}`;
+  const n = new Date();
+  const time = `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  const monthTitle = MONTHS[n.getMonth()][0] + MONTHS[n.getMonth()].slice(1).toLowerCase();
+  const date = `${monthTitle} ${_ordinal(n.getDate())},`;
   setText('clock-time', time);
   setText('clock-date', date);
 }
@@ -4299,6 +4319,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Changelog ist statisch (kein Supabase-Fetch nötig) — einmal beim Laden rendern
   renderChangelog();
+
+  // Seitenaufruf-Zähler — einmal pro Laden, öffentlicher Endpoint ohne
+  // Admin-Passwort (siehe /stats/pageview in admin_api.py). Owner weiß,
+  // dass eigene Aufrufe mitgezählt werden — kein Ausschluss-Mechanismus.
+  fetch(`${ADMIN_API_URL}/stats/pageview`, { method: 'POST' })
+    .then(r => r.json())
+    .then(d => setText('page-views', d.page_views != null ? d.page_views.toLocaleString() : '—'))
+    .catch(() => setText('page-views', '—'));
 });
 </script>
 

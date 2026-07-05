@@ -190,6 +190,27 @@ def sb_delete(table, qs):
 @auth
 def health(): return jsonify({"status": "ok"})
 
+
+# ── Page-View-Zähler ─────────────────────────────────────────────────────────
+# BEWUSST OHNE @auth — das ist die einzige öffentliche, unauthentifizierte
+# Route in diesem File. Rechtfertigung: die einzige mögliche "Aktion" ist,
+# einen kosmetischen Zähler um genau 1 zu erhöhen — keine Nutzerdaten, keine
+# Championship-Daten, kein anderes Feld betroffen. Selbst absichtlicher
+# Missbrauch (Skript das den Endpoint spammt) hat keine schädlichere Folge
+# als eine unrealistisch hohe Zahl auf der Startseite, kein echtes Risiko.
+@app.route("/stats/pageview", methods=["POST"])
+def stats_pageview():
+    try:
+        rows = sb_get("system_config", "select=id,page_views&limit=1")
+        if not rows:
+            return jsonify({"error": "system_config row not found"}), 500
+        row = rows[0]
+        new_count = (row.get("page_views") or 0) + 1
+        sb_patch("system_config", f"id=eq.{row['id']}", {"page_views": new_count})
+        return jsonify({"page_views": new_count})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CR CALCULATION — exakt portiert aus points_auto_fixed_28.py
 # ══════════════════════════════════════════════════════════════════════════════
