@@ -200,13 +200,31 @@ def health(): return jsonify({"status": "ok"})
 # als eine unrealistisch hohe Zahl auf der Startseite, kein echtes Risiko.
 @app.route("/stats/pageview", methods=["POST"])
 def stats_pageview():
+    """
+    system_config ist eine Key-Value-Tabelle (Spalten: key, value — siehe
+    racenet_client.py's Refresh-Token-Handling, nicht {id, page_views} wie
+    fälschlich zuerst angenommen). Zähler lebt daher als eigene Zeile
+    {key: "page_views", value: "<Zahl als Text>"}, gleiches Upsert-Muster
+    wie _supabase_save_refresh_token().
+    """
     try:
-        rows = sb_get("system_config", "select=id,page_views&limit=1")
-        if not rows:
-            return jsonify({"error": "system_config row not found"}), 500
-        row = rows[0]
-        new_count = (row.get("page_views") or 0) + 1
-        sb_patch("system_config", f"id=eq.{row['id']}", {"page_views": new_count})
+        rows = sb_get("system_config", "key=eq.page_views&select=value")
+        current = int(rows[0]["value"]) if rows and rows[0].get("value") else 0
+        new_count = current + 1
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/system_config",
+            headers={
+                "apikey":        SUPABASE_SVC_KEY,
+                "Authorization": f"Bearer {SUPABASE_SVC_KEY}",
+                "Content-Type":  "application/json",
+                "Prefer":        "resolution=merge-duplicates",
+            },
+            json={"key": "page_views", "value": str(new_count)},
+            timeout=5,
+        )
+        if not r.ok:
+            print(f"[stats_pageview ERROR] {r.status_code}: {r.text}")
+            r.raise_for_status()
         return jsonify({"page_views": new_count})
     except Exception as e:
         return jsonify({"error": _err_detail(e)}), 500
