@@ -516,6 +516,62 @@ textarea.inp-std { resize:vertical; }
 }
 .cs-event-row:nth-child(even) { background:#0d0d0d; }
 
+/* HANDBOOK PAGE + VERSION BADGE (Session 3) */
+.version-badge {
+  font-family:'Oswald',sans-serif; font-size:11px; color:#666;
+  background:#1a1a1a; border:1px solid #2a2a2a; padding:2px 7px; margin-left:8px;
+  letter-spacing:0.5px; vertical-align:middle;
+}
+.faq-box {
+  margin:6px; background:var(--black);
+  border:1px solid #1a1a1a; padding:12px;
+}
+.faq-card {
+  border:1px solid #222; border-left:3px solid var(--red-dim, #5a1a1a);
+  margin-bottom:8px; background:rgba(255,255,255,0.02);
+}
+.faq-q {
+  padding:10px 12px; cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+  font-family:'Oswald',sans-serif; font-size:14px; color:var(--white);
+}
+.faq-q:hover { color:var(--red); }
+.faq-arrow { font-size:11px; color:#555; transition:transform .15s; }
+.faq-card.open .faq-arrow { transform:rotate(90deg); }
+.faq-a {
+  display:none; padding:0 12px 12px 12px; font-size:13px; color:#999; line-height:1.65;
+}
+.faq-card.open .faq-a { display:block; }
+.faq-a p { margin:0 0 10px 0; }
+.faq-a p:last-child { margin-bottom:0; }
+.faq-a b { color:var(--gray-light); }
+.faq-a table { width:100%; border-collapse:collapse; margin:8px 0; font-size:12px; }
+.faq-a table td { padding:3px 6px; border-bottom:1px solid #1a1a1a; }
+.changelog-box {
+  margin:6px; background:var(--black); border:1px solid #1a1a1a; padding:12px;
+}
+.changelog-entry {
+  border:1px solid #222; border-left:3px solid var(--green-dim);
+  margin-bottom:8px; background:rgba(0,255,65,0.03);
+}
+.changelog-entry.collapsed .changelog-body { display:none; }
+.changelog-hdr {
+  padding:10px 12px; cursor:pointer; display:flex; align-items:center; gap:10px;
+  font-family:'Oswald',sans-serif; font-size:14px; color:var(--white);
+}
+.changelog-hdr:hover { color:var(--green); }
+.changelog-ver { color:var(--green); }
+.changelog-date { font-size:11px; color:#666; font-weight:normal; margin-left:auto; }
+.changelog-body { padding:0 12px 12px 12px; font-size:13px; color:#999; line-height:1.6; }
+.changelog-body ul { margin:0; padding-left:18px; }
+.changelog-body li { margin-bottom:4px; }
+/* Home-Seite: nur der neueste Eintrag, fix sichtbar, kein Klick nötig */
+.changelog-latest {
+  margin:6px; background:var(--black); border:1px solid #1a1a1a;
+  border-left:3px solid var(--green-dim); padding:12px 14px;
+}
+.changelog-latest-hdr { font-family:'Oswald',sans-serif; font-size:14px; color:var(--white); margin-bottom:6px; }
+.changelog-latest-hdr .changelog-ver { font-size:14px; }
+
 /* EMPTY STATE */
 .empty {
   background:var(--black); padding:24px; text-align:center;
@@ -647,8 +703,7 @@ textarea.inp-std { resize:vertical; }
 
   <!-- TITLE BAR -->
   <div class="titlebar">
-    <span class="titlebar-text">GLOBAL RALLY FANS</span>
-    <span class="titlebar-sub">GRF-SYSTEM v2.4 // EA WRC</span>
+    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.1</span></span>
   </div>
 
   <!-- MENU BAR -->
@@ -658,6 +713,7 @@ textarea.inp-std { resize:vertical; }
     <div class="menu-item" onclick="showPage('teamed',this)">GRF Teamed</div>
     <div class="menu-sep"></div>
     <div class="menu-item" onclick="showPage('elo',this)">ELO Rankings</div>
+    <div class="menu-item" onclick="showPage('handbook',this)">Handbook</div>
     <div class="menu-sep"></div>
     <div class="menu-item" onclick="showPage('admin',this)">Admin</div>
     <div class="menu-right">
@@ -679,8 +735,8 @@ textarea.inp-std { resize:vertical; }
         <div class="hero-title">GLOBAL<br><span class="r">RALLY</span><br>FANS</div>
       </div>
       </div>
-      <div class="hero-sub">The Home For All Rally Sim Racers. With More Than 2000 Discord Members And Over Ten WRC Clubs. A Friendly Community Of Enthusiasts Of The Sport And Beyond.<br><em>This Page Is Dedicated Mainly For The GRF-Themed Club.</em></div>
-      <button class="hero-discord">JOIN DISCORD</button>
+      <div class="hero-sub">The Home For All Rally Sim Racers. With More Than 2000 Discord Members And Over Ten WRC Clubs. A Friendly Community Of Enthusiasts Of The Sport And Beyond. Join Our Discord Server For The Full GRF Experience And Access To All Our Clubs!<br><em>This Page Is Dedicated Mainly For The GRF-Themed Club.</em></div>
+      <button class="hero-discord" onclick="window.open('https://discord.gg/global-rally-fans-817110244547100762', '_blank')">JOIN DISCORD</button>
     </div>
 
     <!-- KACHELN -->
@@ -770,6 +826,15 @@ textarea.inp-std { resize:vertical; }
         <!-- Populated from Supabase -->
         <div id="most-improved-list">
           <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+        </div>
+
+        <!-- Changelog — nur der neueste Eintrag, fix sichtbar. Volle
+             Historie steht im Handbook-Tab. Siehe CHANGELOG-Array in JS. -->
+        <div class="col-hdr" style="margin-top:4px;">WHAT'S NEW
+          <span class="col-hdr-right" id="home-changelog-version"></span>
+        </div>
+        <div id="home-changelog-latest" class="changelog-latest">
+          <div style="color:#555;font-size:12px;">Loading…</div>
         </div>
 
       </div>
@@ -928,11 +993,11 @@ textarea.inp-std { resize:vertical; }
       <div class="themed-eyebrow">// GRF — ELO RATING SYSTEM //</div>
       <div class="themed-champ-name">ELO RANKINGS</div>
       <div class="themed-narrative">
-        "The ELO system rates every GRF driver based on head-to-head performance across all events. Established drivers (5+ starts) carry the most weight. Ratings update automatically after each event is processed."
+        "The ELO system rates every GRF driver based on head-to-head performance across all events. Established drivers (20+ starts) carry the most weight. Ratings update automatically after each event is processed."
       </div>
       <div class="themed-meta">
         <div class="themed-meta-item"><div class="tm-lbl">Rated Drivers</div><div class="tm-val" id="elo-count">—</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Established (5+ starts)</div><div class="tm-val" id="elo-established-count">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Established (20+ starts)</div><div class="tm-val" id="elo-established-count">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Top ELO</div><div class="tm-val" id="elo-top">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Last Updated</div><div class="tm-val">just now</div></div>
       </div>
@@ -941,10 +1006,10 @@ textarea.inp-std { resize:vertical; }
     <!-- FILTER BAR -->
     <div class="event-selector" style="flex-wrap:wrap; gap:8px; padding:8px 12px; align-items:center;">
       <span class="event-selector-lbl" style="font-size:12px;">FILTER:</span>
-      <button class="ev-btn active" onclick="eloFilter('all',this)">All Drivers</button>
+      <button class="ev-btn" onclick="eloFilter('all',this)">All Drivers (incl. Provisional)</button>
       <button class="ev-btn" onclick="eloFilter('active',this)">Active Only</button>
       <button class="ev-btn" onclick="eloFilter('inactive',this)">Inactive Only</button>
-      <button class="ev-btn" onclick="eloFilter('established',this)">Established (5+ starts)</button>
+      <button class="ev-btn active" onclick="eloFilter('established',this)">Established (20+ starts)</button>
       <button class="ev-btn" onclick="eloFilter('improved',this)">Most Improved</button>
       <div class="menu-sep" style="height:20px; margin:0 4px;"></div>
       <span class="event-selector-lbl" style="font-size:12px;">CLUB:</span>
@@ -983,7 +1048,7 @@ textarea.inp-std { resize:vertical; }
         </table>
       </div>
       <div style="padding:6px 8px; font-size:11px; color:#555; background:var(--black); border-top:1px solid #1a1a1a;">
-        <span id="elo-result-count">— drivers shown</span> &nbsp;·&nbsp; ELO base: 1000 &nbsp;·&nbsp; Established threshold: 5 starts
+        <span id="elo-result-count">— drivers shown</span> &nbsp;·&nbsp; ELO base: 1000 &nbsp;·&nbsp; Established threshold: 20 starts
       </div>
     </div>
 
@@ -997,6 +1062,101 @@ textarea.inp-std { resize:vertical; }
       <div style="font-family:'VT323',monospace;font-size:48px;color:var(--red);margin-bottom:8px;">GRF TEAMED</div>
       <div style="font-size:12px;color:#444;">Team events coming soon. Team Builder will open when GRF Teamed Season 1 is announced.</div>
     </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       HANDBOOK PAGE
+  ══════════════════════════════════════════ -->
+  <div class="page" id="page-handbook">
+
+    <div class="col-hdr" style="margin:6px 6px 0 6px;">CHANGELOG</div>
+    <div id="handbook-changelog-list" class="changelog-box">
+      <div style="color:#555;font-size:12px;">Loading…</div>
+    </div>
+
+    <div class="col-hdr" style="margin:16px 6px 0 6px;">FAQ &amp; HANDBOOK</div>
+    <div class="faq-box">
+
+      <div class="faq-card open" onclick="faqToggle(this)">
+        <div class="faq-q">What's the idea behind GRF Themed? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>GRF Themed combines historic and fictional themes with a car-balanced point system. A fast driver will always be fast — no matter the car. But a consistently well-driven underdog car might just bring a surprise to the podium. Anything can happen in GRF Themed!</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">How is a championship structured? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>A championship generally lasts <b>3 to 6 weeks</b>, with occasional deviations. Each event lasts exactly one week, starting on GRF Tuesday at 12am (CET) and running until the following Tuesday at 12am.</p>
+          <p>GRF Themed is a closed, Discord-only club. Join the <a href="https://discord.gg/global-rally-fans-817110244547100762" target="_blank" style="color:var(--discord);">GlobalRallyFans Discord</a> and befriend <b>"zephyr1490"</b> on RaceNet to gain access. RaceNet isn't always user-friendly — if your friend request takes longer than expected, ping @zephyr in the #grf-themed channel.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">How are points calculated? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>All cars from the presented class are allowed. Points for rankings (1st–30th) are:</p>
+          <p style="color:var(--gray-light);font-size:12px;line-height:2;">50 – 44 – 40 – 38 – 36 – 34 – 32 – 30 – 28 – 26 – 25 – 24 – 23 – 22 – 21 – 20 – 19 – 18 – 17 – 16 – 15 – 14 – 13 – 12 – 11 – 10 – 9 – 8 – 7 – 6 (30th and following receive 6)</p>
+          <p><b>× the Car Rating (CR)</b> — a factor given to each car based on its power and handling. A CR of 1 signals the best car of a class; a higher CR (up to 2) is given to slower/weaker cars. The CR table for the class is published before each championship. Ranking points are rounded mathematically (x.50 → x+1, x.49 → x).</p>
+          <p><b>DNF:</b> if a driver can't finish the last stage of an event, for whatever reason, the event counts as DNF — worth 2 ranking points (× CR).</p>
+          <p><b>Driving the same car</b> throughout an entire championship earns an additional <b>+50 points</b> (Loyalty Bonus) at the end.</p>
+          <p>Some championships feature one or more <b>challenges</b>, announced before the championship starts. A completed challenge earns an additional <b>+25 points</b>.</p>
+          <p style="color:#666;font-style:italic;">Example: Colin drives a Subaru Impreza '95 with CR 1.2. He DNFs Monte Carlo (2 × 1.2 → 2 pts), finishes Portugal 3rd (38 × 1.2 = 45.6 → 46 pts, +25 for finishing all stages), finishes France 5th despite a puncture (34 × 1.2 = 40.8 → 41 pts), and wins Britain (50 × 1.2 = 60 pts, +25 for finishing all stages). Same car all season: +50. Total: 2 + 71 + 41 + 85 + 50 = 249 points.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">What if I can only join some events? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>Partaking in only selected events is allowed — no penalties are given. The 50-point Loyalty Bonus can still be collected in full as long as at least one event was driven in the same car.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">How do Car Ratings actually work? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>Car Ratings may change depending on the specific events in a championship. They're always published before the championship starts and are valid for that specific championship only.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">What about multi-club and multiclass events? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>Some championships feature <b>double club</b> or <b>multiclass</b> events, where two clubs/classes run simultaneously. Drivers can choose freely which one to participate in, and are generally allowed to run in both — with points rewarded respectively.</p>
+          <p>How exactly the two results interact can differ from championship to championship — sometimes only the worse of the two counts, sometimes both count fully, sometimes something else entirely. This is announced for the specific championship it applies to, same as with challenges.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">What's the fair play policy? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>This club is run by the motto "by fans – for fans". Keep it clean, friendly and fair. Don't use exploits. Only use reasonable cuts.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">What is ELO, and how does GRF's rating work? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>ELO ratings originated in chess — invented by Arpad Elo to answer a simple question: who's actually better right now, based purely on results? Beat someone rated higher than you, and you gain more points than beating someone weaker. Lose to a weaker opponent, and you lose more than losing to a stronger one. Play enough, and the numbers settle into an honest picture of relative skill.</p>
+          <p>GRF doesn't use plain chess-ELO, though. We've built our own system, inspired by a mix of three well-known rating approaches: <b>iRacing's iRating</b>, <b>Glicko</b>, and Microsoft's <b>TrueSkill</b>. Each one contributes something — tracking not just a rating, but also how confident the system currently is in it, so a driver's number can move quickly early on and settle down over time.</p>
+          <p>New drivers start <b>Provisional</b> until they've completed <b>20 events</b> — after that, they're <b>Established</b> and count toward the official rankings.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">How often do results update? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>Results sync automatically from RaceNet roughly every 10–15 minutes. If you've just finished a stage and don't see it reflected immediately, give it a few minutes — no need to refresh repeatedly.</p>
+          <p><b>Seeing yourself marked as DNF even though you finished?</b> This can happen if the sync ran while you were still out on stage — it sees your times for the early stages but nothing yet for the last one, and (correctly, at that moment) reads that as a DNF. Once the next sync cycle picks up your final stage time, it corrects itself automatically. Just wait for the next cycle rather than worrying — no need to report it.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin:16px 6px 6px 6px;font-size:11px;color:#444;padding:10px 12px;">
+      This handbook may change over time regarding points and rules. Constructive feedback is always welcome — good luck &amp; have fun!
+    </div>
+
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -1635,7 +1795,71 @@ textarea.inp-std { resize:vertical; }
 //  11. ADMIN — ELO UPDATE
 //  12. ADMIN — EVENT CREATION
 //  13. ADMIN — FONT SWITCHER
-//  14. INIT (DOMContentLoaded)
+// ── 14. HANDBOOK / CHANGELOG ──────────────────────────────────
+//
+// Changelog-Einträge werden manuell hier eingetragen, wenn ein neues
+// Feature/ein Fix freigegeben wird (Owner gibt den Text vor, kein
+// Admin-UI/DB-Tabelle nötig dafür — ändert sich selten genug, dass ein
+// Code-Eintrag reicht). Neueste ZUERST in der Liste.
+const CHANGELOG = [
+  {
+    version: '1.1',
+    date:    '2026-07-05',
+    notes: [
+      'New Handbook tab — rules, points, Car Rating and ELO explained, plus this changelog.',
+      'Car Ratings can now be set up in advance and reused across championships (CR Sets).',
+      'Team championships supported in standings (temporary, for the current GRF Themed season).',
+      'ELO page loads noticeably faster — established drivers (20+ starts) load by default.',
+      'Various smaller accuracy fixes to points and standings.',
+    ],
+  },
+  {
+    version: '1.0',
+    date:    '2026-07-04',
+    label:   'Release',
+    notes: [
+      'Initial public launch — Live Results, Championship Standings, Car Ratings, Challenges.',
+      'ELO Rankings across all GRF drivers.',
+      'Home page overview with Top 10 ELO, Most Improved, and Next Event.',
+    ],
+  },
+];
+
+function renderChangelog() {
+  // Home-Seite: NUR der neueste Eintrag, fix sichtbar, kein Klick nötig
+  const latest = CHANGELOG[0];
+  const latestEl = $('home-changelog-latest');
+  if (latestEl && latest) {
+    setText('home-changelog-version', `v${latest.version}`);
+    latestEl.innerHTML = `
+      <div class="changelog-latest-hdr"><span class="changelog-ver">v${latest.version}</span>${latest.label ? ' — ' + escapeHtml(latest.label) : ''} <span style="color:#555;font-size:11px;font-weight:normal;">${latest.date}</span></div>
+      <ul style="margin:0;padding-left:18px;font-size:12px;color:#999;line-height:1.6;">
+        ${latest.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}
+      </ul>`;
+  }
+
+  // Handbook-Tab: komplette Historie, neuester Eintrag aufgeklappt, Rest eingeklappt
+  const list = $('handbook-changelog-list');
+  if (list) {
+    list.innerHTML = CHANGELOG.map((c, i) => `
+      <div class="changelog-entry${i === 0 ? '' : ' collapsed'}">
+        <div class="changelog-hdr" onclick="this.parentElement.classList.toggle('collapsed')">
+          <span class="changelog-ver">v${c.version}</span>${c.label ? ' — ' + escapeHtml(c.label) : ''}
+          <span class="changelog-date">${c.date}</span>
+        </div>
+        <div class="changelog-body">
+          <ul>${c.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>
+        </div>
+      </div>`).join('');
+  }
+}
+
+function faqToggle(card) {
+  card.classList.toggle('open');
+}
+
+
+//  15. INIT (DOMContentLoaded)
 //
 // Supabase-Tabellen:
 //   championships   → id, club_id, name, start_date, end_date, vehicle_class, season, narrative
@@ -1709,6 +1933,28 @@ async function sb(table, params = '') {
   } catch (err) {
     console.error(`[SB] ${table}:`, err);
     return [];
+  }
+}
+
+/**
+ * Holt NUR die exakte Zeilenanzahl einer Tabelle (optional gefiltert),
+ * ohne irgendwelche Zeilendaten zu übertragen — nutzt Supabase/PostgREST's
+ * "Prefer: count=exact" + "Range: 0-0" Kombination, die die Gesamtzahl im
+ * Content-Range-Response-Header liefert. Deutlich billiger als sbAll() nur
+ * um eine Anzahl zu ermitteln (z.B. "GRF Members"-Kachel).
+ */
+async function sbCount(table, params = '') {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, {
+      headers: { ...sbHeaders, 'Prefer': 'count=exact', 'Range': '0-0' },
+    });
+    const range = res.headers.get('content-range'); // Format: "0-0/2221"
+    if (!range) return null;
+    const total = range.split('/')[1];
+    return total === '*' ? null : parseInt(total, 10);
+  } catch (err) {
+    console.error(`[sbCount] ${table}:`, err);
+    return null;
   }
 }
 
@@ -1878,8 +2124,9 @@ function showPage(name, el) {
   if (page) page.classList.add('active');
   if (el)   el.classList.add('active');
 
-  if (name === 'themed') loadThemedResults();
-  if (name === 'elo')    loadEloData();
+  if (name === 'themed')   loadThemedResults();
+  if (name === 'elo')      loadEloData();
+  if (name === 'handbook') renderChangelog();
 }
 
 /**
@@ -1950,16 +2197,23 @@ function _setCountdownTarget(isoDate) {
 
 async function loadHome() {
   try {
-    // WICHTIG: sbAll() statt sb() für drivers/event_results — beide Tabellen
-    // haben weit über 1000 Zeilen (2221 bzw. 25k+), sb() kappt unpaginiert
-    // bei Supabase/PostgREST's Default-Limit von 1000 (Known Issue #5,
-    // gleiche Bug-Klasse wie im Backend schon in Session 2 gefixt — hier im
-    // Frontend war sie noch nicht behoben). Ohne diesen Fix: "GRF Members"
-    // und "Most Events" zählen nur aus den neuesten ~1000 event_results-
-    // Zeilen statt aus allen.
-    const [drivers, allER, deltaMap] = await Promise.all([
-      sbAll('drivers',       'select=*&order=elo.desc'),
-      sbAll('event_results', 'select=driver_name,event_id,created_at&order=created_at.desc'),
+    // Owner-Feedback (Session 3): Home + ELO-Tab luden ALLE 2221 Fahrer +
+    // ALLE 25k+ event_results — spürbar langsam, und von den 2221 Fahrern
+    // sind nur die etablierten (Established, 20+ Starts) tatsächlich relevant für diese
+    // Kacheln. Fix: Fahrer server-seitig auf Established filtern
+    // (starts=gte.20 direkt in der Query, nicht erst nach dem Laden), und
+    // event_results komplett weglassen — beide hier genutzten Kennzahlen
+    // lassen sich aus bereits vorhandenen drivers-Feldern ableiten:
+    //   "GRF Members"  -> sbCount('drivers') — reine Zeilenanzahl, kein
+    //                      Datentransfer, zählt weiterhin ALLE (auch
+    //                      Provisional), nicht nur die gefilterten 300.
+    //   "Most Events"  -> drivers.starts (wird von grf_sync.py schon
+    //                      gepflegt) statt event_id-Set aus event_results.
+    //                      Kleine Abweichung: starts zählt nur Nicht-DNF-
+    //                      Events — für eine Trivia-Kachel unerheblich.
+    const [memberCount, drivers, deltaMap] = await Promise.all([
+      sbCount('drivers'),
+      sbAll('drivers', 'select=*&starts=gte.20&order=elo.desc'),
       fetchEloDeltaMap(7),
     ]);
 
@@ -1971,29 +2225,21 @@ async function loadHome() {
       d.elo_change = (past != null && d.elo != null) ? Math.round(d.elo - past) : null;
     });
 
-    // Kachel: GRF Members (unique Fahrer über alle event_results)
-    const uniqueDrivers = new Set(allER.map(r => r.driver_name).filter(Boolean));
-    setText('k-members', uniqueDrivers.size || '—');
+    // Kachel: GRF Members (echte Gesamtzahl aller Fahrer, nicht nur Established)
+    setText('k-members', memberCount ?? '—');
 
-    // Kachel: Fahrer mit den meisten Events
-    const evMap = {};
-    allER.forEach(r => {
-      if (!r.driver_name) return;
-      evMap[r.driver_name] = evMap[r.driver_name] || new Set();
-      evMap[r.driver_name].add(r.event_id);
-    });
+    // Kachel: Fahrer mit den meisten (nicht-DNF) Events
     let mostName = '—', mostCount = 0;
-    Object.entries(evMap).forEach(([name, evs]) => {
-      if (evs.size > mostCount) { mostCount = evs.size; mostName = name; }
+    drivers.forEach(d => {
+      if ((d.starts || 0) > mostCount) { mostCount = d.starts; mostName = d.name; }
     });
     setText('k-most-events-num',  mostCount || '—');
     setText('k-most-events-name', mostName);
 
-    // Kachel: Top ELO (nur Established: 5+ Starts)
-    const verified = drivers.filter(d => (d.starts || 0) >= 5);
-    if (verified.length) {
-      setText('k-top-elo',      verified[0].elo);
-      setText('k-top-elo-name', verified[0].name);
+    // Kachel: Top ELO — drivers ist hier bereits Established-only (Server-Filter oben)
+    if (drivers.length) {
+      setText('k-top-elo',      drivers[0].elo);
+      setText('k-top-elo-name', drivers[0].name);
     }
 
     // ELO Top-10-Tabelle
@@ -2663,22 +2909,34 @@ async function loadChallenges() {
 
 // ── 8. ELO PAGE ───────────────────────────────────────────────
 
-let _eloData       = [];
-let _eloFilterMode = 'all';
-let _eloClubFilter = 'all';
+let _eloData        = [];
+let _eloFilterMode  = 'established';
+let _eloClubFilter  = 'all';
+let _eloIncludeAll  = false; // true sobald einmal explizit "alle inkl. Provisional" nachgeladen wurde
+let _eloTotalDriverCount = null; // echte Gesamtzahl (sbCount), unabhängig vom aktuell geladenen Filter
 
-async function loadEloData() {
+async function loadEloData(includeAll = false) {
   try {
-    // sbAll() statt sb() für drivers — 2221 Zeilen, war unpaginiert bei
-    // Supabase's 1000er-Default-Cap gekappt (gleicher Fund wie in loadHome(),
-    // siehe Kommentar dort). Betraf u.a. die "Rated Drivers"-Anzeige hier.
-    const [drivers, allResults, deltaMap, clubs, events] = await Promise.all([
-      sbAll('drivers',    'select=*&order=elo.desc'),
+    // Owner-Feedback (Session 3): Seite lud standardmäßig ALLE 2221 Fahrer,
+    // davon sind nur die etablierten (Established, 20+ Starts) tatsächlich relevant —
+    // spürbar langsam. Fix: standardmäßig server-seitig auf Established
+    // filtern (starts=gte.20); nur wenn der Owner explizit "All Drivers"
+    // klickt (includeAll=true), wird zusätzlich der komplette Rest
+    // nachgeladen. event_results bleibt bewusst ein Vollständig-Fetch (wird
+    // für bestPos/DNF-Rate/Club-Zuordnung der jeweils geladenen Fahrer
+    // gebraucht) — die eigentliche Bremse war die 2221-Zeilen-Fahrertabelle
+    // + das Rendern von 2221 statt nur der etablierten DOM-Zeilen, nicht diese Abfrage.
+    const driverParams = includeAll ? 'select=*&order=elo.desc' : 'select=*&starts=gte.20&order=elo.desc';
+    const [totalCount, drivers, allResults, deltaMap, clubs, events] = await Promise.all([
+      _eloTotalDriverCount != null ? Promise.resolve(_eloTotalDriverCount) : sbCount('drivers'),
+      sbAll('drivers', driverParams),
       sbAll('event_results', 'select=driver_name,event_id,position,is_dnf'),
       fetchEloDeltaMap(7),
       sb('clubs',      'select=club_id,name'),
       sbAll('events',  'select=id,club_id'),
     ]);
+    _eloIncludeAll = includeAll;
+    if (totalCount != null) _eloTotalDriverCount = totalCount;
 
     if (!drivers.length) return;
 
@@ -2734,7 +2992,7 @@ async function loadEloData() {
       best:        bestPos[d.name] && bestPos[d.name] < 999 ? `P${bestPos[d.name]}` : '—',
       dnfRate:     dnfStats[d.name] ? (100 * dnfStats[d.name].dnf / dnfStats[d.name].total) : null,
       clubIds:     driverClubs[d.name] ? [...driverClubs[d.name]] : [],
-      established: (d.starts || 0) >= 5,
+      established: (d.starts || 0) >= 20,
       provisional: !!d.elo_provisional,
       inactive:    !!d.elo_inactive,
       };
@@ -2778,12 +3036,22 @@ function eloClub(clubId, el) {
   eloRender();
 }
 
-function eloFilter(mode, el) {
+async function eloFilter(mode, el) {
   _eloFilterMode = mode;
   document.querySelectorAll('#page-elo .event-selector .ev-btn').forEach(b => {
     if (b.getAttribute('onclick')?.includes('eloFilter')) b.classList.remove('active');
   });
   if (el) el.classList.add('active');
+
+  // "All Drivers" (inkl. Provisional, <5 Starts) ist NICHT im Standard-Fetch
+  // enthalten (Performance, siehe loadEloData()-Kommentar) — erst hier auf
+  // Nachfrage nachladen, statt es immer im Voraus mitzuschleppen.
+  if (mode === 'all' && !_eloIncludeAll) {
+    if (el) el.textContent = 'Loading…';
+    await loadEloData(true);
+    if (el) el.textContent = 'All Drivers';
+    return; // loadEloData() ruft eloRender() selbst schon auf
+  }
   eloRender();
 }
 
@@ -2824,7 +3092,7 @@ function eloRender() {
   setText('elo-result-count', `${data.length} driver${data.length !== 1 ? 's' : ''} shown`);
 
   if (_eloData.length) {
-    setText('elo-count',            _eloData.length);
+    setText('elo-count',            _eloTotalDriverCount ?? _eloData.length);
     setText('elo-established-count', _eloData.filter(d => d.established).length);
     const activeTop = _eloData.filter(d => !d.inactive);
     if (activeTop[0]) setText('elo-top', `${activeTop[0].elo} — ${activeTop[0].name}`);
@@ -2832,9 +3100,9 @@ function eloRender() {
 }
 
 const ELO_INFO_TEXT = {
-  elo:   'ELO — Der konservative Gesamtwert (μ − 1.5×σ). Dieser Wert wird für das Ranking genutzt: hohe Unsicherheit drückt ihn nach unten, bis mehr Rennen gefahren wurden.',
-  mu:    'μ (Mu) — Die geschätzte tatsächliche Fahrstärke. Steigt bei guten Ergebnissen gegen starke Gegner, sinkt bei schwachen Ergebnissen oder Inaktivität.',
-  sigma: 'σ (Sigma) — Die Unsicherheit der Einschätzung. Hoch bei wenigen Starts oder langer Pause, sinkt mit mehr Events. Je niedriger, desto verlässlicher der ELO-Wert.',
+  elo:   'ELO — The conservative overall rating (μ − 1.5×σ). This is the value used for ranking: high uncertainty pulls it down until more races have been driven.',
+  mu:    'μ (Mu) — The estimated true driving strength. Rises with good results against strong opponents, drops with weak results or inactivity.',
+  sigma: 'σ (Sigma) — The uncertainty of the estimate. High after few starts or a long break, drops with more events. The lower it is, the more reliable the ELO value.',
 };
 
 document.addEventListener('click', e => {
@@ -4028,6 +4296,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Home-Seite initital laden + Auto-Reload
   loadHome();
   setInterval(loadHome, RELOAD_INTERVAL_MS);
+
+  // Changelog ist statisch (kein Supabase-Fetch nötig) — einmal beim Laden rendern
+  renderChangelog();
 });
 </script>
 
