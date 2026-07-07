@@ -2332,7 +2332,13 @@ function showPage(name, el) {
   if (el)   el.classList.add('active');
 
   if (name === 'themed')   loadThemedResults();
-  if (name === 'elo')      loadEloData();
+  // Standard-Filter ist 'active' (siehe _eloFilterMode-Default) — das ist
+  // eine eigene Dimension zu "Established" (20+ Career-Starts) und sollte
+  // nicht heimlich darauf verengt sein. Session 8: genau das ist bisher
+  // passiert (initialer Fetch war establishment-only), was die "Active"-
+  // Standardansicht um teils mehr als die Hälfte untergezählt hat. Deshalb
+  // hier includeAll=true, nicht der schnellere establishment-only Fetch.
+  if (name === 'elo')      loadEloData(true);
   if (name === 'handbook') renderChangelog();
 }
 
@@ -3622,13 +3628,18 @@ async function eloFilter(mode, el) {
   });
   if (el) el.classList.add('active');
 
-  // "All Drivers" (inkl. Provisional, <5 Starts) ist NICHT im Standard-Fetch
-  // enthalten (Performance, siehe loadEloData()-Kommentar) — erst hier auf
-  // Nachfrage nachladen, statt es immer im Voraus mitzuschleppen.
-  if (mode === 'all' && !_eloIncludeAll) {
+  // "All Drivers" (inkl. Provisional, <5 Starts) — inzwischen (Session 8)
+  // Standard-Fetch schon beim ersten ELO-Seitenaufruf (siehe loadHome()-
+  // Kommentar), dieser Nachlade-Zweig bleibt als Absicherung bestehen,
+  // falls _eloIncludeAll aus irgendeinem Grund doch mal false ist —
+  // betrifft auch 'active'/'inactive', nicht nur 'all': beide sind eine
+  // eigene Dimension zu Established und dürfen nicht heimlich darauf
+  // verengt sein.
+  if (['all', 'active', 'inactive'].includes(mode) && !_eloIncludeAll) {
+    const originalLabel = el ? el.textContent : '';
     if (el) el.textContent = 'Loading…';
     await loadEloData(true);
-    if (el) el.textContent = 'All Drivers';
+    if (el) el.textContent = originalLabel;
     return; // loadEloData() ruft eloRender() selbst schon auf
   }
   eloRender();
