@@ -805,10 +805,8 @@ textarea.inp-std { resize:vertical; }
     <div class="menu-item active" onclick="showPage('home',this)">Home</div>
     <div class="menu-item" onclick="showPage('themed',this)">GRF Themed</div>
     <div class="menu-item" onclick="showPage('teamed',this)">GRF Teamed</div>
-    <div class="menu-sep"></div>
     <div class="menu-item" onclick="showPage('elo',this)">ELO Rankings</div>
     <div class="menu-item" onclick="showPage('handbook',this)">Handbook</div>
-    <div class="menu-sep"></div>
     <div class="menu-item" onclick="showPage('admin',this)">Admin</div>
     <div class="menu-right">
       <div class="live-pill"><div class="live-dot"></div> LIVE</div>
@@ -881,7 +879,7 @@ textarea.inp-std { resize:vertical; }
               <tr><td colspan="5"><div class="empty"><div class="empty-title">NO ELO DATA YET</div><div class="empty-sub">ELO data will appear after the first events are processed.</div></div></td></tr>
             </tbody>
           </table>
-          <div class="see-more" onclick="showPage('elo', document.querySelector('.menu-item:nth-child(5)'))">VIEW FULL ELO RANKINGS ›</div>
+          <div class="see-more" onclick="showPage('elo', document.querySelector('.menu-item:nth-child(4)'))">VIEW FULL ELO RANKINGS ›</div>
         </div>
       </div>
 
@@ -996,7 +994,7 @@ textarea.inp-std { resize:vertical; }
           <div class="col-hdr" id="ev-info-hdr">EVENT INFO</div>
           <div style="background:var(--black);margin:6px;padding:12px;" id="ev-info-panel">
             <div style="font-family:'VT323',monospace;font-size:32px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;" id="ev-info-name">—</div>
-            <div style="border-left:3px solid var(--red-dark);padding:6px 10px;background:rgba(139,0,0,0.06);font-size:13px;color:#999;line-height:1.5;font-style:italic;margin-bottom:12px;" id="ev-info-narrative"></div>
+            <div style="display:none; border-left:3px solid var(--red-dark);padding:6px 10px;background:rgba(139,0,0,0.06);font-size:13px;color:#999;line-height:1.5;font-style:italic;margin-bottom:12px;" id="ev-info-narrative"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
               <div class="themed-meta-item"><div class="tm-lbl">Entries</div><div class="tm-val" id="ev-info-entries">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="ev-info-status">—</div></div>
@@ -1142,19 +1140,19 @@ textarea.inp-std { resize:vertical; }
 
     <!-- FILTER BAR -->
     <div class="elo-filter-bar" style="flex-wrap:wrap; gap:8px; padding:8px 12px; align-items:center;">
-      <span class="event-selector-lbl" style="font-size:12px;">FILTER:</span>
+      <span class="event-selector-lbl" style="font-size:12px; color:#333;">FILTER:</span>
       <button class="ev-btn" onclick="eloFilter('all',this)">All Drivers (incl. Provisional)</button>
       <button class="ev-btn active" onclick="eloFilter('active',this)">Active Only</button>
       <button class="ev-btn" onclick="eloFilter('inactive',this)">Inactive Only</button>
       <button class="ev-btn" onclick="eloFilter('established',this)">Established (20+ starts)</button>
       <button class="ev-btn" onclick="eloFilter('improved',this)">Most Improved</button>
       <div class="menu-sep" style="height:20px; margin:0 4px;"></div>
-      <span class="event-selector-lbl" style="font-size:12px;">CLUB:</span>
+      <span class="event-selector-lbl" style="font-size:12px; color:#333;">CLUB:</span>
       <button class="ev-btn active" id="elo-club-all" onclick="eloClub('all',this)">All Clubs</button>
       <span id="elo-club-buttons" style="display:contents;"></span>
     </div>
     <div class="elo-search-row">
-      <span class="event-selector-lbl" style="font-size:12px;">SEARCH:</span>
+      <span class="event-selector-lbl" style="font-size:12px; color:#333;">SEARCH:</span>
       <input id="elo-search" type="text" placeholder="driver name..." oninput="eloRender()"
         style="background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:5px 8px; outline:none;">
     </div>
@@ -2476,14 +2474,22 @@ async function loadHome() {
     setText('k-most-events-num',  mostCount || '—');
     setText('k-most-events-name', mostName);
 
-    // Kachel: Top ELO — drivers ist hier bereits Established-only (Server-Filter oben)
-    if (drivers.length) {
-      setText('k-top-elo',      drivers[0].elo);
-      setText('k-top-elo-name', drivers[0].name);
+    // Kachel: Top ELO + Top-10 — nur ACTIVE Fahrer (established, s.o., ist
+    // eine andere Dimension als active/inactive). Bisher fehlte dieser
+    // Filter hier komplett — fiel nicht auf, solange der alte Inaktivitäts-
+    // Bug lang-inaktive Fahrer ohnehin automatisch Richtung ~975 gedrückt
+    // hat. Jetzt, wo Ratings bei Inaktivität eingefroren bleiben (siehe
+    // Changelog), kann ein hoch bewerteter inaktiver Fahrer sonst permanent
+    // oben stehen bleiben.
+    const activeDrivers = drivers.filter(d => !d.elo_inactive);
+
+    if (activeDrivers.length) {
+      setText('k-top-elo',      activeDrivers[0].elo);
+      setText('k-top-elo-name', activeDrivers[0].name);
     }
 
     // ELO Top-10-Tabelle
-    const top10 = drivers.slice(0, 10);
+    const top10 = activeDrivers.slice(0, 10);
     const tbody = $('home-elo-tbody');
     if (tbody) {
       tbody.innerHTML = top10.length
@@ -2719,7 +2725,10 @@ async function _fetchAndRenderResults(eventId) {
   setText('ev-info-hdr',       `EVENT INFO — ${rdLabel} ${evLabel}`.trim());
   setText('ev-info-name',      ev.location || ev.name || '—');
   const narEl = $('ev-info-narrative');
-  if (narEl) narEl.textContent = ev.narrative || '';
+  if (narEl) {
+    narEl.textContent = ev.narrative || '';
+    narEl.style.display = ev.narrative ? '' : 'none';
+  }
   setText('ev-info-start',     fmtDate(ev.start_date));
   setText('ev-info-end',       fmtDate(ev.end_date));
 
@@ -3709,7 +3718,7 @@ const ELO_INFO_TEXT = {
   mu:    'μ (Mu) — The estimated true driving strength. Rises with good results against strong opponents, drops with weak results or inactivity.',
   sigma:  'σ (Sigma) — The uncertainty of the estimate. High after few starts or a long break, drops with more events. The lower it is, the more reliable the ELO value.',
   ksigma: 'kσ (Momentum) — How much your rating can still move. Starts high for new drivers and slowly comes down the more you race — much slower than σ, so it sticks around for hundreds of races instead of just a few dozen.',
-  trackviews: 'Track views (Era / Surface / Drivetrain) — each one is its own independent rating, not a filter on your overall number. It only counts events matching that track (e.g. only Gravel rallies for the Gravel view), so it has its own ELO/μ/σ/kσ and usually fewer events than Overall. Δ 7D isn\'t tracked per track and won\'t show outside Overall. Only one track view at a time — no combining (e.g. no "Gravel + AWD" at once).',
+  trackviews: 'How to use: pick ONE track above (or leave it on Overall). Everything below — Filter, Club, Search — then applies within that track, same as it does for Overall. Track views (Era / Surface / Drivetrain) are each their own independent rating, not a filter on your overall number: only events matching that track count (e.g. only Gravel rallies for the Gravel view), so it has its own ELO/μ/σ/kσ and usually fewer events than Overall. Δ 7D isn\'t tracked per track and won\'t show outside Overall. Only one track at a time — no combining (e.g. no "Gravel + AWD" at once), and no comparing numbers across tracks — a Gravel ELO and a Modern ELO aren\'t on the same scale.',
 };
 
 document.addEventListener('click', e => {
