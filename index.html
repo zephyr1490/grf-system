@@ -893,14 +893,15 @@ textarea.inp-std { resize:vertical; }
             <div class="ec-lbl" style="color:var(--green);">● CURRENT</div>
             <div class="ec-name" id="current-event-name">—</div>
             <div class="ec-sub" id="current-event-sub">—</div>
-            <button class="ev-btn active" onclick="showPage('themed', document.querySelectorAll('.menu-item')[1])">VIEW ›</button>
+            <div class="ec-sub" id="current-event-countdown" style="color:var(--red);font-weight:bold;margin-top:-6px;">—</div>
+            <button class="ev-btn active" onclick="viewEventInThemed(_homeCurrentEventId)">VIEW ›</button>
           </div>
           <div class="event-card" id="next-event-card" style="display:none;">
             <div class="ec-lbl">NEXT</div>
             <div class="ec-name" id="next-event-name">—</div>
             <div class="ec-sub" id="next-event-sub">—</div>
             <div class="ec-sub" id="next-event-countdown" style="color:var(--red);font-weight:bold;margin-top:-6px;">—</div>
-            <button class="ev-btn" onclick="showPage('themed', document.querySelectorAll('.menu-item')[1])">VIEW ›</button>
+            <button class="ev-btn active" onclick="viewEventInThemed(_homeNextEventId)">VIEW ›</button>
           </div>
         </div>
       </div>
@@ -1135,8 +1136,9 @@ textarea.inp-std { resize:vertical; }
         <option value="RWD">RWD</option>
         <option value="FWD">FWD</option>
       </select>
+      <span class="elo-th-info" data-info="trackviews" style="margin-left:4px;">What's this? ⓘ</span>
     </div>
-    <div id="elo-track-hint" style="display:none; background:rgba(139,0,0,0.12); border-left:3px solid var(--red-dark); padding:8px 12px; font-size:12px; color:#bbb;"></div>
+    <div id="elo-track-hint" style="display:none; background:var(--panel); border-left:3px solid var(--red-dark); padding:8px 12px; font-size:12px; color:#ddd;"></div>
 
     <!-- FILTER BAR -->
     <div class="elo-filter-bar" style="flex-wrap:wrap; gap:8px; padding:8px 12px; align-items:center;">
@@ -1974,6 +1976,7 @@ const CHANGELOG = [
       'The whole site got a proper pass for phones. Tables (ELO, Standings, Live Results) no longer force you to scroll sideways — the important columns stay put, tap a row for the rest (stage times included).',
       'Home page is more compact and reordered: current + next event, most improved, ELO top 10, then what\u2019s new — in that order.',
       'New on the ELO page: separate rating views for Historic/Modern era, Gravel/Tarmac/Snow surface, and AWD/RWD/FWD drivetrain — not filters, each is its own independent rating with its own ELO/\u03BC/\u03C3, based only on events matching that track. Regular filters (club, active/established) apply within whichever view you\u2019ve picked. Heads up: 7-day \u0394 only exists for the overall rating, it won\u2019t show here.',
+      'Fixed a real bug in how inactivity was handled: the old formula re-applied itself on every sync run instead of calculating from a fixed starting point, so a driver\u2019s rating could get pushed all the way down to the floor within about an hour of going inactive — regardless of how short the actual break was. If you came back from a break and your rating looked lower than you remembered, this was why. Fix: inactivity no longer touches your rating at all — it\u2019s now just a flag (hidden from the default \u201CActive\u201D view). Come back, and your rating is exactly where you left it. Inactive threshold is 6 weeks with no result.',
       'A bunch of smaller fixes: countdown on the home page was stuck at zero for live events (fixed), event names showing raw IDs instead of the actual location (fixed), default ELO filter switched from Established to Active.',
     ],
   },
@@ -2395,6 +2398,7 @@ function updateClock() {
 
 // Countdown-Sekunden — werden von loadHomeEvents() mit dem echten Datum überschrieben
 let _countdownSecs = 0;
+let _endCountdownSecs = 0; // "Ends in..." für das Current-Event (Positions-Parität zu Next)
 
 function _tickCountdown() {
   _countdownSecs = Math.max(0, _countdownSecs - 1);
@@ -2406,11 +2410,26 @@ function _tickCountdown() {
   if (d || h) parts.push(`${h}h`);
   parts.push(`${m}m`);
   setText('next-event-countdown', `Starts in ${parts.join(' ')}`);
+
+  _endCountdownSecs = Math.max(0, _endCountdownSecs - 1);
+  const ed = Math.floor(_endCountdownSecs / 86400);
+  const eh = Math.floor((_endCountdownSecs % 86400) / 3600);
+  const em = Math.floor((_endCountdownSecs % 3600) / 60);
+  const eparts = [];
+  if (ed) eparts.push(`${ed}d`);
+  if (ed || eh) eparts.push(`${eh}h`);
+  eparts.push(`${em}m`);
+  setText('current-event-countdown', `Ends in ${eparts.join(' ')}`);
 }
 
 function _setCountdownTarget(isoDate) {
   const target = new Date(isoDate).getTime();
   _countdownSecs = Math.max(0, Math.floor((target - Date.now()) / 1000));
+}
+
+function _setEndCountdownTarget(isoDate) {
+  const target = new Date(isoDate).getTime();
+  _endCountdownSecs = Math.max(0, Math.floor((target - Date.now()) / 1000));
 }
 
 
@@ -2521,6 +2540,19 @@ function renderMostImproved(drivers) {
 }
 
 /** Lädt das nächste/aktive Event und befüllt den Hero-Bereich auf der Home-Seite. */
+// Current/Next-Event-IDs von der Home-Seite — für die VIEW-Buttons, damit sie
+// auf das jeweils richtige Event in der Themed-Ansicht springen (vorher
+// landeten beide immer auf dem aktiven Event, weil showPage('themed') ohne
+// Event-Kontext aufgerufen wurde).
+let _homeCurrentEventId = null;
+let _homeNextEventId    = null;
+
+/** Springt zur Themed-Seite und wählt gezielt das übergebene Event aus. */
+function viewEventInThemed(eventId) {
+  if (eventId) _themedActiveEventId = eventId;
+  showPage('themed', document.querySelectorAll('.menu-item')[1]);
+}
+
 async function loadHomeEvents() {
   try {
     // club_id=eq.23799 (GRF Themed) ist Pflicht — sonst kommt irgendein Event
@@ -2532,13 +2564,16 @@ async function loadHomeEvents() {
       sb('events', `select=*&club_id=eq.23799&status=eq.0&start_date=gte.${today}&order=start_date.asc&limit=1`),
     ]);
 
-    // CURRENT EVENT — läuft gerade, kein Countdown (Startdatum liegt in der
-    // Vergangenheit), stattdessen einfach "● LIVE".
+    // CURRENT EVENT — läuft gerade, kein Start-Countdown (Startdatum liegt in
+    // der Vergangenheit), aber "Ends in..." (End-Countdown) für Positions-
+    // Parität mit der Next-Karte, die "Starts in..." zeigt.
     const curCard = $('current-event-card');
     if (currentEvs.length) {
       const ev = currentEvs[0];
+      _homeCurrentEventId = ev.id;
       setText('current-event-name', ev.location || ev.name || '—');
       setText('current-event-sub', 'Rally in progress');
+      if (ev.end_date) _setEndCountdownTarget(ev.end_date);
       if (curCard) curCard.style.display = '';
     } else if (curCard) {
       curCard.style.display = 'none';
@@ -2548,6 +2583,7 @@ async function loadHomeEvents() {
     const nextCard = $('next-event-card');
     if (nextEvs.length) {
       const ev = nextEvs[0];
+      _homeNextEventId = ev.id;
       setText('next-event-name', ev.location || ev.name || '—');
       const dateStr = ev.start_date ? `${fmtDate(ev.start_date)} – ${fmtDate(ev.end_date)}` : '—';
       setText('next-event-sub', dateStr);
@@ -3543,7 +3579,13 @@ async function eloLoadTrackView(track) {
         clubIds: overallEntry?.clubIds || [],
         established: starts >= 20,
         provisional: starts < 5,
-        inactive: false, // Inaktivitäts-Decay existiert laut Briefing noch nicht pro Track
+        // Inaktivität ist kalenderbasiert (letztes Event, admin_api.py) und
+        // NICHT track-spezifisch — dieselbe Zahl gilt für alle Tracks. Das
+        // Flag steckt schon in state.driver_inactive (wird im selben Sync
+        // geschrieben wie die Ratings), war hier nur bisher ungenutzt/hart
+        // auf false gesetzt — dadurch griff der Active/Inactive-Filter in
+        // Track-Ansichten gar nicht.
+        inactive: !!(state?.driver_inactive?.[name]),
       };
     }).sort((a, b) => b.elo - a.elo);
 
@@ -3667,6 +3709,7 @@ const ELO_INFO_TEXT = {
   mu:    'μ (Mu) — The estimated true driving strength. Rises with good results against strong opponents, drops with weak results or inactivity.',
   sigma:  'σ (Sigma) — The uncertainty of the estimate. High after few starts or a long break, drops with more events. The lower it is, the more reliable the ELO value.',
   ksigma: 'kσ (Momentum) — How much your rating can still move. Starts high for new drivers and slowly comes down the more you race — much slower than σ, so it sticks around for hundreds of races instead of just a few dozen.',
+  trackviews: 'Track views (Era / Surface / Drivetrain) — each one is its own independent rating, not a filter on your overall number. It only counts events matching that track (e.g. only Gravel rallies for the Gravel view), so it has its own ELO/μ/σ/kσ and usually fewer events than Overall. Δ 7D isn\'t tracked per track and won\'t show outside Overall. Only one track view at a time — no combining (e.g. no "Gravel + AWD" at once).',
 };
 
 document.addEventListener('click', e => {
@@ -3677,7 +3720,7 @@ document.addEventListener('click', e => {
     const key = th.dataset.info;
     popup.textContent = ELO_INFO_TEXT[key] || '';
     const thRect   = th.getBoundingClientRect();
-    const wrapRect = th.closest('.elo-wrap')?.getBoundingClientRect() || {left:0, top:0};
+    const wrapRect = popup.parentElement.getBoundingClientRect();
     popup.style.left = Math.max(0, thRect.left - wrapRect.left) + 'px';
     popup.style.top  = (thRect.bottom - wrapRect.top + 4) + 'px';
     popup.style.display = 'block';
