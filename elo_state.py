@@ -59,11 +59,15 @@ class EloState:
     driver_clubs: Dict[str, List[str]] = field(default_factory=dict)
 
     # Inaktivitäts-Tracking: {driver_id: globaler Event-Zähler beim letzten Auftauchen}
-    # Nach INACTIVITY_THRESHOLD verpassten Events wird ein Fahrer als inaktiv markiert.
+    # HINWEIS (Session 7): der alte, event-basierte Inaktivitäts-Mechanismus
+    # (update_inactivity()/inactivity_threshold) wurde entfernt — die
+    # Inaktivitäts-Entscheidung liegt jetzt ausschließlich bei admin_api.py
+    # (kalenderwochenbasiert, INACTIVE_WEEKS=6). driver_last_seen/
+    # total_events_processed bleiben als reine Zähler bestehen (evtl. von
+    # elo_excel.py/GUI genutzt), speisen aber keine Inaktivitäts-Logik mehr.
     driver_last_seen: Dict[str, int] = field(default_factory=dict)
     driver_inactive: Dict[str, bool] = field(default_factory=dict)
-    total_events_processed: int = 0   # globaler Zähler über alle Events (Basis für Inaktivität)
-    inactivity_threshold: int = 20    # verpasste Events bis zur Inaktivierung
+    total_events_processed: int = 0   # globaler Zähler über alle Events
 
     def add_driver_club(self, driver_id: str, club_id: str) -> None:
         clubs = self.driver_clubs.setdefault(driver_id, [])
@@ -71,23 +75,13 @@ class EloState:
             clubs.append(club_id)
 
     def mark_driver_seen(self, driver_id: str) -> None:
-        """Markiert einen Fahrer als aktiv beim aktuellen Event-Zählerstand."""
+        """
+        Markiert einen Fahrer als beim aktuellen Event-Zählerstand gesehen.
+        Setzt driver_inactive NICHT mehr selbst (Session 7: der alte 20-
+        Events-Mechanismus ist entfernt) — das Flag wird ausschließlich von
+        admin_api.py (kalenderbasiert) gesetzt.
+        """
         self.driver_last_seen[driver_id] = self.total_events_processed
-        self.driver_inactive[driver_id] = False
-
-    def update_inactivity(self) -> List[str]:
-        """
-        Prüft nach jedem verarbeiteten Event alle bekannten Fahrer auf Inaktivität.
-        Gibt Liste der neu inaktiv markierten Fahrer zurück (für Logging).
-        """
-        newly_inactive = []
-        for driver_id in list(self.driver_last_seen.keys()):
-            missed = self.total_events_processed - self.driver_last_seen.get(driver_id, 0)
-            was_inactive = self.driver_inactive.get(driver_id, False)
-            if missed >= self.inactivity_threshold and not was_inactive:
-                self.driver_inactive[driver_id] = True
-                newly_inactive.append(driver_id)
-        return newly_inactive
 
     def is_inactive(self, driver_id: str) -> bool:
         return self.driver_inactive.get(driver_id, False)
@@ -137,7 +131,6 @@ class EloState:
             "driver_last_seen": self.driver_last_seen,
             "driver_inactive": self.driver_inactive,
             "total_events_processed": self.total_events_processed,
-            "inactivity_threshold": self.inactivity_threshold,
         }
 
     @staticmethod
@@ -154,7 +147,6 @@ class EloState:
         st.driver_last_seen = d.get("driver_last_seen", {})
         st.driver_inactive = {k: bool(v) for k, v in d.get("driver_inactive", {}).items()}
         st.total_events_processed = d.get("total_events_processed", 0)
-        st.inactivity_threshold = d.get("inactivity_threshold", 20)
         return st
 
 

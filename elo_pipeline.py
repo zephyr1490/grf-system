@@ -110,7 +110,9 @@ def _process_single_event(state: EloState, event: RawEvent, lookups: CategoryLoo
         state.add_driver_club(r.driver, club_id)
 
     state.total_events_processed += 1
-    state.update_inactivity()
+    # Session 7: kein state.update_inactivity()-Aufruf mehr hier — der alte
+    # 20-Events-Mechanismus ist entfernt, Inaktivität wird ausschließlich
+    # kalenderbasiert in admin_api.py entschieden (INACTIVE_WEEKS=6).
 
     tracks = tracks_for_event(event.location, raw_results, lookups, surface_granular=surface_granular)
 
