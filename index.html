@@ -3473,6 +3473,23 @@ async function _getEloState() {
  * die in loadEloData() gecachten Arrays wieder, KEIN zusätzlicher Fetch
  * dieser (großen) Tabellen.
  */
+/**
+ * Übersetzt den ungeprefixten Frontend-Track-Namen ('historic', 'gravel',
+ * 'AWD', ...) in den tatsächlichen, geprefixten Key in
+ * elo_state.state_json.ratings ('era:historic', 'surface:gravel',
+ * 'drivetrain:AWD', ...). Backend (elo_categories.py/elo_state.py) speichert
+ * IMMER mit Kategorie-Präfix (bestätigt per CSV-Export), die Dropdown-Werte
+ * im HTML sind bewusst ohne Präfix (kürzer für die UI) — ohne diese Übersetzung
+ * ist state.ratings[track] immer leer, komplett stumm (kein Error, einfach
+ * 0 Ergebnisse), was wie ein hängender Ladevorgang aussieht.
+ */
+function trackStateKey(track) {
+  if (['historic', 'modern'].includes(track)) return `era:${track}`;
+  if (['gravel', 'tarmac', 'snow'].includes(track)) return `surface:${track}`;
+  if (['AWD', 'RWD', 'FWD'].includes(track)) return `drivetrain:${track}`;
+  return track;
+}
+
 async function eloLoadTrackView(track) {
   if (track === 'overall') {
     _eloData = _eloDataOverall;
@@ -3485,7 +3502,7 @@ async function eloLoadTrackView(track) {
 
   try {
     const state    = await _getEloState();
-    const ratings  = state?.ratings?.[track] || {};
+    const ratings  = state?.ratings?.[trackStateKey(track)] || {};
     const isVehicleTrack = ['historic', 'modern', 'AWD', 'RWD', 'FWD'].includes(track);
 
     const evLocById = {};
