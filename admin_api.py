@@ -1385,6 +1385,7 @@ def elo_update():
                 "elo":             elo_val,
                 "elo_mu":          round(summary.mu, 2),
                 "elo_sigma":       round(summary.sigma, 2),
+                "elo_k_sigma":     round(summary.k_sigma, 2),
                 "elo_events":      summary.events_played,
                 "elo_provisional": summary.is_provisional,
                 "elo_inactive":    summary.is_inactive,

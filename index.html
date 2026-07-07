@@ -711,7 +711,7 @@ textarea.inp-std { resize:vertical; }
 
   <!-- TITLE BAR -->
   <div class="titlebar">
-    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.1</span></span>
+    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.2</span></span>
   </div>
 
   <!-- MENU BAR -->
@@ -1042,6 +1042,7 @@ textarea.inp-std { resize:vertical; }
               <th class="elo-th-info" data-info="elo">ELO ⓘ</th>
               <th class="elo-th-info" data-info="mu">μ ⓘ</th>
               <th class="elo-th-info" data-info="sigma">σ ⓘ</th>
+              <th class="elo-th-info" data-info="ksigma">kσ ⓘ</th>
               <th>Δ 7D</th>
               <th>STARTS</th>
               <th>WINS</th>
@@ -1051,7 +1052,7 @@ textarea.inp-std { resize:vertical; }
             </tr>
           </thead>
           <tbody id="elo-full-tbody">
-            <tr><td colspan="11"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
+            <tr><td colspan="12"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -1811,6 +1812,20 @@ textarea.inp-std { resize:vertical; }
 // Admin-UI/DB-Tabelle nötig dafür — ändert sich selten genug, dass ein
 // Code-Eintrag reicht). Neueste ZUERST in der Liste.
 const CHANGELOG = [
+  {
+    version: '1.2',
+    date:    '2026-07-07',
+    label:   'Rating formula rework',
+    notes: [
+      'Ratings can move for a much longer time now. Before, after about 50 races, your rating almost stopped changing — win or lose, it barely moved. Now that lasts about 250-300 races. A long history of good results actually counts, not just your first few months.',
+      'There\u2019s a new column: Momentum (k\u03C3). Your rating and \u03C3 still work exactly like before. Momentum is new — it shows how much your rating can still move. Starts high for new drivers, comes down slowly the more you race.',
+      'Beating an experienced driver counts a bit more than beating a brand-new one. Smallest of the three changes.',
+      'Same rules for everyone. Questions or complaints welcome — I did the maths, happy to show it.',
+      'Why: a rating shouldn\u2019t be stuck forever because of your first couple months. A good driver stays good, but improvement should count — and one rough early patch shouldn\u2019t follow you around forever once you\u2019ve clearly moved past it. Works both ways: established drivers can keep moving too, instead of freezing once they hit a certain race count.',
+      'Why might your number drop compared to others? Old races now count for longer. If your rating was high mostly because of one strong early stretch, and later races were more average, the old system froze that early strength in place. The new one doesn\u2019t — it looks at your whole history more fairly, so the number can settle a bit lower. That\u2019s not you getting worse. It\u2019s the old system losing an advantage some people had by chance, just from when their good stretch happened to fall.',
+      'Honest note: I did a lot of testing for this, trying different sources and algorithms like TrueSkill and Glicko-2, but in the end the current (own build) system features the best options from all the established systems for our community. The above mentioned change to the system was necessary to allow everyone to still improve on the long history. While I also come up as one of the gainers (but not much) I think the profit for everyone is worth making this change. If you have questions or feel the numbers don\u2019t add up feel free to ask me and I will try and explain.',
+    ],
+  },
   {
     version: '1.1',
     date:    '2026-07-05',
@@ -3006,6 +3021,7 @@ async function loadEloData(includeAll = false) {
       elo:         d.elo || 1000,
       mu:          d.elo_mu != null ? d.elo_mu : (d.elo || 1000),
       sigma:       d.elo_sigma != null ? d.elo_sigma : 0,
+      k_sigma:     d.elo_k_sigma != null ? d.elo_k_sigma : 0,
       delta:       (past != null && d.elo != null) ? Math.round(d.elo - past) : null,
       starts:      d.starts || 0,
       wins:        d.wins || 0,
@@ -3097,6 +3113,7 @@ function eloRender() {
           <td class="ev">${d.elo}</td>
           <td>${d.mu != null ? Math.round(d.mu) : '—'}</td>
           <td>${d.sigma != null ? Math.round(d.sigma) : '—'}</td>
+          <td>${d.k_sigma != null ? Math.round(d.k_sigma) : '—'}</td>
           <td>${deltaHTML(d.delta)}</td>
           <td>${d.starts}</td>
           <td>${d.wins}</td>
@@ -3122,7 +3139,8 @@ function eloRender() {
 const ELO_INFO_TEXT = {
   elo:   'ELO — The conservative overall rating (μ − 1.5×σ). This is the value used for ranking: high uncertainty pulls it down until more races have been driven.',
   mu:    'μ (Mu) — The estimated true driving strength. Rises with good results against strong opponents, drops with weak results or inactivity.',
-  sigma: 'σ (Sigma) — The uncertainty of the estimate. High after few starts or a long break, drops with more events. The lower it is, the more reliable the ELO value.',
+  sigma:  'σ (Sigma) — The uncertainty of the estimate. High after few starts or a long break, drops with more events. The lower it is, the more reliable the ELO value.',
+  ksigma: 'kσ (Momentum) — How much your rating can still move. Starts high for new drivers and slowly comes down the more you race — much slower than σ, so it sticks around for hundreds of races instead of just a few dozen.',
 };
 
 document.addEventListener('click', e => {

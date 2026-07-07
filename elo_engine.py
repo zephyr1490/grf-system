@@ -20,9 +20,17 @@ MODELL (kurz):
   Das sorgt automatisch dafür, dass ein Sieg gegen einen höher bewerteten
   Gegner mehr zählt als gegen einen niedriger bewerteten.
 
-  Die Summe der paarweisen Überraschungen wird durch die Feldgröße geteilt
-  (Performance = Durchschnitt, nicht Summe), damit ein 40-Fahrer-Feld nicht
-  automatisch krassere Ausschläge erzeugt als ein 8-Fahrer-Feld.
+  Die paarweisen Überraschungen werden NICHT mehr einfach gemittelt,
+  sondern per inverser-Varianz-Gewichtung (1/sigma_gegner^2) kombiniert:
+  ein Duell gegen einen etablierten (niedriges sigma) Gegner ist
+  verlässlichere Evidenz als eines gegen einen unsicheren (hohes sigma)
+  Gegner mit demselben mu, und zählt entsprechend mehr. Bei einem Feld mit
+  überall ähnlichem sigma (der Normalfall bei etablierten Fahrern) ist das
+  praktisch identisch zum einfachen Mittel von vorher — der Unterschied
+  greift gezielt dort, wo etablierte und brandneue Fahrer gemischt
+  aufeinandertreffen. Die Feldgrößen-Neutralität (großes Feld erzeugt nicht
+  automatisch krassere Ausschläge als kleines) bleibt dabei erhalten,
+  solange die Gegner-Unsicherheiten ähnlich verteilt sind.
 
   Der K-Faktor (= maximale Rating-Bewegung pro Event) skaliert mit sigma:
   unsichere (neue) Fahrer bewegen sich schneller, etablierte Fahrer mit
@@ -46,8 +54,16 @@ from typing import Dict, List, Optional
 DEFAULT_MU      = 1500.0   # Start-Rating für jeden neuen Fahrer/Track
 DEFAULT_SIGMA   = 350.0    # Start-Unsicherheit (hoch = bewegt sich schnell)
 SIGMA_FLOOR     = 60.0     # Unsicherheit sinkt nie unter diesen Wert
-SIGMA_DECAY     = 0.94     # pro Event: sigma *= SIGMA_DECAY (Richtung Floor)
-BASE_K          = 40.0     # K-Faktor bei DEFAULT_SIGMA (skaliert linear mit sigma)
+SIGMA_DECAY     = 0.94     # pro Event: DISPLAY-sigma sinkt Richtung Floor (schnell,
+                            # steuert NUR die Anzeige/is_provisional/Conservative Rating)
+K_SIGMA_DECAY   = 0.99     # pro Event: K-SIGMA sinkt Richtung Floor (langsam, steuert
+                            # NUR den K-Faktor -- lässt mu über einen viel längeren
+                            # Zeitraum reagieren, ohne dass die ANGEZEIGTE Unsicherheit
+                            # aufgebläht aussieht. Siehe Konversation: zwei komplett
+                            # unabhängige Zahlen aus demselben Event-Verlauf.]
+BASE_K          = 55.0     # K-Faktor bei DEFAULT_SIGMA (skaliert linear mit sigma)
+                            # [geändert von 40.0 -> 55.0: etwas mehr Trennschärfe/Bewegung,
+                            #  bekannter Kompromiss: auch etwas mehr Rauschen pro Event]
 ELO_SCALE       = 400.0    # Standard-Elo-Skalierungskonstante
 
 # Unterhalb dieser Event-Anzahl gilt ein Fahrer als "Newbie" (nur als
@@ -62,24 +78,41 @@ NEWBIE_SIGMA_THRESHOLD = 200.0
 
 @dataclass
 class Rating:
-    """Rating-Zustand eines Fahrers auf EINEM Track (z.B. 'overall' oder 'gravel')."""
+    """
+    Rating-Zustand eines Fahrers auf EINEM Track (z.B. 'overall' oder 'gravel').
+
+    ZWEI getrennte Unsicherheits-Werte, jeder mit eigenem, unabhängigem Decay:
+      sigma    — "Anzeige-Sigma" (schneller Decay, SIGMA_DECAY). Treibt die
+                 ANGEZEIGTE Unsicherheit, is_provisional und geht ins
+                 Conservative Rating (mu - 1.5*sigma) ein.
+      k_sigma  — "K-Sigma" (langsamer Decay, K_SIGMA_DECAY). Treibt NUR den
+                 K-Faktor, also wie stark sich mu pro Event noch bewegen darf.
+                 Wird NIE direkt angezeigt.
+    Beide starten aus demselben Event-Verlauf, laufen aber unabhängig.
+    """
     mu: float = DEFAULT_MU
     sigma: float = DEFAULT_SIGMA
+    k_sigma: float = DEFAULT_SIGMA
     events_played: int = 0
 
     @property
     def is_provisional(self) -> bool:
-        """True solange die Unsicherheit über dem Newbie-Schwellwert liegt."""
+        """True solange die (Anzeige-)Unsicherheit über dem Newbie-Schwellwert liegt."""
         return self.sigma > NEWBIE_SIGMA_THRESHOLD
 
     def to_dict(self) -> dict:
         return {"mu": round(self.mu, 2), "sigma": round(self.sigma, 2),
-                "events_played": self.events_played}
+                "k_sigma": round(self.k_sigma, 2), "events_played": self.events_played}
 
     @staticmethod
     def from_dict(d: dict) -> "Rating":
+        sigma = d.get("sigma", DEFAULT_SIGMA)
         return Rating(mu=d.get("mu", DEFAULT_MU),
-                       sigma=d.get("sigma", DEFAULT_SIGMA),
+                       sigma=sigma,
+                       # Migration: alte gespeicherte Ratings kennen noch kein k_sigma
+                       # -> mit dem vorhandenen sigma initialisieren (bestmögliche
+                       # Annahme, kein Datenverlust, kein harter Reset nötig).
+                       k_sigma=d.get("k_sigma", sigma),
                        events_played=d.get("events_played", 0))
 
 
@@ -196,27 +229,38 @@ def process_event(ratings: Dict[str, Rating], entries: List[EventEntry],
     # (fixen!) Vorher-Werten rechnen — simultanes Update, kein Reihenfolge-Bias.
     for e in entries:
         ratings.setdefault(e.driver, Rating())
-    pre = {e.driver: (ratings[e.driver].mu, ratings[e.driver].sigma) for e in entries}
+    pre = {e.driver: (ratings[e.driver].mu, ratings[e.driver].sigma, ratings[e.driver].k_sigma)
+           for e in entries}
 
     results: List[DriverEventResult] = []
     for e in entries:
-        mu_i, sigma_i = pre[e.driver]
-        total_delta_score = 0.0
+        mu_i, sigma_i, k_sigma_i = pre[e.driver]
+        weighted_delta_sum = 0.0
+        weight_sum = 0.0
         for o in entries:
             if o.driver == e.driver:
                 continue
-            mu_j, _ = pre[o.driver]
+            mu_j, sigma_j, _ = pre[o.driver]
             exp = expected_score(mu_i, mu_j)
             act = actual_score(e.rank, o.rank)
-            total_delta_score += (act - exp)
+            # Inverse-Varianz-Gewichtung (Standard-Statistik-Technik): ein Duell
+            # gegen einen etablierten (niedriges sigma) Gegner ist verlässlichere
+            # Evidenz als eines gegen einen unsicheren (hohes sigma) Gegner mit
+            # demselben mu -- und wird entsprechend höher gewichtet, statt wie
+            # zuvor 1:1 gleich behandelt zu werden. Nutzt die Anzeige-Sigma des
+            # Gegners (die konservativere, seriösere Schätzung seiner Zuverlässigkeit).
+            weight = 1.0 / (sigma_j ** 2)
+            weighted_delta_sum += weight * (act - exp)
+            weight_sum += weight
 
-        performance = total_delta_score / (n - 1)          # Bereich ca. [-1, +1]
-        k = k_factor(sigma_i, base_k=base_k)
+        performance = weighted_delta_sum / weight_sum        # Bereich ca. [-1, +1]
+        k = k_factor(k_sigma_i, base_k=base_k)               # <- nutzt K-SIGMA, nicht Anzeige-Sigma
         delta_mu = k * performance
 
         r = ratings[e.driver]
         r.mu = mu_i + delta_mu
-        r.sigma = decay_sigma(sigma_i)
+        r.sigma = decay_sigma(sigma_i, decay=SIGMA_DECAY)       # Anzeige-Sigma: schneller Decay
+        r.k_sigma = decay_sigma(k_sigma_i, decay=K_SIGMA_DECAY) # K-Sigma: langsamer Decay
         r.events_played += 1
 
         results.append(DriverEventResult(

@@ -180,10 +180,11 @@ class DriverSummary:
     display_name: str
     mu: float
     sigma: float
-    events_played: int
-    is_provisional: bool
-    is_inactive: bool
-    in_pool: bool
+    k_sigma: float = 0.0   # Momentum-Wert (siehe elo_engine.py), für die neue kσ-Spalte
+    events_played: int = 0
+    is_provisional: bool = False
+    is_inactive: bool = False
+    in_pool: bool = False
     connectivity: int = 1
     conservative_rating: float = 0.0   # mu - 1.5*sigma, für Sortierung
 
@@ -209,6 +210,7 @@ def summarize_track(state: EloState, track: str,
             driver=driver_id,
             display_name=state.label(driver_id),
             mu=r.mu, sigma=r.sigma,
+            k_sigma=getattr(r, "k_sigma", r.sigma),  # Fallback falls je ein altes Rating ohne k_sigma auftaucht
             events_played=r.events_played,
             is_provisional=r.is_provisional,
             is_inactive=inactive,
