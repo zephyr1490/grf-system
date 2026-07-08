@@ -1095,6 +1095,14 @@ textarea.inp-std { resize:vertical; }
   ══════════════════════════════════════════ -->
   <div class="page" id="page-elo">
 
+    <!-- Info-Popup lebt hier auf Page-Ebene (nicht im Desktop-only
+         .full-wrap), damit es auch funktioniert, wenn ein Trigger (z.B.
+         das "What's this?"-Icon beim Track-Switcher) auf Mobile geklickt
+         wird, wo .full-wrap komplett display:none ist. position:fixed statt
+         absolute, damit es keine Notwendigkeit für einen positionierten
+         Vorfahren gibt — Koordinaten kommen direkt aus getBoundingClientRect(). -->
+    <div id="elo-info-popup" style="display:none; position:fixed; z-index:100; background:#111; border:1px solid #333; padding:10px 12px; font-size:12px; line-height:1.5; color:var(--gray-light); max-width:260px; box-shadow:0 4px 12px rgba(0,0,0,0.5);"></div>
+
     <!-- ELO HERO -->
     <div class="themed-hero">
       <div class="themed-eyebrow">// GRF — ELO RATING SYSTEM //</div>
@@ -1160,7 +1168,6 @@ textarea.inp-std { resize:vertical; }
     <!-- ELO TABLE -->
     <div style="padding:6px; background:var(--gray);">
       <div class="elo-wrap full-wrap" style="margin:0; position:relative;">
-        <div id="elo-info-popup" style="display:none; position:absolute; z-index:20; background:#111; border:1px solid #333; padding:10px 12px; font-size:12px; line-height:1.5; color:var(--gray-light); max-width:260px; box-shadow:0 4px 12px rgba(0,0,0,0.5);"></div>
         <table class="elo-table" style="font-size:13px;">
           <thead>
             <tr>
@@ -1186,7 +1193,7 @@ textarea.inp-std { resize:vertical; }
       <div class="elo-wrap slim-wrap" style="margin:0;">
         <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR FULL STATS →</div>
         <table class="elo-table slim-table">
-          <thead><tr><th>#</th><th>DRIVER</th><th>ELO</th><th>σ</th><th>DNF%</th><th>Δ 7D</th></tr></thead>
+          <thead><tr><th>#</th><th>DRIVER</th><th class="elo-th-info" data-info="elo">ELO</th><th class="elo-th-info" data-info="sigma">σ</th><th>DNF%</th><th>Δ 7D</th></tr></thead>
           <tbody id="elo-full-slim-tbody">
             <tr><td colspan="6"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
           </tbody>
@@ -3698,8 +3705,8 @@ function eloRender() {
             <tr class="slim-detail-row" id="${rowId}">
               <td colspan="6">
                 <div class="slim-detail-inner">
-                  <div class="slim-badge"><div class="slim-badge-lbl">μ</div><div class="slim-badge-val">${d.mu != null ? Math.round(d.mu) : '—'}</div></div>
-                  <div class="slim-badge"><div class="slim-badge-lbl">kσ</div><div class="slim-badge-val">${d.k_sigma != null ? Math.round(d.k_sigma) : '—'}</div></div>
+                  <div class="slim-badge"><div class="slim-badge-lbl elo-th-info" data-info="mu">μ</div><div class="slim-badge-val">${d.mu != null ? Math.round(d.mu) : '—'}</div></div>
+                  <div class="slim-badge"><div class="slim-badge-lbl elo-th-info" data-info="ksigma">kσ</div><div class="slim-badge-val">${d.k_sigma != null ? Math.round(d.k_sigma) : '—'}</div></div>
                   <div class="slim-badge"><div class="slim-badge-lbl">STATUS</div><div class="slim-badge-val">${statusHTML}</div></div>
                   <div class="slim-badge"><div class="slim-badge-lbl">STARTS</div><div class="slim-badge-val">${d.starts}</div></div>
                   <div class="slim-badge"><div class="slim-badge-lbl">WINS</div><div class="slim-badge-val">${d.wins}</div></div>
@@ -3739,10 +3746,11 @@ document.addEventListener('click', e => {
   if (th) {
     const key = th.dataset.info;
     popup.textContent = ELO_INFO_TEXT[key] || '';
-    const thRect   = th.getBoundingClientRect();
-    const wrapRect = popup.parentElement.getBoundingClientRect();
-    popup.style.left = Math.max(0, thRect.left - wrapRect.left) + 'px';
-    popup.style.top  = (thRect.bottom - wrapRect.top + 4) + 'px';
+    const thRect = th.getBoundingClientRect();
+    const popupWidth = 260; // matches max-width in the popup's inline style
+    const left = Math.min(thRect.left, window.innerWidth - popupWidth - 8);
+    popup.style.left = Math.max(8, left) + 'px';
+    popup.style.top  = (thRect.bottom + 4) + 'px';
     popup.style.display = 'block';
     e.stopPropagation();
   } else if (!e.target.closest('#elo-info-popup')) {
