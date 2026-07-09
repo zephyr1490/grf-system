@@ -1171,12 +1171,33 @@ def elo_update():
             log("Starting fresh ELO state")
 
         # ── Championships chronologisch laden ─────────────────────────────
-        champ_rows = sb_get(
-            "championships",
-            "select=id,club_id,name,start_date,end_date&order=start_date.asc"
-        )
+        # Session 8 (Egress-Notfall, 83%+ verbraucht): bei Delta-Syncs
+        # (force=False, der absolute Regelfall — force_reset läuft nur
+        # manuell) NUR Championships der letzten RECENT_WINDOW_DAYS laden,
+        # statt jedes Mal die KOMPLETTE Historie (243 Championships/857
+        # Events/829 Result-Sets). Bereits verarbeitete Events werden über
+        # state.processed_event_ids ohnehin übersprungen — sie bei jedem
+        # 15/30/60-Minuten-Takt erneut aus Supabase zu laden, nur um sie
+        # dann zu ignorieren, war der dominante, unnötige Egress-Posten.
+        # 90 Tage Fenster ist bewusst großzügig über der 6-Wochen-
+        # Inaktivitätsschwelle (INACTIVE_WEEKS weiter unten) gewählt: jeder
+        # Fahrer, der die Schwelle überschreitet, fällt erst nach 90 Tagen
+        # aus dem Fenster — und wird garantiert VORHER schon von einem der
+        # vielen Läufe dazwischen korrekt auf inaktiv gesetzt, bevor er aus
+        # dem Fenster rausfällt. force_reset (explizite Neuaufbau-Anfrage)
+        # lädt weiterhin ausnahmslos ALLES, unverändert wie bisher.
+        from datetime import date, timedelta
+        RECENT_WINDOW_DAYS = 90
+
+        champ_params = "select=id,club_id,name,start_date,end_date&order=start_date.asc"
+        if not force:
+            cutoff = (date.today() - timedelta(days=RECENT_WINDOW_DAYS)).isoformat()
+            champ_params += f"&end_date=gte.{cutoff}"
+
+        champ_rows = sb_get("championships", champ_params)
         champ_rows = [c for c in champ_rows if str(c.get("club_id","")) in club_ids]
-        log(f"Found {len(champ_rows)} championships across clubs")
+        log(f"Found {len(champ_rows)} championships across clubs"
+            + ("" if force else f" (delta sync, last {RECENT_WINDOW_DAYS}d only)"))
 
         # ── Events laden: pro Championship chronologisch nach round_number ─
         # Wir speichern (champ_start_date, round_number, RawEvent) für globale Sortierung
