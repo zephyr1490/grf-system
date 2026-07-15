@@ -187,12 +187,47 @@ body::after {
 /* HOME GRID */
 .home-grid {
   display:grid; grid-template-columns:1fr 1fr;
+  grid-template-areas:
+    "elo events"
+    "elo improved"
+    "elo changelog";
   border-top:2px solid var(--gray-dark);
 }
+.he-elo       { grid-area:elo; }
+.he-events    { grid-area:events; }
+.he-improved  { grid-area:improved; }
+.he-changelog { grid-area:changelog; }
 .home-col { border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
-.home-col:last-child { border-right:none; }
+.he-events, .he-improved, .he-changelog { border-right:none; }
 
 /* COL HEADER */
+.elo-filter-bar {
+  display:flex; align-items:center; background:var(--gray-dark);
+  border-bottom:2px solid var(--gray-dark);
+}
+.elo-search-row {
+  display:flex; align-items:center; gap:6px; background:var(--gray-dark);
+  padding:8px 12px; border-bottom:2px solid var(--gray-dark);
+}
+.elo-search-row input { flex:1; }
+.elo-track-row {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  background:var(--gray-dark); padding:8px 12px; border-bottom:2px solid var(--gray-dark);
+}
+.elo-track-row select {
+  background:#252729; border:1px solid #333; color:var(--gray-light);
+  font-family:var(--ui-font); font-size:12px; padding:5px 8px; outline:none;
+}
+.elo-track-row select.picked { border-color:var(--red); color:var(--white); }
+.event-pair { display:flex; gap:6px; margin:6px; }
+.event-card { flex:1; min-width:0; background:var(--black); padding:10px 12px; }
+.ec-lbl { font-size:9px; letter-spacing:2px; color:var(--red); font-family:'Oswald',sans-serif; margin-bottom:4px; }
+.ec-name {
+  font-family:'VT323',monospace; font-size:20px; color:var(--white); line-height:1.1;
+  margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.ec-sub { font-size:11px; color:var(--gray-light); margin-bottom:8px; min-height:14px; }
+.event-card .ev-btn { display:block; width:100%; text-align:center; padding:6px; font-size:11px; }
 .col-hdr {
   background:var(--red-dark); padding:5px 10px;
   font-family:'Oswald',sans-serif; font-size:12px;
@@ -207,6 +242,8 @@ body::after {
   border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
   margin:6px; background:var(--black);
 }
+.slim-wrap { display:none; }
+.full-wrap { display:block; }
 .elo-table { width:100%; border-collapse:collapse; }
 .elo-table th {
   background:#252729; color:#bbb;
@@ -613,10 +650,15 @@ textarea.inp-std { resize:vertical; }
   .titlebar-sub { display:none; }
   .titlebar-text { font-size:12px; letter-spacing:1px; }
 
-  /* MENU BAR — horizontal scroll */
-  .menubar { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+  /* MENU BAR — horizontal scroll with a fade-out edge, so it reads as
+     "scroll for more" instead of wrapping unevenly as tabs get added. */
+  .menubar {
+    overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch;
+    mask-image:linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    -webkit-mask-image:linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+  }
   .menubar::-webkit-scrollbar { display:none; }
-  .menu-item { padding:5px 10px; font-size:12px; white-space:nowrap; flex-shrink:0; }
+  .menu-item { padding:6px 10px; font-size:12px; white-space:nowrap; flex-shrink:0; }
   .menu-right { flex-shrink:0; }
 
   /* HERO */
@@ -635,36 +677,79 @@ textarea.inp-std { resize:vertical; }
 
   /* KACHELN — 2x2 */
   .kacheln { grid-template-columns:1fr 1fr; }
-  .kachel { border-right:2px solid #111; border-bottom:2px solid #111; }
-  .kachel-num { font-size:36px; }
+  .kachel { border-right:2px solid #111; border-bottom:2px solid #111; padding:8px 10px; }
+  .kachel-num { font-size:26px; }
+  .kachel-lbl { font-size:10px; margin-top:1px; }
+  .kachel-sub { font-size:10px; margin-top:0; }
 
-  /* HOME GRID — stack vertically, Next Event first, Most Improved second, ELO third */
-  .home-grid { grid-template-columns:1fr; display:flex; flex-direction:column; }
-  .home-col:last-child { order:1; border-right:none; border-bottom:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
-  .home-col:first-child { order:2; border-right:none; }
+  /* HOME GRID — Events first, Most Improved second, ELO third, Changelog always last */
+  .home-grid {
+    grid-template-columns:1fr;
+    grid-template-areas:
+      "events"
+      "improved"
+      "elo"
+      "changelog";
+  }
+  .home-col { border-right:none !important; border-bottom:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
+  .he-changelog { border-bottom:none; }
 
-  /* ELO TABLE — horizontal scroll */
-  .elo-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  .elo-table { min-width:400px; }
-  .elo-table th, .elo-table td { padding:5px 6px; font-size:12px; }
+  /* ══════════════════════════════════════════
+     DATA TABLES → "SCHLANK + TAP"
+     Each data table now renders twice in the DOM: a full version
+     (all columns, id="…-full-wrap") for desktop, and a slim version
+     (only the priority columns, id="…-slim-wrap") for mobile — tapping
+     a row reveals the remaining stats as a small badge grid below it,
+     instead of a separate horizontally-scrollable column or a tall card.
+  ══════════════════════════════════════════ */
+  .full-wrap { display:none; }
+  .slim-wrap { display:block; }
+
+  .slim-table th, .slim-table td { padding:5px 6px; font-size:12px; white-space:nowrap; }
+  .slim-table tr[onclick] { cursor:pointer; }
+  .slim-table tr[onclick]:active { background:#251010; }
+  .slim-table td:nth-child(2), .slim-table th:nth-child(2) {
+    max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .slim-detail-row td { padding:0 !important; border-bottom:1px solid #1a1a1a; }
+  .slim-detail-row .slim-detail-inner, .slim-detail-row .slim-detail-label, .slim-detail-row .slim-detail-extra { display:none; }
+  .slim-detail-row.open .slim-detail-inner { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; padding:10px 12px; background:#151717; }
+  .slim-detail-row.open .slim-detail-label {
+    display:block; padding:8px 12px 0; font-size:9px; letter-spacing:1px; color:#555;
+    border-top:1px solid #222; background:#151717;
+  }
+  .slim-detail-row.open .slim-detail-extra { display:block; padding:0 12px 8px; font-size:12px; color:#aaa; background:#151717; }
+  #standings-slim-wrap .slim-detail-row.open .slim-detail-inner { grid-template-columns:repeat(4, 1fr); }
+  .slim-badge { text-align:center; }
+  .slim-badge-lbl { font-size:9px; letter-spacing:1px; color:#666; font-family:'Oswald',sans-serif; }
+  .slim-badge-val { font-size:13px; color:var(--gray-light); margin-top:2px; }
 
   /* THEMED HERO */
   .themed-hero { padding:14px 16px; }
   .themed-champ-name { font-size:36px; }
   .themed-narrative { font-size:12px; }
   .themed-meta { gap:6px; }
-  .themed-meta-item { padding:3px 8px; }
-  .tm-val { font-size:13px; }
+  .themed-meta-item { padding:4px 8px; }
+  .tm-lbl { font-size:9px; }
+  .tm-val { font-size:12px; }
 
-  /* THEMED SUBNAV — scroll */
-  .themed-subnav { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+  /* THEMED SUBNAV — horizontal scroll with fade-out edge */
+  .themed-subnav {
+    overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch;
+    mask-image:linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    -webkit-mask-image:linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+  }
   .themed-subnav::-webkit-scrollbar { display:none; }
   .sub-tab { padding:6px 12px; font-size:12px; white-space:nowrap; flex-shrink:0; }
 
-  /* EVENT SELECTOR — scroll */
-  .event-selector { overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; padding:6px 8px; }
+  /* EVENT SELECTOR — horizontal scroll with fade-out edge */
+  .event-selector {
+    overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; padding:6px 8px;
+    mask-image:linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    -webkit-mask-image:linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+  }
   .event-selector::-webkit-scrollbar { display:none; }
-  .ev-btn { white-space:nowrap; flex-shrink:0; font-size:12px; padding:3px 8px; }
+  .ev-btn { white-space:nowrap; flex-shrink:0; font-size:12px; padding:4px 10px; }
 
   /* LIVE GRID — stack, Event Info first on mobile */
   .live-grid { grid-template-columns:1fr; display:flex; flex-direction:column; }
@@ -672,24 +757,25 @@ textarea.inp-std { resize:vertical; }
   .live-col:last-child { border-bottom:none; order:-1; }
   .live-col:first-child { order:1; }
 
-  /* RESULTS + STANDINGS — horizontal scroll */
-  .live-col .elo-wrap, .standings-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  .standings-table { min-width:420px; }
-  .standings-table th, .standings-table td { padding:5px 6px; font-size:12px; }
-
-  /* CR TABLE */
-  .cr-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  .cr-table { min-width:340px; }
-  .cr-table th, .cr-table td { padding:5px 6px; font-size:12px; }
-
-  /* ELO PAGE */
-  #page-elo .event-selector { overflow-x:auto; flex-wrap:nowrap; }
-  #page-elo .elo-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  #page-elo .elo-table { min-width:560px; }
+  /* ELO PAGE — filter bar wraps via inline style, own row for search now */
 
   /* ADMIN — stack columns */
   #admin-panel > div[style*="grid-template-columns:220px"] { display:flex !important; flex-direction:column !important; }
   #admin-panel > div[style*="grid-template-columns:320px"] { display:flex !important; flex-direction:column !important; }
+  .cs-event-row { grid-template-columns:1fr; gap:2px; }
+
+  /* ADMIN — mobile usability: bigger tap targets. Many admin buttons use
+     inline styles with tiny padding/font (fine on desktop with a mouse,
+     too small to reliably tap) — override with !important on mobile. */
+  #admin-panel button, .admin-tab button {
+    min-height:36px; padding:8px 14px !important; font-size:13px !important;
+  }
+  .ec-check-row, .cr-check-row { padding:10px 12px !important; font-size:14px !important; }
+  .ec-check-row input[type=checkbox], .cr-check-row input[type=checkbox] { width:18px; height:18px; }
+  .rule-row { padding:11px 12px; gap:8px; flex-wrap:wrap; }
+  .rule-pts { width:56px; padding:6px 5px; font-size:14px; }
+  .inp-std { padding:9px 10px; font-size:14px; }
+  .admin-tab select, .admin-tab input[type=text], .admin-tab input[type=number] { min-height:38px; }
 
   /* STATUSBAR — 2x2 panels + clock right */
   .statusbar { grid-template-columns:repeat(2, 1fr); gap:4px; padding:4px 6px; }
@@ -711,7 +797,7 @@ textarea.inp-std { resize:vertical; }
 
   <!-- TITLE BAR -->
   <div class="titlebar">
-    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.1</span></span>
+    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.3</span></span>
   </div>
 
   <!-- MENU BAR -->
@@ -719,10 +805,8 @@ textarea.inp-std { resize:vertical; }
     <div class="menu-item active" onclick="showPage('home',this)">Home</div>
     <div class="menu-item" onclick="showPage('themed',this)">GRF Themed</div>
     <div class="menu-item" onclick="showPage('teamed',this)">GRF Teamed</div>
-    <div class="menu-sep"></div>
     <div class="menu-item" onclick="showPage('elo',this)">ELO Rankings</div>
     <div class="menu-item" onclick="showPage('handbook',this)">Handbook</div>
-    <div class="menu-sep"></div>
     <div class="menu-item" onclick="showPage('admin',this)">Admin</div>
     <div class="menu-right">
       <div class="live-pill"><div class="live-dot"></div> LIVE</div>
@@ -778,16 +862,16 @@ textarea.inp-std { resize:vertical; }
       </div>
     </div>
 
-    <!-- HOME GRID: ELO TOP 10 + MOST IMPROVED -->
+    <!-- HOME GRID: ELO TOP 10 + EVENTS + MOST IMPROVED + CHANGELOG -->
     <div class="home-grid">
 
-      <!-- LEFT: TOP 10 ELO -->
-      <div class="home-col">
+      <!-- TOP 10 ELO -->
+      <div class="home-col he-elo">
         <div class="col-hdr">ELO — TOP 10
           <span class="col-hdr-right">OVERALL · ALL CLUBS</span>
         </div>
         <div class="elo-wrap">
-          <table class="elo-table">
+          <table class="elo-table slim-table">
             <thead>
               <tr><th>#</th><th>DRIVER</th><th>ELO</th><th>Δ</th><th>EVENTS</th></tr>
             </thead>
@@ -795,56 +879,52 @@ textarea.inp-std { resize:vertical; }
               <tr><td colspan="5"><div class="empty"><div class="empty-title">NO ELO DATA YET</div><div class="empty-sub">ELO data will appear after the first events are processed.</div></div></td></tr>
             </tbody>
           </table>
-          <div class="see-more" onclick="showPage('elo', document.querySelector('.menu-item:nth-child(5)'))">VIEW FULL ELO RANKINGS ›</div>
+          <div class="see-more" onclick="showPage('elo', document.querySelector('.menu-item:nth-child(4)'))">VIEW FULL ELO RANKINGS ›</div>
         </div>
       </div>
 
-      <!-- RIGHT: NEXT EVENT + MOST IMPROVED -->
-      <div class="home-col">
-
-        <!-- Next Event teaser — sits above Most Improved on both desktop and mobile -->
-        <div class="col-hdr">NEXT EVENT — GRF THEMED</div>
-        <div style="background:var(--black);margin:6px;padding:12px;">
-          <div id="next-event-eyebrow" style="font-size:10px;color:var(--red);letter-spacing:3px;margin-bottom:4px;">—</div>
-          <div id="next-event-name" style="font-family:'VT323',monospace;font-size:28px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;">—</div>
-          <div style="display:flex;align-items:stretch;gap:0;border:1px solid #1a1a1a;">
-            <!-- Countdown block -->
-            <div style="flex:1;background:#0d0f10;padding:10px 14px;border-right:1px solid #1a1a1a;">
-              <div class="cd-label" style="margin-bottom:2px;">OPENS IN</div>
-              <div class="cd-digits" id="countdown" style="font-size:40px;">—</div>
-              <div class="cd-units">DAYS · HRS · MIN</div>
-            </div>
-            <!-- Date block -->
-            <div style="flex:1;background:#0d0f10;padding:10px 14px;border-right:1px solid #1a1a1a;">
-              <div class="cd-label" style="margin-bottom:2px;">EVENT WINDOW</div>
-              <div id="next-event-dates" style="font-family:'VT323',monospace;font-size:22px;color:var(--gray-light);line-height:1.2;margin-top:4px;">—</div>
-              <div id="next-event-year" class="cd-units">—</div>
-            </div>
-            <!-- CTA block -->
-            <div style="background:#0d0f10;padding:10px 14px;display:flex;align-items:center;justify-content:center;">
-              <button class="ev-btn active" onclick="showPage('themed', document.querySelectorAll('.menu-item')[1])" style="white-space:nowrap;">VIEW ›</button>
-            </div>
+      <!-- CURRENT + NEXT EVENT — compact side-by-side pair -->
+      <div class="home-col he-events">
+        <div class="col-hdr">EVENTS — GRF THEMED</div>
+        <div class="event-pair">
+          <div class="event-card" id="current-event-card" style="display:none;">
+            <div class="ec-lbl" style="color:var(--green);">● CURRENT</div>
+            <div class="ec-name" id="current-event-name">—</div>
+            <div class="ec-sub" id="current-event-sub">—</div>
+            <div class="ec-sub" id="current-event-countdown" style="color:var(--red);font-weight:bold;margin-top:-6px;">—</div>
+            <button class="ev-btn active" onclick="viewEventInThemed(_homeCurrentEventId)">VIEW ›</button>
+          </div>
+          <div class="event-card" id="next-event-card" style="display:none;">
+            <div class="ec-lbl">NEXT</div>
+            <div class="ec-name" id="next-event-name">—</div>
+            <div class="ec-sub" id="next-event-sub">—</div>
+            <div class="ec-sub" id="next-event-countdown" style="color:var(--red);font-weight:bold;margin-top:-6px;">—</div>
+            <button class="ev-btn active" onclick="viewEventInThemed(_homeNextEventId)">VIEW ›</button>
           </div>
         </div>
+      </div>
 
-        <!-- Most Improved — below Next Event -->
-        <div class="col-hdr" style="margin-top:4px;">MOST IMPROVED — LAST 7 DAYS
+      <!-- MOST IMPROVED -->
+      <div class="home-col he-improved">
+        <div class="col-hdr">MOST IMPROVED — LAST 7 DAYS
           <span class="col-hdr-right">ELO GAINS</span>
         </div>
         <!-- Populated from Supabase -->
         <div id="most-improved-list">
           <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
         </div>
+      </div>
 
-        <!-- Changelog — nur der neueste Eintrag, fix sichtbar. Volle
-             Historie steht im Handbook-Tab. Siehe CHANGELOG-Array in JS. -->
-        <div class="col-hdr" style="margin-top:4px;">WHAT'S NEW
+      <!-- CHANGELOG — nur der neueste Eintrag, fix sichtbar. Volle
+           Historie steht im Handbook-Tab. Siehe CHANGELOG-Array in JS.
+           Bleibt immer der letzte Abschnitt auf der Seite. -->
+      <div class="home-col he-changelog">
+        <div class="col-hdr">WHAT'S NEW
           <span class="col-hdr-right" id="home-changelog-version"></span>
         </div>
         <div id="home-changelog-latest" class="changelog-latest">
           <div style="color:#555;font-size:12px;">Loading…</div>
         </div>
-
       </div>
 
     </div>
@@ -866,7 +946,6 @@ textarea.inp-std { resize:vertical; }
         <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val">GRF Themed</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val" id="champ-season-val">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val" id="champ-rounds">—</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Active Drivers</div><div class="tm-val" id="champ-drivers">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Current Round</div><div class="tm-val" id="champ-current-round">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="champ-status">—</div></div>
       </div>
@@ -891,13 +970,22 @@ textarea.inp-std { resize:vertical; }
           <div class="col-hdr" id="themed-results-hdr">CURRENT RESULTS — LOADING…
             <span class="col-hdr-right" style="color:var(--green)">● LIVE</span>
           </div>
-          <div class="elo-wrap">
+          <div class="elo-wrap full-wrap">
             <table class="elo-table">
               <thead>
-                <tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th><th>BASE</th><th>×CR</th><th>CR PTS</th><th>TOTAL</th></tr>
+                <tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th><th>BASE</th><th>×CR</th><th>TOTAL</th></tr>
               </thead>
               <tbody id="themed-results-tbody">
                 <tr><td colspan="7"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="elo-wrap slim-wrap">
+            <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR TIME/BASE/CR + STAGE TIMES →</div>
+            <table class="elo-table slim-table">
+              <thead><tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TOTAL</th></tr></thead>
+              <tbody id="themed-results-slim-tbody">
+                <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -905,11 +993,9 @@ textarea.inp-std { resize:vertical; }
         <div class="live-col">
           <div class="col-hdr" id="ev-info-hdr">EVENT INFO</div>
           <div style="background:var(--black);margin:6px;padding:12px;" id="ev-info-panel">
-            <div style="font-size:11px;color:var(--red);letter-spacing:3px;margin-bottom:6px;" id="ev-info-eyebrow">—</div>
             <div style="font-family:'VT323',monospace;font-size:32px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;" id="ev-info-name">—</div>
-            <div style="border-left:3px solid var(--red-dark);padding:6px 10px;background:rgba(139,0,0,0.06);font-size:13px;color:#999;line-height:1.5;font-style:italic;margin-bottom:12px;" id="ev-info-narrative"></div>
+            <div style="display:none; border-left:3px solid var(--red-dark);padding:6px 10px;background:rgba(139,0,0,0.06);font-size:13px;color:#999;line-height:1.5;font-style:italic;margin-bottom:12px;" id="ev-info-narrative"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-              <div class="themed-meta-item"><div class="tm-lbl">Location</div><div class="tm-val" id="ev-info-location">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Entries</div><div class="tm-val" id="ev-info-entries">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="ev-info-status">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val" id="ev-info-start">—</div></div>
@@ -926,6 +1012,8 @@ textarea.inp-std { resize:vertical; }
         <div class="col-hdr" style="margin-bottom:6px;" id="standings-hdr">CHAMPIONSHIP STANDINGS — LOADING…
           <span class="col-hdr-right" id="standings-hdr-right"></span>
         </div>
+      </div>
+      <div class="standings-wrap full-wrap">
         <table class="standings-table">
           <thead>
             <tr>
@@ -936,6 +1024,17 @@ textarea.inp-std { resize:vertical; }
           </thead>
           <tbody id="standings-tbody">
             <tr><td colspan="10"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="standings-wrap slim-wrap" id="standings-slim-wrap">
+        <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;" id="standings-slim-hint">TAP A ROW FOR ROUND-BY-ROUND POINTS →</div>
+        <table class="standings-table slim-table">
+          <thead>
+            <tr id="standings-slim-thead-row"><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TOTAL</th><th>LOYALTY</th></tr>
+          </thead>
+          <tbody id="standings-slim-tbody">
+            <tr><td colspan="5"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -953,28 +1052,28 @@ textarea.inp-std { resize:vertical; }
           </thead>
           <tbody>
             <tr>
-              <td class="p1">1</td>
-              <td>Peugeot 205 T16</td><td>Group B</td><td class="ev">1.50</td>
+              <td class="p1" data-label="#">1</td>
+              <td data-label="VEHICLE">Peugeot 205 T16</td><td data-label="CLASS">Group B</td><td class="ev" data-label="CR">1.50</td>
               </tr>
             <tr>
-              <td class="p2">2</td>
-              <td>Lancia Delta HF Integrale</td><td>Group A</td><td class="ev">1.20</td>
+              <td class="p2" data-label="#">2</td>
+              <td data-label="VEHICLE">Lancia Delta HF Integrale</td><td data-label="CLASS">Group A</td><td class="ev" data-label="CR">1.20</td>
               </tr>
             <tr>
-              <td class="p3">3</td>
-              <td>Subaru Impreza 555</td><td>Group A</td><td class="ev">1.10</td>
+              <td class="p3" data-label="#">3</td>
+              <td data-label="VEHICLE">Subaru Impreza 555</td><td data-label="CLASS">Group A</td><td class="ev" data-label="CR">1.10</td>
               </tr>
             <tr>
-              <td>4</td>
-              <td>Mitsubishi Lancer Evo III</td><td>Group A</td><td class="ev">1.10</td>
+              <td data-label="#">4</td>
+              <td data-label="VEHICLE">Mitsubishi Lancer Evo III</td><td data-label="CLASS">Group A</td><td class="ev" data-label="CR">1.10</td>
               </tr>
             <tr>
-              <td>5</td>
-              <td>Ford Escort RS Cosworth</td><td>Group A</td><td class="ev">1.00</td>
+              <td data-label="#">5</td>
+              <td data-label="VEHICLE">Ford Escort RS Cosworth</td><td data-label="CLASS">Group A</td><td class="ev" data-label="CR">1.00</td>
               </tr>
             <tr>
-              <td>6</td>
-              <td>Lancia Stratos HF</td><td>Group 4</td><td class="ev">0.90</td>
+              <td data-label="#">6</td>
+              <td data-label="VEHICLE">Lancia Stratos HF</td><td data-label="CLASS">Group 4</td><td class="ev" data-label="CR">0.90</td>
               </tr>
           </tbody>
         </table>
@@ -996,6 +1095,14 @@ textarea.inp-std { resize:vertical; }
   ══════════════════════════════════════════ -->
   <div class="page" id="page-elo">
 
+    <!-- Info-Popup lebt hier auf Page-Ebene (nicht im Desktop-only
+         .full-wrap), damit es auch funktioniert, wenn ein Trigger (z.B.
+         das "What's this?"-Icon beim Track-Switcher) auf Mobile geklickt
+         wird, wo .full-wrap komplett display:none ist. position:fixed statt
+         absolute, damit es keine Notwendigkeit für einen positionierten
+         Vorfahren gibt — Koordinaten kommen direkt aus getBoundingClientRect(). -->
+    <div id="elo-info-popup" style="display:none; position:fixed; z-index:100; background:#111; border:1px solid #333; padding:10px 12px; font-size:12px; line-height:1.5; color:var(--gray-light); max-width:260px; box-shadow:0 4px 12px rgba(0,0,0,0.5);"></div>
+
     <!-- ELO HERO -->
     <div class="themed-hero">
       <div class="themed-eyebrow">// GRF — ELO RATING SYSTEM //</div>
@@ -1011,29 +1118,56 @@ textarea.inp-std { resize:vertical; }
       </div>
     </div>
 
+    <!-- ROW 1: TRACK VIEW SWITCHER — NOT a filter, each track is its own
+         independent rating (own ELO/μ/σ/starts). Grouped into 3 dropdowns
+         (Era / Surface / Drivetrain) instead of 9 flat buttons — same idea
+         as the other filter bars, avoids a 4th horizontally-scrolling row.
+         Rows below (Club, Active/Established) filter WITHIN this track. -->
+    <div class="elo-track-row">
+      <button class="ev-btn active" id="elo-track-overall" onclick="eloSetTrack('overall')">Overall</button>
+      <select id="elo-track-era" onchange="eloSetTrack(this.value)">
+        <option value="">Era ▾</option>
+        <option value="historic">Historic</option>
+        <option value="modern">Modern</option>
+      </select>
+      <select id="elo-track-surface" onchange="eloSetTrack(this.value)">
+        <option value="">Surface ▾</option>
+        <option value="gravel">Gravel</option>
+        <option value="tarmac">Tarmac</option>
+        <option value="snow">Snow</option>
+      </select>
+      <select id="elo-track-drivetrain" onchange="eloSetTrack(this.value)">
+        <option value="">Drivetrain ▾</option>
+        <option value="AWD">AWD</option>
+        <option value="RWD">RWD</option>
+        <option value="FWD">FWD</option>
+      </select>
+      <span class="elo-th-info" data-info="trackviews" style="margin-left:4px;">What's this? ⓘ</span>
+    </div>
+    <div id="elo-track-hint" style="display:none; background:var(--panel); border-left:3px solid var(--red-dark); padding:8px 12px; font-size:12px; color:#ddd;"></div>
+
     <!-- FILTER BAR -->
-    <div class="event-selector" style="flex-wrap:wrap; gap:8px; padding:8px 12px; align-items:center;">
-      <span class="event-selector-lbl" style="font-size:12px;">FILTER:</span>
+    <div class="elo-filter-bar" style="flex-wrap:wrap; gap:8px; padding:8px 12px; align-items:center;">
+      <span class="event-selector-lbl" style="font-size:12px; color:#333;">FILTER:</span>
       <button class="ev-btn" onclick="eloFilter('all',this)">All Drivers (incl. Provisional)</button>
-      <button class="ev-btn" onclick="eloFilter('active',this)">Active Only</button>
+      <button class="ev-btn active" onclick="eloFilter('active',this)">Active Only</button>
       <button class="ev-btn" onclick="eloFilter('inactive',this)">Inactive Only</button>
-      <button class="ev-btn active" onclick="eloFilter('established',this)">Established (20+ starts)</button>
+      <button class="ev-btn" onclick="eloFilter('established',this)">Established (20+ starts)</button>
       <button class="ev-btn" onclick="eloFilter('improved',this)">Most Improved</button>
       <div class="menu-sep" style="height:20px; margin:0 4px;"></div>
-      <span class="event-selector-lbl" style="font-size:12px;">CLUB:</span>
+      <span class="event-selector-lbl" style="font-size:12px; color:#333;">CLUB:</span>
       <button class="ev-btn active" id="elo-club-all" onclick="eloClub('all',this)">All Clubs</button>
       <span id="elo-club-buttons" style="display:contents;"></span>
-      <div style="margin-left:auto; display:flex; align-items:center; gap:6px;">
-        <span class="event-selector-lbl" style="font-size:12px;">SEARCH:</span>
-        <input id="elo-search" type="text" placeholder="driver name..." oninput="eloRender()"
-          style="background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:3px 8px; width:150px; outline:none;">
-      </div>
+    </div>
+    <div class="elo-search-row">
+      <span class="event-selector-lbl" style="font-size:12px; color:#333;">SEARCH:</span>
+      <input id="elo-search" type="text" placeholder="driver name..." oninput="eloRender()"
+        style="background:#252729; border:1px solid #333; color:var(--gray-light); font-family:var(--ui-font); font-size:12px; padding:5px 8px; outline:none;">
     </div>
 
     <!-- ELO TABLE -->
     <div style="padding:6px; background:var(--gray);">
-      <div class="elo-wrap" style="margin:0; position:relative;">
-        <div id="elo-info-popup" style="display:none; position:absolute; z-index:20; background:#111; border:1px solid #333; padding:10px 12px; font-size:12px; line-height:1.5; color:var(--gray-light); max-width:260px; box-shadow:0 4px 12px rgba(0,0,0,0.5);"></div>
+      <div class="elo-wrap full-wrap" style="margin:0; position:relative;">
         <table class="elo-table" style="font-size:13px;">
           <thead>
             <tr>
@@ -1042,6 +1176,7 @@ textarea.inp-std { resize:vertical; }
               <th class="elo-th-info" data-info="elo">ELO ⓘ</th>
               <th class="elo-th-info" data-info="mu">μ ⓘ</th>
               <th class="elo-th-info" data-info="sigma">σ ⓘ</th>
+              <th class="elo-th-info" data-info="ksigma">kσ ⓘ</th>
               <th>Δ 7D</th>
               <th>STARTS</th>
               <th>WINS</th>
@@ -1051,12 +1186,21 @@ textarea.inp-std { resize:vertical; }
             </tr>
           </thead>
           <tbody id="elo-full-tbody">
-            <tr><td colspan="11"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
+            <tr><td colspan="12"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="elo-wrap slim-wrap" style="margin:0;">
+        <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR FULL STATS →</div>
+        <table class="elo-table slim-table">
+          <thead><tr><th>#</th><th>DRIVER</th><th class="elo-th-info" data-info="elo">ELO</th><th class="elo-th-info" data-info="sigma">σ</th><th>DNF%</th><th>Δ 7D</th></tr></thead>
+          <tbody id="elo-full-slim-tbody">
+            <tr><td colspan="6"><div class="empty"><div class="empty-title">LOADING ELO DATA…</div></div></td></tr>
           </tbody>
         </table>
       </div>
       <div style="padding:6px 8px; font-size:11px; color:#555; background:var(--black); border-top:1px solid #1a1a1a;">
-        <span id="elo-result-count">— drivers shown</span> &nbsp;·&nbsp; ELO base: 1000 &nbsp;·&nbsp; Established threshold: 20 starts
+        <span id="elo-result-count">— drivers shown</span> &nbsp;·&nbsp; ELO base: 1500 &nbsp;·&nbsp; Established threshold: 20 starts
       </div>
     </div>
 
@@ -1324,11 +1468,20 @@ textarea.inp-std { resize:vertical; }
           <div class="col-hdr" style="margin-bottom:6px;">CALCULATION PREVIEW
             <span id="cr-preview-info" style="font-family:var(--ui-font); font-weight:normal; font-size:10px; color:#aaa; margin-left:12px;"></span>
           </div>
-          <div class="elo-wrap" style="margin:0;">
+          <div class="elo-wrap full-wrap" style="margin:0;">
             <table class="cr-table">
               <thead><tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>N</th><th>AVG TOP TIME</th><th>CAR AVG TIME</th><th>CR VALUE</th><th>RATING</th></tr></thead>
               <tbody id="cr-preview-tbody">
                 <tr><td colspan="8"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select championship, locations, classes → Calculate.</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="elo-wrap slim-wrap" style="margin:0;">
+            <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR FULL BREAKDOWN →</div>
+            <table class="cr-table slim-table">
+              <thead><tr><th>#</th><th>VEHICLE</th><th>CR</th><th>RATING</th></tr></thead>
+              <tbody id="cr-preview-slim-tbody">
+                <tr><td colspan="4"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select championship, locations, classes → Calculate.</div></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -1594,11 +1747,20 @@ textarea.inp-std { resize:vertical; }
           <!-- RIGHT: EXISTING BONUSES TABLE -->
           <div style="padding:12px;">
             <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:8px; border-bottom:1px solid #1a1a1a; padding-bottom:6px;">EXISTING MANUAL BONUSES</div>
-            <div class="elo-wrap" style="margin:0;">
+            <div class="elo-wrap full-wrap" style="margin:0;">
               <table class="elo-table" style="width:100%;">
                 <thead><tr><th>DRIVER</th><th>EVENT</th><th>TYPE</th><th>NAME</th><th>PTS</th><th>NOTE</th><th>DEL</th></tr></thead>
                 <tbody id="mb-existing-tbody">
                   <tr><td colspan="7"><div class="empty"><div class="empty-title">SELECT CHAMPIONSHIP</div></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="elo-wrap slim-wrap" style="margin:0;">
+              <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR TYPE/NAME/NOTE →</div>
+              <table class="elo-table slim-table" style="width:100%;">
+                <thead><tr><th>DRIVER</th><th>PTS</th><th>DEL</th></tr></thead>
+                <tbody id="mb-existing-slim-tbody">
+                  <tr><td colspan="3"><div class="empty"><div class="empty-title">SELECT CHAMPIONSHIP</div></div></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1800,7 +1962,7 @@ textarea.inp-std { resize:vertical; }
 //   3. UTILS (DOM, Datum, Formatierung)
 //   4. NAVIGATION (showPage, showSubTab, showAdminTab)
 //   5. CLOCK & COUNTDOWN
-//   6. HOME PAGE   (loadHome, loadNextEvent, renderMostImproved)
+//   6. HOME PAGE   (loadHome, loadHomeEvents, renderMostImproved)
 //   7. THEMED PAGE (loadThemedResults, loadStandings)
 //   8. ELO PAGE    (loadEloData, eloRender, eloFilter, eloClub)
 //   9. ADMIN PAGE  (adminLogin, adminLogout, initAdminPanel)
@@ -1815,6 +1977,32 @@ textarea.inp-std { resize:vertical; }
 // Admin-UI/DB-Tabelle nötig dafür — ändert sich selten genug, dass ein
 // Code-Eintrag reicht). Neueste ZUERST in der Liste.
 const CHANGELOG = [
+  {
+    version: '1.3',
+    date:    '2026-07-07',
+    label:   'Mobile rework',
+    notes: [
+      'The whole site got a proper pass for phones. Tables (ELO, Standings, Live Results) no longer force you to scroll sideways — the important columns stay put, tap a row for the rest (stage times included).',
+      'Home page is more compact and reordered: current + next event, most improved, ELO top 10, then what\u2019s new — in that order.',
+      'New on the ELO page: separate rating views for Historic/Modern era, Gravel/Tarmac/Snow surface, and AWD/RWD/FWD drivetrain — not filters, each is its own independent rating with its own ELO/\u03BC/\u03C3, based only on events matching that track. Regular filters (club, active/established) apply within whichever view you\u2019ve picked. Heads up: 7-day \u0394 only exists for the overall rating, it won\u2019t show here.',
+      'Fixed a real bug in how inactivity was handled: the old formula re-applied itself on every sync run instead of calculating from a fixed starting point, so a driver\u2019s rating could get pushed all the way down to the floor within about an hour of going inactive — regardless of how short the actual break was. If you came back from a break and your rating looked lower than you remembered, this was why. Fix: inactivity no longer touches your rating at all — it\u2019s now just a flag (hidden from the default \u201CActive\u201D view). Come back, and your rating is exactly where you left it. Inactive threshold is 6 weeks with no result.',
+      'A bunch of smaller fixes: countdown on the home page was stuck at zero for live events (fixed), event names showing raw IDs instead of the actual location (fixed), default ELO filter switched from Established to Active.',
+    ],
+  },
+  {
+    version: '1.2',
+    date:    '2026-07-07',
+    label:   'Rating formula rework',
+    notes: [
+      'Ratings can move for a much longer time now. Before, after about 50 races, your rating almost stopped changing — win or lose, it barely moved. Now that lasts about 250-300 races. A long history of good results actually counts, not just your first few months.',
+      'There\u2019s a new column: Momentum (k\u03C3). Your rating and \u03C3 still work exactly like before. Momentum is new — it shows how much your rating can still move. Starts high for new drivers, comes down slowly the more you race.',
+      'Beating an experienced driver counts a bit more than beating a brand-new one. Smallest of the three changes.',
+      'Same rules for everyone. Questions or complaints welcome — I did the maths, happy to show it.',
+      'Why: a rating shouldn\u2019t be stuck forever because of your first couple months. A good driver stays good, but improvement should count — and one rough early patch shouldn\u2019t follow you around forever once you\u2019ve clearly moved past it. Works both ways: established drivers can keep moving too, instead of freezing once they hit a certain race count.',
+      'Why might your number drop compared to others? Old races now count for longer. If your rating was high mostly because of one strong early stretch, and later races were more average, the old system froze that early strength in place. The new one doesn\u2019t — it looks at your whole history more fairly, so the number can settle a bit lower. That\u2019s not you getting worse. It\u2019s the old system losing an advantage some people had by chance, just from when their good stretch happened to fall.',
+      'Honest note: I did a lot of testing for this, trying different sources and algorithms like TrueSkill and Glicko-2, but in the end the current (own build) system features the best options from all the established systems for our community. The above mentioned change to the system was necessary to allow everyone to still improve on the long history. While I also come up as one of the gainers (but not much) I think the profit for everyone is worth making this change. If you have questions or feel the numbers don\u2019t add up feel free to ask me and I will try and explain.',
+    ],
+  },
   {
     version: '1.1',
     date:    '2026-07-05',
@@ -2070,6 +2258,23 @@ function fmtDate(str) {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
+/**
+ * Formatiert eine Stage-/Ergebniszeit einheitlich als MM:SS:xxx — Stunden
+ * werden bewusst weggelassen (Rally-Stages/Events dauern nie über eine
+ * Stunde), Millisekunden immer auf 3 Stellen normiert. Nimmt sowohl
+ * "H:MM:SS.ffff" als auch "MM:SS.ff" als Rohformat aus der DB entgegen.
+ */
+function fmtStageTime(raw) {
+  if (!raw || raw === '—') return raw;
+  const m = String(raw).trim().match(/(?:\d+:)?(\d{1,2}):(\d{1,2})(?:[.:](\d+))?/);
+  if (!m) return raw;
+  const [, min, sec, frac] = m;
+  const mm = min.padStart(2, '0');
+  const ss = sec.padStart(2, '0');
+  const ms = (frac || '000').padEnd(3, '0').slice(0, 3);
+  return `${mm}:${ss}:${ms}`;
+}
+
 /** Rang-CSS-Klasse für Podiumsfarben. */
 const rankClass = i => i === 0 ? 'p1' : i === 1 ? 'p2' : i === 2 ? 'p3' : '';
 
@@ -2138,7 +2343,13 @@ function showPage(name, el) {
   if (el)   el.classList.add('active');
 
   if (name === 'themed')   loadThemedResults();
-  if (name === 'elo')      loadEloData();
+  // Standard-Filter ist 'active' (siehe _eloFilterMode-Default) — das ist
+  // eine eigene Dimension zu "Established" (20+ Career-Starts) und sollte
+  // nicht heimlich darauf verengt sein. Session 8: genau das ist bisher
+  // passiert (initialer Fetch war establishment-only), was die "Active"-
+  // Standardansicht um teils mehr als die Hälfte untergezählt hat. Deshalb
+  // hier includeAll=true, nicht der schnellere establishment-only Fetch.
+  if (name === 'elo')      loadEloData(true);
   if (name === 'handbook') renderChangelog();
 }
 
@@ -2200,20 +2411,40 @@ function updateClock() {
   setText('clock-date', date);
 }
 
-// Countdown-Sekunden — werden von loadNextEvent() mit dem echten Datum überschrieben
+// Countdown-Sekunden — werden von loadHomeEvents() mit dem echten Datum überschrieben
 let _countdownSecs = 0;
+let _endCountdownSecs = 0; // "Ends in..." für das Current-Event (Positions-Parität zu Next)
 
 function _tickCountdown() {
   _countdownSecs = Math.max(0, _countdownSecs - 1);
   const d = Math.floor(_countdownSecs / 86400);
   const h = Math.floor((_countdownSecs % 86400) / 3600);
   const m = Math.floor((_countdownSecs % 3600) / 60);
-  setText('countdown', `${String(d).padStart(2,'0')}:${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+  const parts = [];
+  if (d) parts.push(`${d}d`);
+  if (d || h) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  setText('next-event-countdown', `Starts in ${parts.join(' ')}`);
+
+  _endCountdownSecs = Math.max(0, _endCountdownSecs - 1);
+  const ed = Math.floor(_endCountdownSecs / 86400);
+  const eh = Math.floor((_endCountdownSecs % 86400) / 3600);
+  const em = Math.floor((_endCountdownSecs % 3600) / 60);
+  const eparts = [];
+  if (ed) eparts.push(`${ed}d`);
+  if (ed || eh) eparts.push(`${eh}h`);
+  eparts.push(`${em}m`);
+  setText('current-event-countdown', `Ends in ${eparts.join(' ')}`);
 }
 
 function _setCountdownTarget(isoDate) {
   const target = new Date(isoDate).getTime();
   _countdownSecs = Math.max(0, Math.floor((target - Date.now()) / 1000));
+}
+
+function _setEndCountdownTarget(isoDate) {
+  const target = new Date(isoDate).getTime();
+  _endCountdownSecs = Math.max(0, Math.floor((target - Date.now()) / 1000));
 }
 
 
@@ -2260,24 +2491,32 @@ async function loadHome() {
     setText('k-most-events-num',  mostCount || '—');
     setText('k-most-events-name', mostName);
 
-    // Kachel: Top ELO — drivers ist hier bereits Established-only (Server-Filter oben)
-    if (drivers.length) {
-      setText('k-top-elo',      drivers[0].elo);
-      setText('k-top-elo-name', drivers[0].name);
+    // Kachel: Top ELO + Top-10 — nur ACTIVE Fahrer (established, s.o., ist
+    // eine andere Dimension als active/inactive). Bisher fehlte dieser
+    // Filter hier komplett — fiel nicht auf, solange der alte Inaktivitäts-
+    // Bug lang-inaktive Fahrer ohnehin automatisch Richtung ~975 gedrückt
+    // hat. Jetzt, wo Ratings bei Inaktivität eingefroren bleiben (siehe
+    // Changelog), kann ein hoch bewerteter inaktiver Fahrer sonst permanent
+    // oben stehen bleiben.
+    const activeDrivers = drivers.filter(d => !d.elo_inactive);
+
+    if (activeDrivers.length) {
+      setText('k-top-elo',      activeDrivers[0].elo);
+      setText('k-top-elo-name', activeDrivers[0].name);
     }
 
     // ELO Top-10-Tabelle
-    const top10 = drivers.slice(0, 10);
+    const top10 = activeDrivers.slice(0, 10);
     const tbody = $('home-elo-tbody');
     if (tbody) {
       tbody.innerHTML = top10.length
         ? top10.map((d, i) => `
             <tr>
-              <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
-              <td>${escapeHtml(d.country || '')} ${escapeHtml(d.name)}</td>
-              <td class="ev">${d.elo || '—'}</td>
-              <td>${deltaHTML(d.elo_change)}</td>
-              <td>${d.starts || 0}</td>
+              <td class="${rankClass(i)}" data-label="#">${String(i + 1).padStart(2, '0')}</td>
+              <td data-label="DRIVER">${escapeHtml(d.country || '')} ${escapeHtml(d.name)}</td>
+              <td class="ev" data-label="ELO">${d.elo || '—'}</td>
+              <td data-label="Δ">${deltaHTML(d.elo_change)}</td>
+              <td data-label="EVENTS">${d.starts || 0}</td>
             </tr>`).join('')
         : emptyRow(5, 'NO ELO DATA YET', 'ELO data will appear after the first events are processed.');
     }
@@ -2286,7 +2525,7 @@ async function loadHome() {
     renderMostImproved(drivers);
 
     // Nächstes Event
-    await loadNextEvent();
+    await loadHomeEvents();
 
   } catch (err) {
     console.error('[loadHome]', err);
@@ -2324,31 +2563,60 @@ function renderMostImproved(drivers) {
 }
 
 /** Lädt das nächste/aktive Event und befüllt den Hero-Bereich auf der Home-Seite. */
-async function loadNextEvent() {
+// Current/Next-Event-IDs von der Home-Seite — für die VIEW-Buttons, damit sie
+// auf das jeweils richtige Event in der Themed-Ansicht springen (vorher
+// landeten beide immer auf dem aktiven Event, weil showPage('themed') ohne
+// Event-Kontext aufgerufen wurde).
+let _homeCurrentEventId = null;
+let _homeNextEventId    = null;
+
+/** Springt zur Themed-Seite und wählt gezielt das übergebene Event aus. */
+function viewEventInThemed(eventId) {
+  if (eventId) _themedActiveEventId = eventId;
+  showPage('themed', document.querySelectorAll('.menu-item')[1]);
+}
+
+async function loadHomeEvents() {
   try {
-    // WICHTIG: club_id=eq.23799 (GRF Themed) ergänzt — fehlte komplett,
-    // dadurch kam hier irgendein Event von irgendeinem Club im RaceNet-
-    // Dummy-Account (auch Teamed etc.), nicht spezifisch Themed.
+    // club_id=eq.23799 (GRF Themed) ist Pflicht — sonst kommt irgendein Event
+    // von irgendeinem Club im RaceNet-Dummy-Account (auch Teamed etc.).
     const today = new Date().toISOString().split('T')[0];
-    let evs = await sb('events', 'select=*&club_id=eq.23799&status=eq.1&order=start_date.asc&limit=1');
-    if (!evs.length) {
-      evs = await sb('events', `select=*&club_id=eq.23799&status=eq.0&start_date=gte.${today}&order=start_date.asc&limit=1`);
+
+    const [currentEvs, nextEvs] = await Promise.all([
+      sb('events', 'select=*&club_id=eq.23799&status=eq.1&order=start_date.asc&limit=1'),
+      sb('events', `select=*&club_id=eq.23799&status=eq.0&start_date=gte.${today}&order=start_date.asc&limit=1`),
+    ]);
+
+    // CURRENT EVENT — läuft gerade, kein Start-Countdown (Startdatum liegt in
+    // der Vergangenheit), aber "Ends in..." (End-Countdown) für Positions-
+    // Parität mit der Next-Karte, die "Starts in..." zeigt.
+    const curCard = $('current-event-card');
+    if (currentEvs.length) {
+      const ev = currentEvs[0];
+      _homeCurrentEventId = ev.id;
+      setText('current-event-name', ev.location || ev.name || '—');
+      setText('current-event-sub', 'Rally in progress');
+      if (ev.end_date) _setEndCountdownTarget(ev.end_date);
+      if (curCard) curCard.style.display = '';
+    } else if (curCard) {
+      curCard.style.display = 'none';
     }
-    if (!evs.length) return;
 
-    const ev = evs[0];
-    setText('next-event-eyebrow', ev.location ? `// ${ev.location.toUpperCase()} //` : '—');
-    setText('next-event-name',    ev.name || '—');
-
-    const datesEl = $('next-event-dates');
-    if (datesEl) datesEl.innerHTML = `${fmtDate(ev.start_date)}<br>— ${fmtDate(ev.end_date)}`;
-
-    if (ev.start_date) {
-      setText('next-event-year', new Date(ev.start_date).getUTCFullYear());
-      _setCountdownTarget(ev.start_date);
+    // NEXT EVENT — echt bevorstehend, Countdown ergibt hier tatsächlich Sinn.
+    const nextCard = $('next-event-card');
+    if (nextEvs.length) {
+      const ev = nextEvs[0];
+      _homeNextEventId = ev.id;
+      setText('next-event-name', ev.location || ev.name || '—');
+      const dateStr = ev.start_date ? `${fmtDate(ev.start_date)} – ${fmtDate(ev.end_date)}` : '—';
+      setText('next-event-sub', dateStr);
+      if (ev.start_date) _setCountdownTarget(ev.start_date);
+      if (nextCard) nextCard.style.display = '';
+    } else if (nextCard) {
+      nextCard.style.display = 'none';
     }
   } catch (err) {
-    console.error('[loadNextEvent]', err);
+    console.error('[loadHomeEvents]', err);
   }
 }
 
@@ -2462,7 +2730,8 @@ async function _fetchAndRenderResults(eventId) {
   if (!eventId) return;
 
   setText('themed-results-hdr', 'RESULTS — LOADING…');
-  setHTML('themed-results-tbody', emptyRow(8, 'LOADING…'));
+  setHTML('themed-results-tbody', emptyRow(7, 'LOADING…'));
+  setHTML('themed-results-slim-tbody', emptyRow(4, 'LOADING…'));
 
   // Event-Objekt aus Cache holen
   const ev = _themedEvents.find(e => e.id === eventId) || {};
@@ -2471,11 +2740,12 @@ async function _fetchAndRenderResults(eventId) {
 
   // Event Info Panel befüllen
   setText('ev-info-hdr',       `EVENT INFO — ${rdLabel} ${evLabel}`.trim());
-  setText('ev-info-eyebrow',   ev.location ? `// ${ev.location.toUpperCase()} //` : '—');
-  setText('ev-info-name',      ev.name || '—');
+  setText('ev-info-name',      ev.location || ev.name || '—');
   const narEl = $('ev-info-narrative');
-  if (narEl) narEl.textContent = ev.narrative || '';
-  setText('ev-info-location',  ev.location || '—');
+  if (narEl) {
+    narEl.textContent = ev.narrative || '';
+    narEl.style.display = ev.narrative ? '' : 'none';
+  }
   setText('ev-info-start',     fmtDate(ev.start_date));
   setText('ev-info-end',       fmtDate(ev.end_date));
 
@@ -2501,7 +2771,8 @@ async function _fetchAndRenderResults(eventId) {
     if (!tbody) return;
 
     if (!results.length) {
-      tbody.innerHTML = emptyRow(8, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
+      tbody.innerHTML = emptyRow(7, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
+      setHTML('themed-results-slim-tbody', emptyRow(4, 'NO RESULTS YET', 'Results appear as drivers finish the event.'));
       setText('themed-results-hdr', `${rdLabel} ${evLabel} — NO DATA`.trim());
       return;
     }
@@ -2526,7 +2797,7 @@ async function _fetchAndRenderResults(eventId) {
           const sr = stageIdx[st.id]?.[r.driver_name];
           if (!sr) return `<td style="color:#555;">—</td>`;
           const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
-          return `<td ${cls}>${sr.time_str || '—'}</td>`;
+          return `<td ${cls}>${fmtStageTime(sr.time_str) || '—'}</td>`;
         }).join('');
         const hdrs = stages.map(st =>
           `<td style="font-size:10px;color:var(--red);letter-spacing:1px;">SS${st.stage_number}</td>`
@@ -2534,7 +2805,7 @@ async function _fetchAndRenderResults(eventId) {
         stageRow = `
           <tr id="${rowId}" style="display:none;background:#0a0a0a;">
             <td></td>
-            <td colspan="${7 + stages.length}" style="padding:4px 8px;">
+            <td colspan="${6 + stages.length}" style="padding:4px 8px;">
               <table style="width:100%;border-collapse:collapse;font-size:12px;">
                 <tr>${hdrs}</tr>
                 <tr>${cells}</tr>
@@ -2545,16 +2816,51 @@ async function _fetchAndRenderResults(eventId) {
 
       return `
         <tr${dnf ? ' style="opacity:.55"' : ''} style="cursor:pointer;" onclick="toggleStageRow('${rowId}')">
-          <td class="${rankClass(i)}">${posStr}</td>
-          <td>${escapeHtml(r.driver_name) || '—'}</td>
-          <td style="font-size:12px;color:#aaa;">${escapeHtml(r.vehicle) || '—'}</td>
-          <td>${r.time || '—'}</td>
-          <td>${r.base_points ?? '—'}</td>
-          <td class="ev">${crStr}</td>
-          <td class="ev">${fmtPts(r.cr_points)}</td>
-          <td class="ev" style="color:var(--green);">${fmtPts(r.total_points)}</td>
+          <td class="${rankClass(i)}" data-label="#">${posStr}</td>
+          <td data-label="DRIVER">${escapeHtml(r.driver_name) || '—'}</td>
+          <td style="font-size:12px;color:#aaa;" data-label="VEHICLE">${escapeHtml(r.vehicle) || '—'}</td>
+          <td data-label="TIME">${fmtStageTime(r.time) || '—'}</td>
+          <td data-label="BASE">${r.base_points ?? '—'}</td>
+          <td class="ev" data-label="×CR">${crStr}</td>
+          <td class="ev" style="color:var(--green);" data-label="TOTAL">${fmtPts(r.total_points)}</td>
         </tr>${stageRow}`;
     }).join('');
+
+    // Schlanke Mobile-Tabelle: #, DRIVER, VEHICLE, TOTAL fix sichtbar,
+    // TIME/BASE/×CR + einzelne Stage-Zeiten (SS1..SSn) im Tap-Detail.
+    const slimTbody = $('themed-results-slim-tbody');
+    if (slimTbody) {
+      slimTbody.innerHTML = results.map((r, i) => {
+        const dnf    = r.is_dnf;
+        const posStr = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
+        const crStr  = r.cr_multiplier != null ? Number(r.cr_multiplier).toFixed(2) : '—';
+        const rowId  = `results-slim-${i}`;
+
+        const stageBadges = stages.map(st => {
+          const sr   = stageIdx[st.id]?.[r.driver_name];
+          const best = sr?.stage_position === 1;
+          return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || '—'}</div></div>`;
+        }).join('');
+
+        return `
+          <tr${dnf ? ' style="opacity:.55"' : ''} onclick="toggleSlimDetail('${rowId}')">
+            <td class="${rankClass(i)}">${posStr}</td>
+            <td>${escapeHtml(r.driver_name) || '—'}</td>
+            <td style="font-size:12px;color:#aaa;">${escapeHtml(r.vehicle) || '—'}</td>
+            <td class="ev" style="color:var(--green);">${fmtPts(r.total_points)}</td>
+          </tr>
+          <tr class="slim-detail-row" id="${rowId}">
+            <td colspan="4">
+              <div class="slim-detail-inner">
+                <div class="slim-badge"><div class="slim-badge-lbl">TIME</div><div class="slim-badge-val">${fmtStageTime(r.time) || '—'}</div></div>
+                <div class="slim-badge"><div class="slim-badge-lbl">BASE</div><div class="slim-badge-val">${r.base_points ?? '—'}</div></div>
+                <div class="slim-badge"><div class="slim-badge-lbl">×CR</div><div class="slim-badge-val">${crStr}</div></div>
+              </div>
+              ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
+            </td>
+          </tr>`;
+      }).join('');
+    }
 
     // Header aktualisieren
     const finishers = results.filter(r => !r.is_dnf).length;
@@ -2573,7 +2879,8 @@ async function _fetchAndRenderResults(eventId) {
 
   } catch (err) {
     console.error('[_fetchAndRenderResults]', err);
-    setHTML('themed-results-tbody', emptyRow(8, 'ERROR', 'Could not load results.'));
+    setHTML('themed-results-tbody', emptyRow(7, 'ERROR', 'Could not load results.'));
+    setHTML('themed-results-slim-tbody', emptyRow(4, 'ERROR', 'Could not load results.'));
   }
 }
 
@@ -2583,11 +2890,18 @@ function toggleStageRow(rowId) {
   if (row) row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
 }
 
+/** Öffnet/schließt den "Schlank + Tap"-Detailbereich einer mobilen Tabellenzeile. */
+function toggleSlimDetail(rowId) {
+  const row = document.getElementById(rowId);
+  if (row) row.classList.toggle('open');
+}
+
 /**
  * Championship Standings — gefiltert nach _themedChampId, sortiert nach round_number.
  */
 async function loadStandings() {
   setHTML('standings-tbody', emptyRow(10, 'LOADING…'));
+  setHTML('standings-slim-tbody', emptyRow(5, 'LOADING…'));
 
   if (!_themedChampId) {
     // Championship noch nicht geladen — kurz warten und nochmal
@@ -2610,6 +2924,7 @@ async function loadStandings() {
 
     if (!results.length) {
       setHTML('standings-tbody', emptyRow(10, 'NO STANDINGS DATA', 'Standings appear after the first event.'));
+      setHTML('standings-slim-tbody', emptyRow(5, 'NO STANDINGS DATA', 'Standings appear after the first event.'));
       setText('standings-hdr', 'CHAMPIONSHIP STANDINGS — NO DATA');
       return;
     }
@@ -2671,8 +2986,9 @@ async function loadStandings() {
     setText('standings-hdr', `${champName} — STANDINGS`);
     setText('standings-hdr-right', `${evOrder.length} ROUNDS`);
 
-    // Tabellen-Header dynamisch bauen (eine Spalte pro Runde)
-    const theadRow = document.querySelector('#tab-standings table thead tr');
+    // Tabellen-Header dynamisch bauen (eine Spalte pro Runde) — nur in der
+    // vollen Desktop-Tabelle; die schlanke Mobile-Tabelle hat feste Spalten.
+    const theadRow = document.querySelector('#tab-standings .full-wrap table thead tr');
     if (theadRow) {
       const roundHdrs = evs.map(ev =>
         `<th title="${escapeHtml(ev.name || ev.location || '')}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
@@ -2689,20 +3005,55 @@ async function loadStandings() {
         const loyal  = d.vehicles.size === 1 ? '<span style="color:var(--green);">✓ +50</span>' : '—';
 
         const roundCells = evOrder.map(evId => {
+          const rd  = evs.find(e => e.id === evId);
+          const lbl = `R${rd?.round_number ?? '?'}`;
           const pts = d.roundPts[evId];
           return pts != null
-            ? `<td style="font-size:12px;color:#ccc;">${fmtPts(pts)}</td>`
-            : `<td style="font-size:12px;color:#555;">—</td>`;
+            ? `<td style="font-size:12px;color:#ccc;" data-label="${lbl}">${fmtPts(pts)}</td>`
+            : `<td style="font-size:12px;color:#555;" data-label="${lbl}">—</td>`;
         }).join('');
 
         return `
           <tr>
+            <td class="${rankClass(i)}" data-label="#">${String(i + 1).padStart(2, '0')}</td>
+            <td data-label="DRIVER">${escapeHtml(d.name)}</td>
+            <td style="font-size:12px;color:#aaa;" data-label="CAR">${escapeHtml(carStr)}</td>
+            ${roundCells}
+            <td class="ev" style="color:var(--green);font-weight:bold;" data-label="TOTAL">${fmtPts(d.total)}</td>
+            <td class="ev" data-label="LOYALTY">${loyal}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    // Schlanke Mobile-Tabelle: #, DRIVER, VEHICLE, TOTAL, LOYALTY fix sichtbar,
+    // Runden-Aufschlüsselung (R1..Rn) im Tap-Detail darunter.
+    const slimTheadRow = $('standings-slim-thead-row');
+    if (slimTheadRow) slimTheadRow.innerHTML = `<th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TOTAL</th><th>LOYALTY</th>`;
+
+    const slimTbody = $('standings-slim-tbody');
+    if (slimTbody) {
+      slimTbody.innerHTML = sorted.map((d, i) => {
+        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : `${d.vehicles.size} cars`;
+        const loyal  = d.vehicles.size === 1 ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+        const rowId  = `standings-slim-${i}`;
+
+        const roundBadges = evOrder.map(evId => {
+          const rd  = evs.find(e => e.id === evId);
+          const lbl = `R${rd?.round_number ?? '?'}`;
+          const pts = d.roundPts[evId];
+          return `<div class="slim-badge"><div class="slim-badge-lbl">${lbl}</div><div class="slim-badge-val">${pts != null ? fmtPts(pts) : '—'}</div></div>`;
+        }).join('');
+
+        return `
+          <tr onclick="toggleSlimDetail('${rowId}')">
             <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
             <td>${escapeHtml(d.name)}</td>
-            <td style="font-size:12px;color:#aaa;">${escapeHtml(carStr)}</td>
-            ${roundCells}
+            <td style="font-size:12px;color:#aaa;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(carStr)}</td>
             <td class="ev" style="color:var(--green);font-weight:bold;">${fmtPts(d.total)}</td>
             <td class="ev">${loyal}</td>
+          </tr>
+          <tr class="slim-detail-row" id="${rowId}">
+            <td colspan="5"><div class="slim-detail-inner">${roundBadges}</div></td>
           </tr>`;
       }).join('');
     }
@@ -2713,6 +3064,7 @@ async function loadStandings() {
   } catch (err) {
     console.error('[loadStandings]', err);
     setHTML('standings-tbody', emptyRow(10, 'ERROR', 'Could not load standings.'));
+    setHTML('standings-slim-tbody', emptyRow(5, 'ERROR', 'Could not load standings.'));
   }
 }
 
@@ -2771,7 +3123,7 @@ async function renderTeamStandings(teams, driverMap, evs, evOrder) {
   setText('standings-hdr', `${champName} — TEAM STANDINGS`);
   setText('standings-hdr-right', `${evOrder.length} ROUNDS`);
 
-  const theadRow = document.querySelector('#tab-standings table thead tr');
+  const theadRow = document.querySelector('#tab-standings .full-wrap table thead tr');
   if (theadRow) {
     const roundHdrs = evs.map(ev =>
       `<th title="${escapeHtml(ev.name || ev.location || '')}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
@@ -2787,20 +3139,61 @@ async function renderTeamStandings(teams, driverMap, evs, evOrder) {
         ? '<span style="color:var(--green);">✓ +50</span>' : '—';
 
       const roundCells = evOrder.map(evId => {
+        const rd  = evs.find(e => e.id === evId);
+        const lbl = `R${rd?.round_number ?? '?'}`;
         const pts = t.roundPts[evId];
         return pts != null
-          ? `<td style="font-size:12px;color:#ccc;">${fmtPts(pts)}</td>`
-          : `<td style="font-size:12px;color:#555;">—</td>`;
+          ? `<td style="font-size:12px;color:#ccc;" data-label="${lbl}">${fmtPts(pts)}</td>`
+          : `<td style="font-size:12px;color:#555;" data-label="${lbl}">—</td>`;
       }).join('');
 
       return `
         <tr${t.isUnassigned ? ' style="opacity:0.6;"' : ''}>
+          <td class="${t.isUnassigned ? '' : rankClass(i)}" data-label="#">${t.isUnassigned ? '—' : String(i + 1).padStart(2, '0')}</td>
+          <td style="${t.isUnassigned ? '' : `border-left:3px solid ${t.color};padding-left:8px;`}" data-label="TEAM">${escapeHtml(t.name)}</td>
+          <td style="font-size:11px;color:#aaa;" data-label="MEMBERS">${escapeHtml(membersStr)}</td>
+          ${roundCells}
+          <td class="ev" style="color:var(--green);font-weight:bold;" data-label="TOTAL">${fmtPts(t.total)}</td>
+          <td class="ev" data-label="LOYALTY">${loyal}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // Schlanke Mobile-Tabelle (Team-Variante) — MEMBERS ist eine potenziell
+  // lange, kommagetrennte Namensliste und gehört NICHT in die fix sichtbare
+  // Zeile (das war der Grund für den horizontalen Scroll) — wandert ins
+  // Tap-Detail, Hauptzeile bleibt #, TEAM, TOTAL, LOYALTY.
+  const slimTheadRow = $('standings-slim-thead-row');
+  if (slimTheadRow) slimTheadRow.innerHTML = `<th>#</th><th>TEAM</th><th>TOTAL</th><th>LOYALTY</th>`;
+
+  const slimTbody = $('standings-slim-tbody');
+  if (slimTbody) {
+    slimTbody.innerHTML = rows.map((t, i) => {
+      const membersStr = t.members.join(', ');
+      const loyal = (!t.isUnassigned && t.loyal && t.members.length)
+        ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+      const rowId = `standings-slim-${i}`;
+
+      const roundBadges = evOrder.map(evId => {
+        const rd  = evs.find(e => e.id === evId);
+        const lbl = `R${rd?.round_number ?? '?'}`;
+        const pts = t.roundPts[evId];
+        return `<div class="slim-badge"><div class="slim-badge-lbl">${lbl}</div><div class="slim-badge-val">${pts != null ? fmtPts(pts) : '—'}</div></div>`;
+      }).join('');
+
+      return `
+        <tr${t.isUnassigned ? ' style="opacity:0.6;"' : ''} onclick="toggleSlimDetail('${rowId}')">
           <td class="${t.isUnassigned ? '' : rankClass(i)}">${t.isUnassigned ? '—' : String(i + 1).padStart(2, '0')}</td>
           <td style="${t.isUnassigned ? '' : `border-left:3px solid ${t.color};padding-left:8px;`}">${escapeHtml(t.name)}</td>
-          <td style="font-size:11px;color:#aaa;">${escapeHtml(membersStr)}</td>
-          ${roundCells}
           <td class="ev" style="color:var(--green);font-weight:bold;">${fmtPts(t.total)}</td>
           <td class="ev">${loyal}</td>
+        </tr>
+        <tr class="slim-detail-row" id="${rowId}">
+          <td colspan="4">
+            <div class="slim-detail-label">MEMBERS</div>
+            <div class="slim-detail-extra">${escapeHtml(membersStr)}</div>
+            <div class="slim-detail-inner">${roundBadges}</div>
+          </td>
         </tr>`;
     }).join('');
   }
@@ -2947,7 +3340,25 @@ async function loadChallenges() {
 // ── 8. ELO PAGE ───────────────────────────────────────────────
 
 let _eloData        = [];
-let _eloFilterMode  = 'established';
+let _eloDataOverall = [];   // Snapshot der Overall-Ansicht, siehe loadEloData()
+let _eloResultsAll  = [];   // event_results-Cache (inkl. vehicle), Package 4
+let _eloEventsAll   = [];   // events-Cache (inkl. location), Package 4
+let _eloStateJson   = null; // geparster elo_state.state_json, einmalig gecacht
+// ── Package 4: Track-View Lookups ──────────────────────────────
+// Fahrzeug → Antrieb/Ära und Location → Surface. Eingebettet statt
+// separat gefetcht (Owner-Vorgabe im Briefing, Inhalt identisch zur
+// Python-Seite: 20 Locations, 99 Fahrzeuge).
+const CATEGORY_LOOKUP_VEHICLES = {"Alpine Renault A110 1600 S":{"drivetrain":"RWD","era":"historic"},"Audi Sport quattro S1 (E2)":{"drivetrain":"AWD","era":"historic"},"BMW M1 Procar Rally":{"drivetrain":"RWD","era":"historic"},"BMW M3 Evo Rally":{"drivetrain":"RWD","era":"historic"},"Citroën C2 R2 Max":{"drivetrain":"FWD","era":"modern"},"Citroën C2 Super 1600":{"drivetrain":"FWD","era":"historic"},"Citroën C3 Rally2":{"drivetrain":"AWD","era":"modern"},"Citroën C3 WRC":{"drivetrain":"AWD","era":"modern"},"Citroën C4 WRC":{"drivetrain":"AWD","era":"historic"},"Citroën DS3 WRC '12":{"drivetrain":"AWD","era":"modern"},"Citroën Saxo Super 1600":{"drivetrain":"FWD","era":"historic"},"Citroën Xsara Kit Car":{"drivetrain":"FWD","era":"historic"},"Citroën Xsara WRC":{"drivetrain":"AWD","era":"historic"},"Fiat 131 Abarth Rally":{"drivetrain":"RWD","era":"historic"},"Fiat Grande Punto Abarth S2000":{"drivetrain":"FWD","era":"historic"},"Ford Escort MK2":{"drivetrain":"RWD","era":"historic"},"Ford Escort MK2 McRae Motorsport":{"drivetrain":"RWD","era":"historic"},"Ford Escort Mk 6 Maxi":{"drivetrain":"FWD","era":"historic"},"Ford Escort RS 1600 MK1":{"drivetrain":"RWD","era":"historic"},"Ford Escort RS Cosworth":{"drivetrain":"AWD","era":"historic"},"Ford Fiesta MK8 Rally4":{"drivetrain":"FWD","era":"modern"},"Ford Fiesta R5 MK7 Evo 2":{"drivetrain":"AWD","era":"modern"},"Ford Fiesta Rally2":{"drivetrain":"AWD","era":"modern"},"Ford Fiesta Rally3":{"drivetrain":"AWD","era":"modern"},"Ford Fiesta Rally3 Evo":{"drivetrain":"AWD","era":"modern"},"Ford Fiesta WRC":{"drivetrain":"AWD","era":"modern"},"Ford Focus RS Rally 2001":{"drivetrain":"AWD","era":"historic"},"Ford Focus RS Rally 2008":{"drivetrain":"AWD","era":"historic"},"Ford Focus WRC '99":{"drivetrain":"AWD","era":"historic"},"Ford Puma Rally1 HYBRID (2023)":{"drivetrain":"AWD","era":"modern"},"Ford Puma Rally1 HYBRID (2024)":{"drivetrain":"AWD","era":"modern"},"Ford Puma S1600":{"drivetrain":"FWD","era":"historic"},"Ford RS200":{"drivetrain":"AWD","era":"historic"},"Ford Sierra Cosworth RS500":{"drivetrain":"RWD","era":"historic"},"Hillman Avenger":{"drivetrain":"RWD","era":"historic"},"Hyundai i20 Coupe WRC '21":{"drivetrain":"AWD","era":"modern"},"Hyundai i20 N Rally1 HYBRID (2023)":{"drivetrain":"AWD","era":"modern"},"Hyundai i20 N Rally1 HYBRID (2024)":{"drivetrain":"AWD","era":"modern"},"Hyundai i20 N Rally2":{"drivetrain":"AWD","era":"modern"},"Junior WRC Builder Vehicle":{"drivetrain":"AWD","era":"modern"},"Lancia 037 Evo 2":{"drivetrain":"RWD","era":"historic"},"Lancia Delta HF Integrale":{"drivetrain":"AWD","era":"historic"},"Lancia Delta S4":{"drivetrain":"AWD","era":"historic"},"Lancia Fulvia HF":{"drivetrain":"FWD","era":"historic"},"Lancia Stratos":{"drivetrain":"RWD","era":"historic"},"MG Metro 6R4":{"drivetrain":"AWD","era":"historic"},"MINI Cooper S":{"drivetrain":"FWD","era":"historic"},"MINI Countryman Rally Edition":{"drivetrain":"AWD","era":"historic"},"MINI John Cooper Works WRC":{"drivetrain":"AWD","era":"modern"},"McRae R4":{"drivetrain":"AWD","era":"modern"},"Mitsubishi Galant VR4":{"drivetrain":"AWD","era":"historic"},"Mitsubishi Lancer Evolution VI":{"drivetrain":"AWD","era":"historic"},"Mitsubishi Lancer Evolution X":{"drivetrain":"AWD","era":"modern"},"Opel Adam R2":{"drivetrain":"FWD","era":"modern"},"Opel Ascona 400":{"drivetrain":"RWD","era":"historic"},"Opel Corsa Rally4":{"drivetrain":"FWD","era":"modern"},"Opel Corsa S2000":{"drivetrain":"FWD","era":"historic"},"Opel Kadett C GT/E":{"drivetrain":"RWD","era":"historic"},"Opel Manta 400":{"drivetrain":"RWD","era":"historic"},"Peugeot 205 GTI":{"drivetrain":"FWD","era":"historic"},"Peugeot 205 T16 Evo 2":{"drivetrain":"AWD","era":"historic"},"Peugeot 206 Rally":{"drivetrain":"AWD","era":"historic"},"Peugeot 206 S1600":{"drivetrain":"FWD","era":"historic"},"Peugeot 207 S2000":{"drivetrain":"FWD","era":"historic"},"Peugeot 208 Rally4":{"drivetrain":"FWD","era":"modern"},"Peugeot 208 T16 R5":{"drivetrain":"AWD","era":"modern"},"Peugeot 306 Maxi":{"drivetrain":"FWD","era":"historic"},"Peugeot 309 GTI":{"drivetrain":"FWD","era":"historic"},"Porsche 911 SC RS":{"drivetrain":"RWD","era":"historic"},"Renault 5 Turbo":{"drivetrain":"RWD","era":"historic"},"Renault Clio Rally3":{"drivetrain":"AWD","era":"modern"},"Renault Clio Rally4":{"drivetrain":"FWD","era":"modern"},"Renault Clio S1600":{"drivetrain":"FWD","era":"historic"},"Renault Maxi Mégane":{"drivetrain":"FWD","era":"historic"},"Renault Twingo II":{"drivetrain":"FWD","era":"modern"},"SEAT Córdoba WRC":{"drivetrain":"AWD","era":"historic"},"SEAT Ibiza Kit Car":{"drivetrain":"FWD","era":"historic"},"SUBARU Impreza 1995":{"drivetrain":"AWD","era":"historic"},"SUBARU Impreza 1998":{"drivetrain":"AWD","era":"historic"},"SUBARU Impreza 2001":{"drivetrain":"AWD","era":"historic"},"SUBARU Impreza 2008":{"drivetrain":"AWD","era":"historic"},"SUBARU Legacy RS":{"drivetrain":"AWD","era":"historic"},"SUBARU WRX STI NR4":{"drivetrain":"AWD","era":"modern"},"Talbot Sunbeam Lotus":{"drivetrain":"RWD","era":"historic"},"Toyota GR Yaris Rally1 HYBRID (2023)":{"drivetrain":"AWD","era":"modern"},"Toyota GR Yaris Rally1 HYBRID (2024)":{"drivetrain":"AWD","era":"modern"},"Toyota GR Yaris Rally2":{"drivetrain":"AWD","era":"modern"},"Vauxhall Astra Rally Car":{"drivetrain":"FWD","era":"historic"},"Vauxhall Nova Sport":{"drivetrain":"FWD","era":"historic"},"Volkswagen Golf GTI":{"drivetrain":"FWD","era":"historic"},"Volkswagen Golf IV Kit Car":{"drivetrain":"FWD","era":"historic"},"Volkswagen Polo 2017":{"drivetrain":"AWD","era":"modern"},"Volkswagen Polo GTI R5":{"drivetrain":"AWD","era":"modern"},"Volkswagen Polo R WRC 2013":{"drivetrain":"AWD","era":"modern"},"WRC Builder Vehicle":{"drivetrain":"AWD","era":"modern"},"WRC2 Builder Vehicle":{"drivetrain":"AWD","era":"modern"},"ŠKODA Fabia RS Rally2":{"drivetrain":"AWD","era":"modern"},"ŠKODA Fabia Rally2 Evo":{"drivetrain":"AWD","era":"modern"},"ŠKODA Fabia WRC":{"drivetrain":"AWD","era":"historic"}};
+
+const CATEGORY_LOOKUP_SURFACE = {"AGON by AOC Rally Pacifico":"gravel","Central Europe Rally":"tarmac","Croatia Rally":"tarmac","EKO Acropolis Rally Greece":"gravel","FANATEC Rally Oceania":"gravel","FORUM8 Rally Japan":"tarmac","Guanajuato Rally México":"gravel","ORLEN 80th Rally Poland":"gravel","Rally Chile Bio Bío":"gravel","Rally Estonia":"gravel","Rally Iberia":"tarmac","Rally Italia Sardegna":"gravel","Rally Mediterraneo":"tarmac","Rally Scandia":"snow","Rally Sweden":"snow","Rallye Monte-Carlo":"tarmac","Safari Rally Kenya":"gravel","Secto Rally Finland":"gravel","Tet Rally Latvia":"gravel","Vodafone Rally de Portugal":"gravel"};
+
+// Aktuell gewählter Track: 'overall' | 'historic' | 'modern' | 'gravel' |
+// 'tarmac' | 'snow' | 'AWD' | 'RWD' | 'FWD'. Kein Filter — siehe Briefing:
+// jeder Track ist eine eigenständige Berechnung, kein Filter auf dieselbe
+// Zahl. Datenquelle: elo_state.state_json (siehe eloLoadTrackView() unten).
+let _eloTrack = 'overall';
+
+let _eloFilterMode  = 'active';
 let _eloClubFilter  = 'all';
 let _eloIncludeAll  = false; // true sobald einmal explizit "alle inkl. Provisional" nachgeladen wurde
 let _eloTotalDriverCount = null; // echte Gesamtzahl (sbCount), unabhängig vom aktuell geladenen Filter
@@ -2967,13 +3378,21 @@ async function loadEloData(includeAll = false) {
     const [totalCount, drivers, allResults, deltaMap, clubs, events] = await Promise.all([
       _eloTotalDriverCount != null ? Promise.resolve(_eloTotalDriverCount) : sbCount('drivers'),
       sbAll('drivers', driverParams),
-      sbAll('event_results', 'select=driver_name,event_id,position,is_dnf'),
+      // vehicle + location zusätzlich mitgeladen (keine Extra-Anfrage!) —
+      // werden für die Track-Ansichten (Package 4) gebraucht, um
+      // Ergebniszeilen per CATEGORY_LOOKUP_* auf Era/Antrieb/Surface zu
+      // klassifizieren. Arrays werden unten gecacht, damit eloLoadTrackView()
+      // dieselben Daten wiederverwendet statt event_results/events ein
+      // zweites Mal zu laden.
+      sbAll('event_results', 'select=driver_name,event_id,position,is_dnf,vehicle'),
       fetchEloDeltaMap(7),
       sb('clubs',      'select=club_id,name'),
-      sbAll('events',  'select=id,club_id'),
+      sbAll('events',  'select=id,club_id,location'),
     ]);
     _eloIncludeAll = includeAll;
     if (totalCount != null) _eloTotalDriverCount = totalCount;
+    _eloResultsAll = allResults;
+    _eloEventsAll  = events;
 
     if (!drivers.length) return;
 
@@ -3020,9 +3439,10 @@ async function loadEloData(includeAll = false) {
       return {
       name:        d.name,
       country:     d.country || '',
-      elo:         d.elo || 1000,
-      mu:          d.elo_mu != null ? d.elo_mu : (d.elo || 1000),
+      elo:         d.elo || 1500,
+      mu:          d.elo_mu != null ? d.elo_mu : (d.elo || 1500),
       sigma:       d.elo_sigma != null ? d.elo_sigma : 0,
+      k_sigma:     d.elo_k_sigma != null ? d.elo_k_sigma : 0,
       delta:       (past != null && d.elo != null) ? Math.round(d.elo - past) : null,
       starts:      d.starts || 0,
       wins:        d.wins || 0,
@@ -3058,9 +3478,161 @@ async function loadEloData(includeAll = false) {
 
     eloRender();
     renderMostImproved(drivers);
+    // Overall-Datensatz separat sichern — Zurückschalten von einem Track auf
+    // "Overall" muss nicht neu fetchen, sondern nur diese Referenz wieder
+    // aktiv setzen (siehe eloLoadTrackView()).
+    _eloDataOverall = _eloData;
 
   } catch (err) {
     console.error('[loadEloData]', err);
+  }
+}
+
+/**
+ * Row-1-Track-Switcher (Overall/Era/Surface/Drivetrain). KEIN Filter —
+ * jeder Track ist eine eigenständige Berechnung (siehe Briefing). Nur
+ * einer aktiv gleichzeitig, kein Kombinieren (Owner-Entscheidung).
+ * Aktualisiert den aktiven Zustand, den Hinweistext (Δ-7D existiert nur
+ * für Overall) und stößt eloLoadTrackView() für die eigentlichen Daten an.
+ */
+function eloSetTrack(track) {
+  _eloTrack = track || 'overall';
+
+  const overallBtn = $('elo-track-overall');
+  const eraSel = $('elo-track-era');
+  const surfaceSel = $('elo-track-surface');
+  const drivetrainSel = $('elo-track-drivetrain');
+  const hint = $('elo-track-hint');
+
+  if (overallBtn) overallBtn.classList.toggle('active', _eloTrack === 'overall');
+  [eraSel, surfaceSel, drivetrainSel].forEach(sel => {
+    if (!sel) return;
+    const belongsToThisTrack = [...sel.options].some(o => o.value === _eloTrack);
+    sel.classList.toggle('picked', belongsToThisTrack);
+    if (!belongsToThisTrack) sel.value = '';
+  });
+
+  if (hint) {
+    if (_eloTrack === 'overall') {
+      hint.style.display = 'none';
+    } else {
+      hint.style.display = 'block';
+      hint.textContent = `Showing: ${_eloTrack[0].toUpperCase()}${_eloTrack.slice(1)} only — a separate rating with its own ELO/μ/σ, based only on events matching this track. Δ 7D isn't tracked per-track and won't show here.`;
+    }
+  }
+
+  eloLoadTrackView(_eloTrack);
+}
+
+/** Lädt & cacht elo_state.state_json einmalig (kleine, einzeilige Abfrage). */
+async function _getEloState() {
+  if (_eloStateJson) return _eloStateJson;
+  const rows = await sb('elo_state', 'select=state_json&limit=1');
+  if (!rows.length) throw new Error('elo_state ist leer');
+  _eloStateJson = JSON.parse(rows[0].state_json);
+  return _eloStateJson;
+}
+
+/**
+ * Lädt die Daten für einen Track (Era/Surface/Drivetrain) und rendert sie
+ * über die bestehende eloRender()-Pipeline (identisches Datenformat wie
+ * die Overall-Ansicht, deshalb keine eigene Render-Funktion nötig).
+ *
+ * ELO/μ/σ/kσ kommen direkt aus elo_state.state_json (ratings[track][name]),
+ * KEINE Umrechnung nötig (mu-Basis ist 1500, entspricht direkt der
+ * angezeigten ELO-Zahl — bestätigt).
+ *
+ * Wins/Best/DNF%/Starts werden aus den schon geladenen event_results
+ * (inkl. vehicle) + events (inkl. location) neu berechnet, gefiltert auf
+ * die zu diesem Track passenden Zeilen (Owner-Vorgabe im Briefing) — nutzt
+ * die in loadEloData() gecachten Arrays wieder, KEIN zusätzlicher Fetch
+ * dieser (großen) Tabellen.
+ */
+/**
+ * Übersetzt den ungeprefixten Frontend-Track-Namen ('historic', 'gravel',
+ * 'AWD', ...) in den tatsächlichen, geprefixten Key in
+ * elo_state.state_json.ratings ('era:historic', 'surface:gravel',
+ * 'drivetrain:AWD', ...). Backend (elo_categories.py/elo_state.py) speichert
+ * IMMER mit Kategorie-Präfix (bestätigt per CSV-Export), die Dropdown-Werte
+ * im HTML sind bewusst ohne Präfix (kürzer für die UI) — ohne diese Übersetzung
+ * ist state.ratings[track] immer leer, komplett stumm (kein Error, einfach
+ * 0 Ergebnisse), was wie ein hängender Ladevorgang aussieht.
+ */
+function trackStateKey(track) {
+  if (['historic', 'modern'].includes(track)) return `era:${track}`;
+  if (['gravel', 'tarmac', 'snow'].includes(track)) return `surface:${track}`;
+  if (['AWD', 'RWD', 'FWD'].includes(track)) return `drivetrain:${track}`;
+  return track;
+}
+
+async function eloLoadTrackView(track) {
+  if (track === 'overall') {
+    _eloData = _eloDataOverall;
+    eloRender();
+    return;
+  }
+
+  setHTML('elo-full-tbody', emptyRow(12, 'LOADING…', `Computing "${track}" ratings…`));
+  setHTML('elo-full-slim-tbody', emptyRow(6, 'LOADING…', `Computing "${track}" ratings…`));
+
+  try {
+    const state    = await _getEloState();
+    const ratings  = state?.ratings?.[trackStateKey(track)] || {};
+    const isVehicleTrack = ['historic', 'modern', 'AWD', 'RWD', 'FWD'].includes(track);
+
+    const evLocById = {};
+    _eloEventsAll.forEach(e => { evLocById[e.id] = e.location; });
+
+    const matchesTrack = (r) => {
+      if (isVehicleTrack) {
+        const info = CATEGORY_LOOKUP_VEHICLES[r.vehicle];
+        return !!info && (info.era === track || info.drivetrain === track);
+      }
+      return CATEGORY_LOOKUP_SURFACE[evLocById[r.event_id]] === track;
+    };
+
+    // Wins/Best/DNF% je Fahrer, nur aus den zum Track passenden Zeilen
+    const stats = {};
+    _eloResultsAll.forEach(r => {
+      if (!r.driver_name || !matchesTrack(r)) return;
+      const s = stats[r.driver_name] || (stats[r.driver_name] = { starts: 0, wins: 0, best: null, dnfs: 0 });
+      s.starts++;
+      if (r.is_dnf) { s.dnfs++; return; }
+      const pos = parseInt(r.position) || null;
+      if (pos === 1) s.wins++;
+      if (pos != null && (s.best == null || pos < s.best)) s.best = pos;
+    });
+
+    _eloData = Object.entries(ratings).map(([name, r]) => {
+      const s = stats[name] || null;
+      const overallEntry = _eloDataOverall.find(od => od.name === name);
+      const starts = s ? s.starts : (r.events_played || 0);
+      return {
+        name, country: overallEntry?.country || '',
+        elo: Math.round(r.mu), mu: r.mu, sigma: r.sigma, k_sigma: r.k_sigma,
+        delta: null, // Δ 7D existiert nur für Overall (siehe Hinweistext)
+        starts,
+        wins: s ? s.wins : 0,
+        best: s && s.best != null ? `P${s.best}` : '—',
+        dnfRate: s && s.starts ? (100 * s.dnfs / s.starts) : null,
+        clubIds: overallEntry?.clubIds || [],
+        established: starts >= 20,
+        provisional: starts < 5,
+        // Inaktivität ist kalenderbasiert (letztes Event, admin_api.py) und
+        // NICHT track-spezifisch — dieselbe Zahl gilt für alle Tracks. Das
+        // Flag steckt schon in state.driver_inactive (wird im selben Sync
+        // geschrieben wie die Ratings), war hier nur bisher ungenutzt/hart
+        // auf false gesetzt — dadurch griff der Active/Inactive-Filter in
+        // Track-Ansichten gar nicht.
+        inactive: !!(state?.driver_inactive?.[name]),
+      };
+    }).sort((a, b) => b.elo - a.elo);
+
+    eloRender();
+  } catch (err) {
+    console.error('[eloLoadTrackView]', err);
+    setHTML('elo-full-tbody', emptyRow(12, 'ERROR', `Could not load "${track}" data — ${err.message}`));
+    setHTML('elo-full-slim-tbody', emptyRow(6, 'ERROR', `Could not load "${track}" data.`));
   }
 }
 
@@ -3075,18 +3647,23 @@ function eloClub(clubId, el) {
 
 async function eloFilter(mode, el) {
   _eloFilterMode = mode;
-  document.querySelectorAll('#page-elo .event-selector .ev-btn').forEach(b => {
+  document.querySelectorAll('#page-elo .elo-filter-bar .ev-btn').forEach(b => {
     if (b.getAttribute('onclick')?.includes('eloFilter')) b.classList.remove('active');
   });
   if (el) el.classList.add('active');
 
-  // "All Drivers" (inkl. Provisional, <5 Starts) ist NICHT im Standard-Fetch
-  // enthalten (Performance, siehe loadEloData()-Kommentar) — erst hier auf
-  // Nachfrage nachladen, statt es immer im Voraus mitzuschleppen.
-  if (mode === 'all' && !_eloIncludeAll) {
+  // "All Drivers" (inkl. Provisional, <5 Starts) — inzwischen (Session 8)
+  // Standard-Fetch schon beim ersten ELO-Seitenaufruf (siehe loadHome()-
+  // Kommentar), dieser Nachlade-Zweig bleibt als Absicherung bestehen,
+  // falls _eloIncludeAll aus irgendeinem Grund doch mal false ist —
+  // betrifft auch 'active'/'inactive', nicht nur 'all': beide sind eine
+  // eigene Dimension zu Established und dürfen nicht heimlich darauf
+  // verengt sein.
+  if (['all', 'active', 'inactive'].includes(mode) && !_eloIncludeAll) {
+    const originalLabel = el ? el.textContent : '';
     if (el) el.textContent = 'Loading…';
     await loadEloData(true);
-    if (el) el.textContent = 'All Drivers';
+    if (el) el.textContent = originalLabel;
     return; // loadEloData() ruft eloRender() selbst schon auf
   }
   eloRender();
@@ -3109,22 +3686,57 @@ function eloRender() {
   tbody.innerHTML = data.length
     ? data.map((d, i) => `
         <tr class="${d.inactive ? 'elo-row-inactive' : ''}">
-          <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
-          <td>${escapeHtml(d.country)} ${escapeHtml(d.name)}</td>
-          <td class="ev">${d.elo}</td>
-          <td>${d.mu != null ? Math.round(d.mu) : '—'}</td>
-          <td>${d.sigma != null ? Math.round(d.sigma) : '—'}</td>
-          <td>${deltaHTML(d.delta)}</td>
-          <td>${d.starts}</td>
-          <td>${d.wins}</td>
-          <td>${d.best}</td>
-          <td>${dnfRateHTML(d.dnfRate)}</td>
-          <td>${d.inactive ? '<span style="color:#555;font-size:12px;">INACTIVE</span>' : (d.provisional ? '<span style="color:#888;font-size:12px;">PROVISIONAL</span>' : statusBadge(d.established))}</td>
+          <td class="${rankClass(i)}" data-label="#">${String(i + 1).padStart(2, '0')}</td>
+          <td data-label="DRIVER">${escapeHtml(d.country)} ${escapeHtml(d.name)}</td>
+          <td class="ev" data-label="ELO">${d.elo}</td>
+          <td data-label="μ">${d.mu != null ? Math.round(d.mu) : '—'}</td>
+          <td data-label="σ">${d.sigma != null ? Math.round(d.sigma) : '—'}</td>
+          <td data-label="kσ">${d.k_sigma != null ? Math.round(d.k_sigma) : '—'}</td>
+          <td data-label="Δ 7D">${deltaHTML(d.delta)}</td>
+          <td data-label="STARTS">${d.starts}</td>
+          <td data-label="WINS">${d.wins}</td>
+          <td data-label="BEST">${d.best}</td>
+          <td data-label="DNF%">${dnfRateHTML(d.dnfRate)}</td>
+          <td data-label="STATUS">${d.inactive ? '<span style="color:#555;font-size:12px;">INACTIVE</span>' : (d.provisional ? '<span style="color:#888;font-size:12px;">PROVISIONAL</span>' : statusBadge(d.established))}</td>
         </tr>`).join('')
     : emptyRow(11,
         _eloData.length ? 'NO RESULTS' : 'LOADING…',
         _eloData.length ? 'No drivers match the current filter.' : 'Fetching ELO data from Supabase…'
       );
+
+  const slimTbody = $('elo-full-slim-tbody');
+  if (slimTbody) {
+    slimTbody.innerHTML = data.length
+      ? data.map((d, i) => {
+          const rowId = `elo-slim-${i}`;
+          const statusHTML = d.inactive ? '<span style="color:#555;">INACTIVE</span>' : (d.provisional ? '<span style="color:#888;">PROVISIONAL</span>' : statusBadge(d.established));
+          return `
+            <tr class="${d.inactive ? 'elo-row-inactive' : ''}" onclick="toggleSlimDetail('${rowId}')">
+              <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
+              <td>${escapeHtml(d.country)} ${escapeHtml(d.name)}</td>
+              <td class="ev">${d.elo}</td>
+              <td>${d.sigma != null ? Math.round(d.sigma) : '—'}</td>
+              <td>${dnfRateHTML(d.dnfRate)}</td>
+              <td>${deltaHTML(d.delta)}</td>
+            </tr>
+            <tr class="slim-detail-row" id="${rowId}">
+              <td colspan="6">
+                <div class="slim-detail-inner">
+                  <div class="slim-badge"><div class="slim-badge-lbl elo-th-info" data-info="mu">μ</div><div class="slim-badge-val">${d.mu != null ? Math.round(d.mu) : '—'}</div></div>
+                  <div class="slim-badge"><div class="slim-badge-lbl elo-th-info" data-info="ksigma">kσ</div><div class="slim-badge-val">${d.k_sigma != null ? Math.round(d.k_sigma) : '—'}</div></div>
+                  <div class="slim-badge"><div class="slim-badge-lbl">STATUS</div><div class="slim-badge-val">${statusHTML}</div></div>
+                  <div class="slim-badge"><div class="slim-badge-lbl">STARTS</div><div class="slim-badge-val">${d.starts}</div></div>
+                  <div class="slim-badge"><div class="slim-badge-lbl">WINS</div><div class="slim-badge-val">${d.wins}</div></div>
+                  <div class="slim-badge"><div class="slim-badge-lbl">BEST</div><div class="slim-badge-val">${d.best}</div></div>
+                </div>
+              </td>
+            </tr>`;
+        }).join('')
+      : emptyRow(6,
+          _eloData.length ? 'NO RESULTS' : 'LOADING…',
+          _eloData.length ? 'No drivers match the current filter.' : 'Fetching ELO data from Supabase…'
+        );
+  }
 
   setText('elo-result-count', `${data.length} driver${data.length !== 1 ? 's' : ''} shown`);
 
@@ -3139,7 +3751,9 @@ function eloRender() {
 const ELO_INFO_TEXT = {
   elo:   'ELO — The conservative overall rating (μ − 1.5×σ). This is the value used for ranking: high uncertainty pulls it down until more races have been driven.',
   mu:    'μ (Mu) — The estimated true driving strength. Rises with good results against strong opponents, drops with weak results or inactivity.',
-  sigma: 'σ (Sigma) — The uncertainty of the estimate. High after few starts or a long break, drops with more events. The lower it is, the more reliable the ELO value.',
+  sigma:  'σ (Sigma) — The uncertainty of the estimate. High after few starts or a long break, drops with more events. The lower it is, the more reliable the ELO value.',
+  ksigma: 'kσ (Momentum) — How much your rating can still move. Starts high for new drivers and slowly comes down the more you race — much slower than σ, so it sticks around for hundreds of races instead of just a few dozen.',
+  trackviews: 'How to use: pick ONE track above (or leave it on Overall). Everything below — Filter, Club, Search — then applies within that track, same as it does for Overall. Track views (Era / Surface / Drivetrain) are each their own independent rating, not a filter on your overall number: only events matching that track count (e.g. only Gravel rallies for the Gravel view), so it has its own ELO/μ/σ/kσ and usually fewer events than Overall. Δ 7D isn\'t tracked per track and won\'t show outside Overall. Only one track at a time — no combining (e.g. no "Gravel + AWD" at once), and no comparing numbers across tracks — a Gravel ELO and a Modern ELO aren\'t on the same scale.',
 };
 
 document.addEventListener('click', e => {
@@ -3149,10 +3763,11 @@ document.addEventListener('click', e => {
   if (th) {
     const key = th.dataset.info;
     popup.textContent = ELO_INFO_TEXT[key] || '';
-    const thRect   = th.getBoundingClientRect();
-    const wrapRect = th.closest('.elo-wrap')?.getBoundingClientRect() || {left:0, top:0};
-    popup.style.left = Math.max(0, thRect.left - wrapRect.left) + 'px';
-    popup.style.top  = (thRect.bottom - wrapRect.top + 4) + 'px';
+    const thRect = th.getBoundingClientRect();
+    const popupWidth = 260; // matches max-width in the popup's inline style
+    const left = Math.min(thRect.left, window.innerWidth - popupWidth - 8);
+    popup.style.left = Math.max(8, left) + 'px';
+    popup.style.top  = (thRect.bottom + 4) + 'px';
     popup.style.display = 'block';
     e.stopPropagation();
   } else if (!e.target.closest('#elo-info-popup')) {
@@ -3384,6 +3999,8 @@ async function crCalculate() {
 
   const tbody = $('cr-preview-tbody');
   if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-title">LOADING…</div><div class="empty-sub">Fetching RaceNet time trial leaderboards. This may take 30–60 seconds.</div></div></td></tr>`;
+  const slimTbodyLoading = $('cr-preview-slim-tbody');
+  if (slimTbodyLoading) slimTbodyLoading.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div><div class="empty-sub">Fetching RaceNet time trial leaderboards. This may take 30–60 seconds.</div></div></td></tr>`;
 
   try {
     const res  = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
@@ -3406,6 +4023,8 @@ async function crCalculate() {
 
     if (!results.length) {
       if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
+      const slimTbodyEmpty = $('cr-preview-slim-tbody');
+      if (slimTbodyEmpty) slimTbodyEmpty.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
       setText('cr-status', 'No results for selected filters.');
       return;
     }
@@ -3417,15 +4036,39 @@ async function crCalculate() {
     if (tbody) {
       tbody.innerHTML = results.map((r, i) => `
         <tr>
-          <td>${i + 1}</td>
-          <td style="text-align:left;">${escapeHtml(r.vehicle)}</td>
-          <td style="font-size:11px;color:#888;">${r.era || '—'}</td>
-          <td>${r.n}</td>
-          <td>${fmtMs(r.avg_top_time_ms)}</td>
-          <td>${fmtMs(r.car_avg_ms)}</td>
-          <td style="color:var(--green);">${r.cr.toFixed(4)}</td>
-          <td><span class="cr-badge ${crBadge(r.cr)}">${crLabel(r.cr)}</span></td>
+          <td data-label="#">${i + 1}</td>
+          <td style="text-align:left;" data-label="VEHICLE">${escapeHtml(r.vehicle)}</td>
+          <td style="font-size:11px;color:#888;" data-label="ERA">${r.era || '—'}</td>
+          <td data-label="N">${r.n}</td>
+          <td data-label="AVG TOP TIME">${fmtMs(r.avg_top_time_ms)}</td>
+          <td data-label="CAR AVG">${fmtMs(r.car_avg_ms)}</td>
+          <td style="color:var(--green);" data-label="CR">${r.cr.toFixed(4)}</td>
+          <td data-label="TIER"><span class="cr-badge ${crBadge(r.cr)}">${crLabel(r.cr)}</span></td>
         </tr>`).join('');
+    }
+
+    const slimTbody = $('cr-preview-slim-tbody');
+    if (slimTbody) {
+      slimTbody.innerHTML = results.map((r, i) => {
+        const rowId = `cr-preview-slim-${i}`;
+        return `
+          <tr onclick="toggleSlimDetail('${rowId}')">
+            <td>${i + 1}</td>
+            <td style="text-align:left;">${escapeHtml(r.vehicle)}</td>
+            <td style="color:var(--green);">${r.cr.toFixed(4)}</td>
+            <td><span class="cr-badge ${crBadge(r.cr)}">${crLabel(r.cr)}</span></td>
+          </tr>
+          <tr class="slim-detail-row" id="${rowId}">
+            <td colspan="4">
+              <div class="slim-detail-inner">
+                <div class="slim-badge"><div class="slim-badge-lbl">CLASS</div><div class="slim-badge-val">${r.era || '—'}</div></div>
+                <div class="slim-badge"><div class="slim-badge-lbl">N</div><div class="slim-badge-val">${r.n}</div></div>
+                <div class="slim-badge"><div class="slim-badge-lbl">AVG TOP</div><div class="slim-badge-val">${fmtMs(r.avg_top_time_ms)}</div></div>
+                <div class="slim-badge"><div class="slim-badge-lbl">CAR AVG</div><div class="slim-badge-val">${fmtMs(r.car_avg_ms)}</div></div>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
     }
 
     setText('cr-preview-info', `${results.length} vehicles · ${stats.stages_loaded} stages · ${stats.total_entries} entries · exp=${exponent}`);
@@ -3475,8 +4118,8 @@ async function crLoadExisting() {
     }
     tbody.innerHTML = sets.map(s => `
       <tr>
-        <td style="text-align:left;">${escapeHtml(s.name)}</td>
-        <td style="font-size:11px;color:#888;">${s.vehicle_count} vehicle(s)</td>
+        <td style="text-align:left;" data-label="NAME">${escapeHtml(s.name)}</td>
+        <td style="font-size:11px;color:#888;" data-label="VEHICLES">${s.vehicle_count} vehicle(s)</td>
         <td><button data-set-name="${escapeHtml(s.name)}" onclick="crDeleteSet(this.dataset.setName)" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
       </tr>`).join('');
 
@@ -4181,23 +4824,51 @@ async function mbLoadDrivers() {
 async function mbLoadExisting() {
   const champId = $('mb-champ')?.value;
   const tbody = $('mb-existing-tbody');
+  const slimTbody = $('mb-existing-slim-tbody');
   if (!tbody || !champId) return;
 
   const rows = await sb('manual_bonuses', `championship_id=eq.${champId}&select=id,driver_name,event_id,bonus_type,bonus_name,points,note,events(name,round_number)&order=created_at.desc`);
 
-  if (!rows.length) { tbody.innerHTML = emptyRow(7, 'NO MANUAL BONUSES', 'Add bonuses using the form on the left.'); return; }
+  if (!rows.length) {
+    tbody.innerHTML = emptyRow(7, 'NO MANUAL BONUSES', 'Add bonuses using the form on the left.');
+    if (slimTbody) slimTbody.innerHTML = emptyRow(3, 'NO MANUAL BONUSES', 'Add bonuses using the form on the left.');
+    return;
+  }
   tbody.innerHTML = rows.map(r => {
     const evName = r.events ? `R${r.events.round_number} ${escapeHtml(r.events.name)}` : r.event_id;
     return `<tr>
-      <td>${escapeHtml(r.driver_name)}</td>
-      <td style="font-size:12px;">${evName}</td>
-      <td>${r.bonus_type}</td>
-      <td>${escapeHtml(r.bonus_name) || '—'}</td>
-      <td style="color:var(--green);">+${r.points}</td>
-      <td style="font-size:11px;color:#888;">${escapeHtml(r.note) || '—'}</td>
+      <td data-label="DRIVER">${escapeHtml(r.driver_name)}</td>
+      <td style="font-size:12px;" data-label="EVENT">${evName}</td>
+      <td data-label="TYPE">${r.bonus_type}</td>
+      <td data-label="BONUS">${escapeHtml(r.bonus_name) || '—'}</td>
+      <td style="color:var(--green);" data-label="POINTS">+${r.points}</td>
+      <td style="font-size:11px;color:#888;" data-label="NOTE">${escapeHtml(r.note) || '—'}</td>
       <td><button onclick="mbDelete('${r.id}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
     </tr>`;
   }).join('');
+
+  if (slimTbody) {
+    slimTbody.innerHTML = rows.map((r, i) => {
+      const evName = r.events ? `R${r.events.round_number} ${escapeHtml(r.events.name)}` : r.event_id;
+      const rowId = `mb-slim-${i}`;
+      return `
+        <tr onclick="toggleSlimDetail('${rowId}')">
+          <td>${escapeHtml(r.driver_name)}</td>
+          <td style="color:var(--green);">+${r.points}</td>
+          <td><button onclick="event.stopPropagation(); mbDelete('${r.id}')" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:5px 10px;cursor:pointer;">DEL</button></td>
+        </tr>
+        <tr class="slim-detail-row" id="${rowId}">
+          <td colspan="3">
+            <div class="slim-detail-inner">
+              <div class="slim-badge"><div class="slim-badge-lbl">EVENT</div><div class="slim-badge-val">${evName}</div></div>
+              <div class="slim-badge"><div class="slim-badge-lbl">TYPE</div><div class="slim-badge-val">${r.bonus_type}</div></div>
+              <div class="slim-badge"><div class="slim-badge-lbl">BONUS</div><div class="slim-badge-val">${escapeHtml(r.bonus_name) || '—'}</div></div>
+              <div class="slim-badge" style="grid-column:span 3;"><div class="slim-badge-lbl">NOTE</div><div class="slim-badge-val">${escapeHtml(r.note) || '—'}</div></div>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  }
 }
 
 async function mbAdd() {

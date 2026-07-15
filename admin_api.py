@@ -1171,12 +1171,33 @@ def elo_update():
             log("Starting fresh ELO state")
 
         # ── Championships chronologisch laden ─────────────────────────────
-        champ_rows = sb_get(
-            "championships",
-            "select=id,club_id,name,start_date,end_date&order=start_date.asc"
-        )
+        # Session 8 (Egress-Notfall, 83%+ verbraucht): bei Delta-Syncs
+        # (force=False, der absolute Regelfall — force_reset läuft nur
+        # manuell) NUR Championships der letzten RECENT_WINDOW_DAYS laden,
+        # statt jedes Mal die KOMPLETTE Historie (243 Championships/857
+        # Events/829 Result-Sets). Bereits verarbeitete Events werden über
+        # state.processed_event_ids ohnehin übersprungen — sie bei jedem
+        # 15/30/60-Minuten-Takt erneut aus Supabase zu laden, nur um sie
+        # dann zu ignorieren, war der dominante, unnötige Egress-Posten.
+        # 90 Tage Fenster ist bewusst großzügig über der 6-Wochen-
+        # Inaktivitätsschwelle (INACTIVE_WEEKS weiter unten) gewählt: jeder
+        # Fahrer, der die Schwelle überschreitet, fällt erst nach 90 Tagen
+        # aus dem Fenster — und wird garantiert VORHER schon von einem der
+        # vielen Läufe dazwischen korrekt auf inaktiv gesetzt, bevor er aus
+        # dem Fenster rausfällt. force_reset (explizite Neuaufbau-Anfrage)
+        # lädt weiterhin ausnahmslos ALLES, unverändert wie bisher.
+        from datetime import date, timedelta
+        RECENT_WINDOW_DAYS = 90
+
+        champ_params = "select=id,club_id,name,start_date,end_date&order=start_date.asc"
+        if not force:
+            cutoff = (date.today() - timedelta(days=RECENT_WINDOW_DAYS)).isoformat()
+            champ_params += f"&end_date=gte.{cutoff}"
+
+        champ_rows = sb_get("championships", champ_params)
         champ_rows = [c for c in champ_rows if str(c.get("club_id","")) in club_ids]
-        log(f"Found {len(champ_rows)} championships across clubs")
+        log(f"Found {len(champ_rows)} championships across clubs"
+            + ("" if force else f" (delta sync, last {RECENT_WINDOW_DAYS}d only)"))
 
         # ── Events laden: pro Championship chronologisch nach round_number ─
         # Wir speichern (champ_start_date, round_number, RawEvent) für globale Sortierung
@@ -1293,13 +1314,36 @@ def elo_update():
         drivers_updated = len(state.ratings.get("overall", {}))
         log(f"Processed {drivers_updated} drivers")
 
-        # ── Inaktivitäts-Decay anwenden ───────────────────────────────────
-        # Decay: pro Woche Inaktivität bewegt sich mu um DECAY_PER_WEEK Richtung 1000
-        # Fahrer gilt als inaktiv wenn letztes Event > INACTIVE_WEEKS Wochen her
-        from datetime import date, timedelta
-        DECAY_PER_WEEK  = 8.0   # mu-Punkte pro Woche Richtung Baseline
-        INACTIVE_WEEKS  = 4     # ab wann inaktiv
-        BASELINE_MU     = 1500.0
+        # ── Inaktivitäts-STATUS setzen (KEIN Zahlen-Verfall mehr) ──────────
+        # Bis Session 6: hier lief zusätzlich ein mu/sigma-"Decay" (mu Richtung
+        # 1500, sigma bis auf 350 aufgeblasen). ENTFERNT in dieser Session,
+        # aus zwei Gründen:
+        #   1) Echter Bug gefunden: die Sigma-Formel (sigma *= 1.02**weeks_inactive)
+        #      wurde bei JEDEM /elo/update-Lauf auf den bereits vom letzten Lauf
+        #      inflierten Wert erneut angewendet, nicht wiederholungssicher
+        #      (nicht idempotent). Da grf_sync.py /elo/update bei JEDEM
+        #      Sync-Durchlauf aufruft (auch ohne neue Events, absichtlich, siehe
+        #      Kommentar dort), potenziert sich der Fehler bei einem 10-Minuten-
+        #      Cron: sigma erreicht die 350er-Obergrenze binnen ~5 Läufen (unter
+        #      einer Stunde!), selbst wenn ein Fahrer erst wenige Wochen inaktiv
+        #      ist. Ergebnis: JEDER ausreichend lange inaktive Fahrer landet
+        #      irgendwann exakt beim selben Conservative Rating (975 bei
+        #      mu-Baseline=1500), unabhängig von seinem früheren Karriere-Niveau
+        #      — ein Top10-Allzeit-Fahrer sah am Ende identisch aus wie ein
+        #      mittelmäßiger Fahrer nach derselben Pausenlänge.
+        #   2) Eigentlich unnötig: die Standard-Ansicht ist ohnehin "Active
+        #      Only" — ein reines an/aus-Flag reicht aus, damit inaktive Fahrer
+        #      aus der Standardansicht verschwinden, ohne dass ihre Zahl
+        #      dafür aktiv kaputtgehen muss. Bei Rückkehr eines Fahrers bleibt
+        #      sein Rating jetzt an der Stelle, wo er es verlassen hat, statt
+        #      künstlich Richtung Baseline gewandert zu sein.
+        from datetime import date
+        INACTIVE_WEEKS  = 6     # final entschieden (Session 7). Der ältere,
+                                 # separate 20-Events-Mechanismus in
+                                 # elo_state.py (update_inactivity()) wurde
+                                 # in dieser Session komplett entfernt —
+                                 # driver_inactive wird jetzt AUSSCHLIESSLICH
+                                 # hier gesetzt.
         today = date.today()
 
         overall_ratings = state.ratings.get("overall", {})
@@ -1313,7 +1357,7 @@ def elo_update():
         # bleiben trotzdem vollständig sichtbar (no_date/active/inactive-Summe).
         transition_log = []
         no_date_count = 0
-        for driver_name, rating in overall_ratings.items():
+        for driver_name in overall_ratings.keys():
             last_date_str = driver_last_event_date.get(driver_name)
             if not last_date_str:
                 no_date_count += 1
@@ -1332,16 +1376,12 @@ def elo_update():
                     f"  {driver_name}: last={last_date_str[:10]} days={days_inactive} "
                     f"{'active → INACTIVE' if is_now_inactive else 'INACTIVE → active'}"
                 )
-            if is_now_inactive:
-                decay = DECAY_PER_WEEK * weeks_inactive
-                if rating.mu > BASELINE_MU:
-                    rating.mu = max(BASELINE_MU, rating.mu - decay)
-                elif rating.mu < BASELINE_MU:
-                    rating.mu = min(BASELINE_MU, rating.mu + decay)
-                rating.sigma = min(rating.sigma * 1.02 ** weeks_inactive, 350.0)
-                state.driver_inactive[driver_name] = True
-            else:
-                state.driver_inactive[driver_name] = False
+            state.driver_inactive[driver_name] = is_now_inactive
+            # KEIN mu/sigma/k_sigma-Zugriff mehr hier -- Ratings bleiben exakt
+            # so eingefroren, wie sie beim letzten echten Event des Fahrers
+            # waren, bis er wieder fährt. Gilt automatisch für ALLE Tracks
+            # (overall + surface:*/era:*/drivetrain:*), weil an deren
+            # Zahlen gar nichts mehr angefasst wird.
 
         print(f"\n[INACTIVITY LOG] {len(overall_ratings)} drivers checked, "
               f"{no_date_count} no date, {len(transition_log)} status change(s)")
@@ -1385,6 +1425,7 @@ def elo_update():
                 "elo":             elo_val,
                 "elo_mu":          round(summary.mu, 2),
                 "elo_sigma":       round(summary.sigma, 2),
+                "elo_k_sigma":     round(summary.k_sigma, 2),
                 "elo_events":      summary.events_played,
                 "elo_provisional": summary.is_provisional,
                 "elo_inactive":    summary.is_inactive,
@@ -1394,6 +1435,33 @@ def elo_update():
         log(f"ELO written: {matched} matched, {len(unmatched)} unmatched")
         if unmatched:
             log(f"Unmatched (not in drivers table): {', '.join(unmatched[:10])}")
+
+        # ── Package 4: alle ANDEREN Tracks (surface:*/era:*/drivetrain:*) in
+        # driver_track_ratings schreiben — "overall" bleibt wie bisher in
+        # der drivers-Tabelle, das hier ist zusätzlich, kein Ersatz. ─────────
+        track_upsert_rows = []
+        for track_name in state.all_tracks():
+            if track_name == "overall":
+                continue   # bleibt exklusiv in der drivers-Tabelle, wie bisher
+            track_summaries = summarize_track(state, track_name, include_inactive=True)
+            for summary in track_summaries:
+                if summary.display_name not in driver_names_in_db:
+                    continue   # gleiche Matching-Logik wie beim "overall"-Sync oben
+                track_upsert_rows.append({
+                    "driver_name":     summary.display_name,
+                    "track":           track_name,
+                    "elo":             round(summary.conservative_rating, 1),
+                    "elo_mu":          round(summary.mu, 2),
+                    "elo_sigma":       round(summary.sigma, 2),
+                    "elo_k_sigma":     round(summary.k_sigma, 2),
+                    "elo_events":      summary.events_played,
+                    "elo_provisional": summary.is_provisional,
+                    "elo_inactive":    summary.is_inactive,
+                })
+        if track_upsert_rows:
+            sb_upsert_all("driver_track_ratings", track_upsert_rows, on_conflict="driver_name,track")
+        log(f"Track ratings written: {len(track_upsert_rows)} rows across "
+            f"{len(state.all_tracks()) - 1} tracks (excl. overall)")
 
         # ── Tages-Snapshot für "Delta 7 Tage" schreiben ─────────────────────
         # EIN Eintrag pro Fahrer pro Tag (on_conflict auf driver_name+
