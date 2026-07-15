@@ -2946,9 +2946,20 @@ async function loadStandings() {
       driverMap[name].roundPts[r.event_id] = (driverMap[name].roundPts[r.event_id] || 0) + pts;
     });
 
-    // Best-of-N anwenden: pro Fahrer nur die N besten Runden-Totals summieren.
-    // Läuft VOR dem Team-Zweig, damit Team-Punkte aus bereits gedroppten
-    // Fahrer-Totals gebildet werden (Regel gilt pro Fahrer, nicht pro Team).
+    // Jede Runden-Punktzahl auf die angezeigte (gerundete) Zahl fixieren —
+    // ab hier wird nur noch mit den sichtbaren, gerundeten Werten gerechnet,
+    // damit "Summe der angezeigten Rundenwerte" == "angezeigtes Total" gilt
+    // (WYSIWYG statt Runden-erst-am-Schluss).
+    Object.values(driverMap).forEach(d => {
+      Object.keys(d.roundPts).forEach(evId => {
+        d.roundPts[evId] = Math.round(d.roundPts[evId]);
+      });
+    });
+
+    // Best-of-N anwenden: pro Fahrer nur die N besten (bereits gerundeten)
+    // Runden-Totals summieren. Läuft VOR dem Team-Zweig, damit Team-Punkte
+    // aus bereits gedroppten Fahrer-Totals gebildet werden (Regel gilt pro
+    // Fahrer, nicht pro Team).
     Object.values(driverMap).forEach(d => {
       const roundTotals = Object.values(d.roundPts).sort((a, b) => b - a); // beste zuerst
       const n = bestOf ? Math.min(bestOf, roundTotals.length) : roundTotals.length;
