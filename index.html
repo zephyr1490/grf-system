@@ -1207,14 +1207,148 @@ textarea.inp-std { resize:vertical; }
   </div>
 
   <!-- ══════════════════════════════════════════
-       TEAMED PAGE (placeholder)
+       TEAMED PAGE (Phase 1 — Club 39230, noch keine aktive
+       Championship. Struktur ist 1:1 von Themed übernommen,
+       Standings zeigt direkt die Team-Ansicht (Teamed hostet per
+       Definition nur Team-Championships, kein Einzelfahrer-Zweig
+       nötig). Sobald die aktuell laufende Themed-Team-Championship
+       vorbei ist, wird der temporäre Team-Zweig aus Themed entfernt
+       — siehe Kommentar dort.
   ══════════════════════════════════════════ -->
   <div class="page" id="page-teamed">
-    <div style="background:var(--black);padding:40px;text-align:center;">
-      <div style="font-family:'VT323',monospace;font-size:48px;color:var(--red);margin-bottom:8px;">GRF TEAMED</div>
-      <div style="font-size:12px;color:#444;">Team events coming soon. Team Builder will open when GRF Teamed Season 1 is announced.</div>
+
+    <!-- CHAMPIONSHIP HERO -->
+    <div class="themed-hero">
+      <div class="themed-eyebrow">// GRF TEAMED — SEASON <span id="teamed-champ-season">—</span> //</div>
+      <div class="themed-champ-name" id="teamed-champ-name">—</div>
+      <div class="themed-narrative" id="teamed-champ-narrative">
+        —
+      </div>
+      <div class="themed-meta">
+        <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val">GRF Teamed</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val" id="teamed-champ-season-val">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val" id="teamed-champ-rounds">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Current Round</div><div class="tm-val" id="teamed-champ-current-round">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="teamed-champ-status">—</div></div>
+      </div>
     </div>
+
+    <!-- SUB NAV -->
+    <div class="themed-subnav">
+      <div class="sub-tab active" onclick="showTeamedSubTab('results',this)">Live Results</div>
+      <div class="sub-tab" onclick="showTeamedSubTab('standings',this)">Championship Standings</div>
+      <div class="sub-tab" onclick="showTeamedSubTab('carratings',this)">Car Ratings</div>
+      <div class="sub-tab" onclick="showTeamedSubTab('challenges',this)">Bonus Rules</div>
+    </div>
+
+    <!-- TAB: LIVE RESULTS -->
+    <div class="themed-tab active" id="tab-teamed-results">
+      <div class="event-selector" id="teamed-event-selector">
+        <span class="event-selector-lbl">EVENT:</span>
+        <span style="color:#555;font-size:12px;">Loading events…</span>
+      </div>
+      <div class="live-grid">
+        <div class="live-col">
+          <div class="col-hdr" id="teamed-results-hdr">CURRENT RESULTS — LOADING…
+            <span class="col-hdr-right" style="color:var(--green)">● LIVE</span>
+          </div>
+          <div class="elo-wrap full-wrap">
+            <table class="elo-table">
+              <thead>
+                <tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th><th>BASE</th><th>×CR</th><th>TOTAL</th></tr>
+              </thead>
+              <tbody id="teamed-results-tbody">
+                <tr><td colspan="7"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="elo-wrap slim-wrap">
+            <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR TIME/BASE/CR + STAGE TIMES →</div>
+            <table class="elo-table slim-table">
+              <thead><tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TOTAL</th></tr></thead>
+              <tbody id="teamed-results-slim-tbody">
+                <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="live-col">
+          <div class="col-hdr" id="teamed-ev-info-hdr">EVENT INFO</div>
+          <div style="background:var(--black);margin:6px;padding:12px;" id="teamed-ev-info-panel">
+            <div style="font-family:'VT323',monospace;font-size:32px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;" id="teamed-ev-info-name">—</div>
+            <div style="display:none; border-left:3px solid var(--red-dark);padding:6px 10px;background:rgba(139,0,0,0.06);font-size:13px;color:#999;line-height:1.5;font-style:italic;margin-bottom:12px;" id="teamed-ev-info-narrative"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              <div class="themed-meta-item"><div class="tm-lbl">Entries</div><div class="tm-val" id="teamed-ev-info-entries">—</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="teamed-ev-info-status">—</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val" id="teamed-ev-info-start">—</div></div>
+              <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val" id="teamed-ev-info-end">—</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CHAMPIONSHIP STANDINGS (Team-Ansicht direkt, kein Einzelfahrer-Zweig) -->
+    <div class="themed-tab" id="tab-teamed-standings">
+      <div class="standings-wrap">
+        <div class="col-hdr" style="margin-bottom:6px;" id="teamed-standings-hdr">CHAMPIONSHIP STANDINGS — LOADING…
+          <span class="col-hdr-right" id="teamed-standings-hdr-right"></span>
+        </div>
+      </div>
+      <div class="standings-wrap full-wrap">
+        <table class="standings-table">
+          <thead>
+            <tr>
+              <th>#</th><th>TEAM</th><th>MEMBERS</th>
+              <th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>R5</th>
+              <th>TOTAL PTS</th><th>LOYALTY</th>
+            </tr>
+          </thead>
+          <tbody id="teamed-standings-tbody">
+            <tr><td colspan="10"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="standings-wrap slim-wrap" id="teamed-standings-slim-wrap">
+        <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;" id="teamed-standings-slim-hint">TAP A ROW FOR MEMBERS + ROUND-BY-ROUND POINTS →</div>
+        <table class="standings-table slim-table">
+          <thead>
+            <tr id="teamed-standings-slim-thead-row"><th>#</th><th>TEAM</th><th>TOTAL</th><th>LOYALTY</th></tr>
+          </thead>
+          <tbody id="teamed-standings-slim-tbody">
+            <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: CAR RATINGS -->
+    <div class="themed-tab" id="tab-teamed-carratings">
+      <div class="cr-wrap">
+        <div class="col-hdr" style="margin-bottom:6px;" id="teamed-cr-hdr">CAR RATINGS
+          <span class="col-hdr-right">SET BEFORE SEASON · ADMIN ONLY</span>
+        </div>
+        <table class="cr-table">
+          <thead>
+            <tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>CR</th></tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="4"><div class="empty"><div class="empty-title">NO CAR RATINGS SET</div><div class="empty-sub">Configure via Admin before the season starts.</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: BONUS RULES -->
+    <div class="themed-tab" id="tab-teamed-challenges">
+      <div class="challenge-box" id="teamed-challenges-box">
+        <div class="col-hdr" style="margin-bottom:10px;" id="teamed-challenges-hdr">ACTIVE CHALLENGES — LOADING…</div>
+        <div id="teamed-challenges-list"></div>
+      </div>
+    </div>
+
   </div>
+
 
   <!-- ══════════════════════════════════════════
        HANDBOOK PAGE
@@ -1553,7 +1687,8 @@ textarea.inp-std { resize:vertical; }
             <label class="inp-lbl">RACENET CLUB (Referenz)</label>
             <select id="cs-nm-club" class="inp-std">
               <option value="23799">GRF Themed (23799)</option>
-              <option value="23834">GRF Teamed (23834)</option>
+              <option value="23834">GRF Themed 1980H2 (23834)</option>
+              <option value="39230">GRF Teamed (39230)</option>
             </select>
             <label class="inp-lbl">CHAMPIONSHIP NAME</label>
             <input id="cs-nm-name" type="text" placeholder="e.g. GRF Themed Season 5 — Golden Era" class="inp-std">
@@ -1573,7 +1708,8 @@ textarea.inp-std { resize:vertical; }
             <label class="inp-lbl">CLUB</label>
             <select id="cs-rn-club" onchange="csRnLoadChamps()" class="inp-std">
               <option value="23799">GRF Themed (23799)</option>
-              <option value="23834">GRF Teamed (23834)</option>
+              <option value="23834">GRF Themed 1980H2 (23834)</option>
+              <option value="39230">GRF Teamed (39230)</option>
             </select>
             <button onclick="csRnLoadChamps()" class="btn-gray" style="width:100%;">▶ LOAD FROM RACENET</button>
             <div id="cs-rn-list" style="background:#111; border:1px solid #1a1a1a; min-height:120px; max-height:280px; overflow-y:auto; padding:4px;">
@@ -2343,6 +2479,7 @@ function showPage(name, el) {
   if (el)   el.classList.add('active');
 
   if (name === 'themed')   loadThemedResults();
+  if (name === 'teamed')   loadTeamedResults();
   // Standard-Filter ist 'active' (siehe _eloFilterMode-Default) — das ist
   // eine eigene Dimension zu "Established" (20+ Career-Starts) und sollte
   // nicht heimlich darauf verengt sein. Session 8: genau das ist bisher
@@ -3346,6 +3483,580 @@ async function loadChallenges() {
     list.innerHTML = `<div class="empty"><div class="empty-title">ERROR</div><div class="empty-sub">Could not load challenges.</div></div>`;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// 7b. TEAMED PAGE (Phase 1 — Club 39230)
+// ─────────────────────────────────────────────────────────────────────
+// 1:1 Struktur-Kopie der Themed-Seite (siehe Abschnitt 7 oben), aber
+// eigener Namensraum (State-Variablen, Funktionsnamen, DOM-IDs alle mit
+// "teamed"-Präfix) und eigene Club-ID (39230 statt 23799), damit beide
+// Seiten komplett unabhängig voneinander laufen. Standings zeigt direkt
+// die Team-Ansicht (kein Einzelfahrer-Fallback wie bei Themed), da
+// GRF Teamed per Definition nur Team-Championships hostet.
+//
+// Sobald die aktuell laufende Themed-Team-Championship vorbei ist, wird
+// der temporäre Team-Zweig in loadStandings()/renderTeamStandings()
+// (Abschnitt 7 oben) entfernt — Themed bleibt danach dauerhaft
+// Einzelfahrer-only. Diese Sektion hier ist davon unberührt.
+// ═══════════════════════════════════════════════════════════════════════
+
+let _teamedChampId       = null;  // aktuelle championship_id (club 39230)
+let _teamedActiveEventId = null;  // aktives Event im Selector
+let _teamedEvents        = [];    // alle Events der Championship (sortiert nach round_number)
+
+/**
+ * Wechselt den aktiven Sub-Tab auf der Teamed-Seite. Scoped auf
+ * #page-teamed, damit ein Klick hier NICHT die Themed-Tabs (gleiche
+ * CSS-Klassen .themed-tab/.sub-tab) mit umschaltet.
+ */
+function showTeamedSubTab(name, el) {
+  document.querySelectorAll('#page-teamed .themed-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-teamed .sub-tab').forEach(t => t.classList.remove('active'));
+
+  const tab = $('tab-teamed-' + name);
+  if (tab) tab.classList.add('active');
+  if (el)  el.classList.add('active');
+
+  if (name === 'standings')  loadTeamedStandings();
+  if (name === 'carratings') loadTeamedCarRatings();
+  if (name === 'challenges') loadTeamedChallenges();
+}
+
+/**
+ * Einstiegspunkt: wird bei showPage('teamed') aufgerufen.
+ * Lädt Championship + Events, baut Selector, rendert Ergebnis.
+ */
+async function loadTeamedResults() {
+  try {
+    // 1. Aktuelle Championship für Club 39230 laden.
+    let champ = null;
+
+    const activeEvs0 = await sb('events', 'select=championship_id&club_id=eq.39230&status=eq.1&limit=1');
+    if (activeEvs0.length) {
+      const found = await sb('championships', `select=*&id=eq.${activeEvs0[0].championship_id}&limit=1`);
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      const found = await sb('championships', 'select=*&club_id=eq.39230&order=start_date.desc&limit=1');
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      const found = await sb('championships', 'select=*&club_id=eq.39230&limit=1');
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      setHTML('teamed-event-selector', '<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">No championship found</span>');
+      return;
+    }
+
+    _teamedChampId = champ.id;
+
+    // 2. Championship Hero befüllen
+    setText('teamed-champ-name',     champ.name || '—');
+    setText('teamed-champ-season',   champ.season_number || '—');
+    setText('teamed-champ-season-val', champ.season_number || '—');
+    const narEl = $('teamed-champ-narrative');
+    if (narEl) narEl.textContent = champ.narrative || '';
+
+    // 3. Alle Events dieser Championship laden, sortiert nach round_number
+    const evs = await sb('events',
+      `select=*&championship_id=eq.${_teamedChampId}&order=round_number.asc`
+    );
+    _teamedEvents = evs;
+
+    // Hero Meta: Rounds, Status
+    setText('teamed-champ-rounds', evs.length || '—');
+
+    const activeEvs    = evs.filter(e => e.status === 1);
+    const hasActive    = activeEvs.length > 0;
+    const statusEl     = $('teamed-champ-status');
+    if (statusEl) {
+      statusEl.textContent  = hasActive ? '● LIVE' : 'FINISHED';
+      statusEl.style.color  = hasActive ? 'var(--green)' : '#999';
+    }
+
+    // Aktuelle Runde
+    const currentRound = activeEvs[0] || evs[evs.length - 1];
+    if (currentRound) {
+      setText('teamed-champ-current-round',
+        `RD.${currentRound.round_number || '?'} — ${currentRound.location || currentRound.name || '—'}`
+      );
+    }
+
+    // 4. Event-Selector aufbauen (neuestes/aktives zuerst aktiv)
+    const selectorEl = $('teamed-event-selector');
+    if (selectorEl && evs.length) {
+      const defaultEv = activeEvs[0] || evs[evs.length - 1];
+      if (!_teamedActiveEventId) _teamedActiveEventId = defaultEv.id;
+
+      selectorEl.innerHTML =
+        `<span class="event-selector-lbl">EVENT:</span>` +
+        evs.map(ev => `
+          <span class="ev-btn${ev.id === _teamedActiveEventId ? ' active' : ''}"
+                onclick="selectTeamedEvent('${ev.id}', this)">
+            RD.${ev.round_number || '?'} ${ev.location || ev.name || ''}
+          </span>`).join('');
+    } else if (selectorEl) {
+      selectorEl.innerHTML = `<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">No events found</span>`;
+    }
+
+    // 5. Ergebnisse für aktives Event laden
+    await _fetchAndRenderTeamedResults(_teamedActiveEventId);
+
+  } catch (err) {
+    console.error('[loadTeamedResults]', err);
+  }
+}
+
+/** Klick auf Event-Button im Selector. */
+async function selectTeamedEvent(eventId, el) {
+  _teamedActiveEventId = eventId;
+  document.querySelectorAll('#teamed-event-selector .ev-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  await _fetchAndRenderTeamedResults(eventId);
+}
+
+/** Lädt event_results für ein Event, rendert Tabelle + Event-Info-Panel. */
+async function _fetchAndRenderTeamedResults(eventId) {
+  if (!eventId) return;
+
+  setText('teamed-results-hdr', 'RESULTS — LOADING…');
+  setHTML('teamed-results-tbody', emptyRow(7, 'LOADING…'));
+  setHTML('teamed-results-slim-tbody', emptyRow(4, 'LOADING…'));
+
+  const ev = _teamedEvents.find(e => e.id === eventId) || {};
+  const rdLabel = ev.round_number ? `RD.${ev.round_number}` : '';
+  const evLabel = ev.location || ev.name || eventId;
+
+  setText('teamed-ev-info-hdr',       `EVENT INFO — ${rdLabel} ${evLabel}`.trim());
+  setText('teamed-ev-info-name',      ev.location || ev.name || '—');
+  const narEl = $('teamed-ev-info-narrative');
+  if (narEl) {
+    narEl.textContent = ev.narrative || '';
+    narEl.style.display = ev.narrative ? '' : 'none';
+  }
+  setText('teamed-ev-info-start',     fmtDate(ev.start_date));
+  setText('teamed-ev-info-end',       fmtDate(ev.end_date));
+
+  const evStatusMap = { 0: 'Upcoming', 1: '● Live', 2: 'Finished' };
+  const evStatusEl  = $('teamed-ev-info-status');
+  if (evStatusEl) {
+    evStatusEl.textContent = evStatusMap[ev.status] ?? '—';
+    evStatusEl.style.color = ev.status === 1 ? 'var(--green)' : '';
+  }
+
+  try {
+    const [results, stages, stageResults] = await Promise.all([
+      sb('event_results',  `select=*&event_id=eq.${eventId}&order=is_dnf.asc,position.asc`),
+      sb('stages',         `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`),
+      sb('stage_results',  `select=driver_name,stage_id,time_str,stage_position,is_dnf&event_id=eq.${eventId}`),
+    ]);
+
+    setText('teamed-ev-info-entries', results.length || '—');
+
+    const tbody = $('teamed-results-tbody');
+    if (!tbody) return;
+
+    if (!results.length) {
+      tbody.innerHTML = emptyRow(7, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
+      setHTML('teamed-results-slim-tbody', emptyRow(4, 'NO RESULTS YET', 'Results appear as drivers finish the event.'));
+      setText('teamed-results-hdr', `${rdLabel} ${evLabel} — NO DATA`.trim());
+      return;
+    }
+
+    const stageIdx = {};
+    stageResults.forEach(r => {
+      if (!stageIdx[r.stage_id]) stageIdx[r.stage_id] = {};
+      stageIdx[r.stage_id][r.driver_name] = r;
+    });
+
+    tbody.innerHTML = results.map((r, i) => {
+      const dnf       = r.is_dnf;
+      const posStr    = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
+      const crStr     = r.cr_multiplier != null ? Number(r.cr_multiplier).toFixed(2) : '—';
+      const rowId     = `teamed-stages-row-${r.driver_id || i}`;
+
+      let stageRow = '';
+      if (stages.length) {
+        const cells = stages.map(st => {
+          const sr = stageIdx[st.id]?.[r.driver_name];
+          if (!sr) return `<td style="color:#555;">—</td>`;
+          const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
+          return `<td ${cls}>${fmtStageTime(sr.time_str) || '—'}</td>`;
+        }).join('');
+        const hdrs = stages.map(st =>
+          `<td style="font-size:10px;color:var(--red);letter-spacing:1px;">SS${st.stage_number}</td>`
+        ).join('');
+        stageRow = `
+          <tr id="${rowId}" style="display:none;background:#0a0a0a;">
+            <td></td>
+            <td colspan="${6 + stages.length}" style="padding:4px 8px;">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <tr>${hdrs}</tr>
+                <tr>${cells}</tr>
+              </table>
+            </td>
+          </tr>`;
+      }
+
+      return `
+        <tr${dnf ? ' style="opacity:.55"' : ''} style="cursor:pointer;" onclick="toggleStageRow('${rowId}')">
+          <td class="${rankClass(i)}" data-label="#">${posStr}</td>
+          <td data-label="DRIVER">${escapeHtml(r.driver_name) || '—'}</td>
+          <td style="font-size:12px;color:#aaa;" data-label="VEHICLE">${escapeHtml(r.vehicle) || '—'}</td>
+          <td data-label="TIME">${fmtStageTime(r.time) || '—'}</td>
+          <td data-label="BASE">${r.base_points ?? '—'}</td>
+          <td class="ev" data-label="×CR">${crStr}</td>
+          <td class="ev" style="color:var(--green);" data-label="TOTAL">${fmtPts(r.total_points)}</td>
+        </tr>${stageRow}`;
+    }).join('');
+
+    const slimTbody = $('teamed-results-slim-tbody');
+    if (slimTbody) {
+      slimTbody.innerHTML = results.map((r, i) => {
+        const dnf    = r.is_dnf;
+        const posStr = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
+        const crStr  = r.cr_multiplier != null ? Number(r.cr_multiplier).toFixed(2) : '—';
+        const rowId  = `teamed-results-slim-${i}`;
+
+        const stageBadges = stages.map(st => {
+          const sr   = stageIdx[st.id]?.[r.driver_name];
+          const best = sr?.stage_position === 1;
+          return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || '—'}</div></div>`;
+        }).join('');
+
+        return `
+          <tr${dnf ? ' style="opacity:.55"' : ''} onclick="toggleSlimDetail('${rowId}')">
+            <td class="${rankClass(i)}">${posStr}</td>
+            <td>${escapeHtml(r.driver_name) || '—'}</td>
+            <td style="font-size:12px;color:#aaa;">${escapeHtml(r.vehicle) || '—'}</td>
+            <td class="ev" style="color:var(--green);">${fmtPts(r.total_points)}</td>
+          </tr>
+          <tr class="slim-detail-row" id="${rowId}">
+            <td colspan="4">
+              <div class="slim-detail-inner">
+                <div class="slim-badge"><div class="slim-badge-lbl">TIME</div><div class="slim-badge-val">${fmtStageTime(r.time) || '—'}</div></div>
+                <div class="slim-badge"><div class="slim-badge-lbl">BASE</div><div class="slim-badge-val">${r.base_points ?? '—'}</div></div>
+                <div class="slim-badge"><div class="slim-badge-lbl">×CR</div><div class="slim-badge-val">${crStr}</div></div>
+              </div>
+              ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    const finishers = results.filter(r => !r.is_dnf).length;
+    const dnfs      = results.filter(r => r.is_dnf).length;
+    const statusStr = ev.status === 1 ? ' ● LIVE' : ev.status === 2 ? ' ✓ FINISHED' : '';
+    setText('teamed-results-hdr',
+      `${rdLabel} ${evLabel} — ${finishers} FINISHED · ${dnfs} DNF${statusStr}`.trim()
+    );
+
+    const hdrRight = $('teamed-results-hdr')?.querySelector('.col-hdr-right');
+    if (hdrRight) {
+      hdrRight.textContent  = ev.status === 1 ? '● LIVE' : '';
+      hdrRight.style.color  = 'var(--green)';
+    }
+
+  } catch (err) {
+    console.error('[_fetchAndRenderTeamedResults]', err);
+    setHTML('teamed-results-tbody', emptyRow(7, 'ERROR', 'Could not load results.'));
+    setHTML('teamed-results-slim-tbody', emptyRow(4, 'ERROR', 'Could not load results.'));
+  }
+}
+
+/**
+ * Team Standings für Teamed — analog zum permanenten Team-Zweig in
+ * loadStandings()/renderTeamStandings() (Themed, Abschnitt 7 oben), aber
+ * ohne Einzelfahrer-Fallback: Teamed hostet immer Team-Championships.
+ */
+async function loadTeamedStandings() {
+  setHTML('teamed-standings-tbody', emptyRow(10, 'LOADING…'));
+  setHTML('teamed-standings-slim-tbody', emptyRow(4, 'LOADING…'));
+
+  if (!_teamedChampId) {
+    await loadTeamedResults();
+  }
+
+  try {
+    const evs = _teamedEvents.length
+      ? _teamedEvents
+      : await sb('events', `select=id,round_number,location,name&championship_id=eq.${_teamedChampId}&order=round_number.asc`);
+
+    const evOrder = evs.map(e => e.id);
+
+    const results = await sb(
+      'event_results',
+      `select=driver_name,vehicle,total_points,event_id,is_dnf&championship_id=eq.${_teamedChampId}&order=event_id.asc`
+    );
+
+    if (!results.length) {
+      setHTML('teamed-standings-tbody', emptyRow(10, 'NO STANDINGS DATA', 'Standings appear after the first event.'));
+      setHTML('teamed-standings-slim-tbody', emptyRow(4, 'NO STANDINGS DATA', 'Standings appear after the first event.'));
+      setText('teamed-standings-hdr', 'CHAMPIONSHIP STANDINGS — NO DATA');
+      return;
+    }
+
+    // Best-of-N (Streichresultat) — Championship-Einstellung holen
+    const _champMeta = await sb('championships', `select=best_of_events&id=eq.${_teamedChampId}&limit=1`);
+    const bestOf = _champMeta[0]?.best_of_events || null;
+
+    // Punkte pro Fahrer aggregieren, pro Runde
+    const driverMap = {};
+    results.forEach(r => {
+      const name = r.driver_name;
+      if (!name) return;
+      if (!driverMap[name]) {
+        driverMap[name] = { name, vehicles: new Set(), roundPts: {}, total: 0 };
+      }
+      if (r.vehicle) driverMap[name].vehicles.add(r.vehicle);
+      const pts = r.total_points ?? 0;
+      driverMap[name].roundPts[r.event_id] = (driverMap[name].roundPts[r.event_id] || 0) + pts;
+    });
+
+    // Jede Runden-Punktzahl auf die angezeigte (gerundete) Zahl fixieren —
+    // WYSIWYG, gleiche Logik wie in loadStandings() (Themed, Abschnitt 7).
+    Object.values(driverMap).forEach(d => {
+      Object.keys(d.roundPts).forEach(evId => {
+        d.roundPts[evId] = Math.round(d.roundPts[evId]);
+      });
+    });
+
+    // Best-of-N anwenden: pro Fahrer nur die N besten (gerundeten)
+    // Runden-Totals summieren — VOR der Team-Aggregation.
+    Object.values(driverMap).forEach(d => {
+      const roundTotals = Object.values(d.roundPts).sort((a, b) => b - a);
+      const n = bestOf ? Math.min(bestOf, roundTotals.length) : roundTotals.length;
+      d.total = roundTotals.slice(0, n).reduce((s, p) => s + p, 0);
+      d.droppedCount = roundTotals.length - n;
+    });
+
+    // Teams laden und Fahrer-Totals zu Team-Totals aggregieren
+    const teams = await sb('teams', `championship_id=eq.${_teamedChampId}&select=id,name,color,team_members(driver_name)`);
+
+    if (!teams.length) {
+      setHTML('teamed-standings-tbody', emptyRow(10, 'NO TEAMS CONFIGURED', 'Set up teams in Admin → Championship Setup.'));
+      setHTML('teamed-standings-slim-tbody', emptyRow(4, 'NO TEAMS CONFIGURED', 'Set up teams in Admin → Championship Setup.'));
+      setText('teamed-standings-hdr', 'CHAMPIONSHIP STANDINGS — NO TEAMS');
+      return;
+    }
+
+    const memberToTeam = {};
+    teams.forEach(t => (t.team_members || []).forEach(m => { memberToTeam[m.driver_name] = t.id; }));
+
+    const teamMap = {};
+    teams.forEach(t => {
+      teamMap[t.id] = {
+        name: t.name, color: t.color || '#c0392b',
+        members: (t.team_members || []).map(m => m.driver_name),
+        roundPts: {}, total: 0,
+        loyal: true,
+      };
+    });
+    const UNASSIGNED_ID = '__unassigned__';
+    teamMap[UNASSIGNED_ID] = { name: 'Unassigned', color: '#555', members: [], roundPts: {}, total: 0, loyal: false, isUnassigned: true };
+
+    Object.values(driverMap).forEach(d => {
+      const teamId = memberToTeam[d.name] || UNASSIGNED_ID;
+      const bucket = teamMap[teamId];
+      if (teamId === UNASSIGNED_ID) bucket.members.push(d.name);
+
+      evOrder.forEach(evId => {
+        const pts = d.roundPts[evId];
+        if (pts != null) bucket.roundPts[evId] = (bucket.roundPts[evId] || 0) + pts;
+      });
+      bucket.total += d.total;
+
+      if (d.vehicles.size !== 1) bucket.loyal = false;
+    });
+
+    Object.values(teamMap).forEach(t => {
+      if (!t.isUnassigned && t.members.length && t.loyal) t.total += 50;
+    });
+
+    const rows = Object.values(teamMap).filter(t => t.members.length);
+    rows.sort((a, b) => b.total - a.total);
+
+    const champs = await sb('championships', `select=name,season_number&id=eq.${_teamedChampId}&limit=1`);
+    const champName = champs[0]?.name || 'CHAMPIONSHIP';
+    setText('teamed-standings-hdr', `${champName} — TEAM STANDINGS`);
+    setText('teamed-standings-hdr-right', `${evOrder.length} ROUNDS`);
+
+    const theadRow = document.querySelector('#tab-teamed-standings .full-wrap table thead tr');
+    if (theadRow) {
+      const roundHdrs = evs.map(ev =>
+        `<th title="${escapeHtml(ev.name || ev.location || '')}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
+      ).join('');
+      theadRow.innerHTML = `<th>#</th><th>TEAM</th><th>MEMBERS</th>${roundHdrs}<th>TOTAL</th><th>LOYALTY</th>`;
+    }
+
+    const tbody = $('teamed-standings-tbody');
+    if (tbody) {
+      tbody.innerHTML = rows.map((t, i) => {
+        const membersStr = t.members.join(', ');
+        const loyal = (!t.isUnassigned && t.loyal && t.members.length)
+          ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+
+        const roundCells = evOrder.map(evId => {
+          const rd  = evs.find(e => e.id === evId);
+          const lbl = `R${rd?.round_number ?? '?'}`;
+          const pts = t.roundPts[evId];
+          return pts != null
+            ? `<td style="font-size:12px;color:#ccc;" data-label="${lbl}">${fmtPts(pts)}</td>`
+            : `<td style="font-size:12px;color:#555;" data-label="${lbl}">—</td>`;
+        }).join('');
+
+        return `
+          <tr${t.isUnassigned ? ' style="opacity:0.6;"' : ''}>
+            <td class="${t.isUnassigned ? '' : rankClass(i)}" data-label="#">${t.isUnassigned ? '—' : String(i + 1).padStart(2, '0')}</td>
+            <td style="${t.isUnassigned ? '' : `border-left:3px solid ${t.color};padding-left:8px;`}" data-label="TEAM">${escapeHtml(t.name)}</td>
+            <td style="font-size:11px;color:#aaa;" data-label="MEMBERS">${escapeHtml(membersStr)}</td>
+            ${roundCells}
+            <td class="ev" style="color:var(--green);font-weight:bold;" data-label="TOTAL">${fmtPts(t.total)}</td>
+            <td class="ev" data-label="LOYALTY">${loyal}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    const slimTheadRow = $('teamed-standings-slim-thead-row');
+    if (slimTheadRow) slimTheadRow.innerHTML = `<th>#</th><th>TEAM</th><th>TOTAL</th><th>LOYALTY</th>`;
+
+    const slimTbody = $('teamed-standings-slim-tbody');
+    if (slimTbody) {
+      slimTbody.innerHTML = rows.map((t, i) => {
+        const membersStr = t.members.join(', ');
+        const loyal = (!t.isUnassigned && t.loyal && t.members.length)
+          ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+        const rowId = `teamed-standings-slim-${i}`;
+
+        const roundBadges = evOrder.map(evId => {
+          const rd  = evs.find(e => e.id === evId);
+          const lbl = `R${rd?.round_number ?? '?'}`;
+          const pts = t.roundPts[evId];
+          return `<div class="slim-badge"><div class="slim-badge-lbl">${lbl}</div><div class="slim-badge-val">${pts != null ? fmtPts(pts) : '—'}</div></div>`;
+        }).join('');
+
+        return `
+          <tr${t.isUnassigned ? ' style="opacity:0.6;"' : ''} onclick="toggleSlimDetail('${rowId}')">
+            <td class="${t.isUnassigned ? '' : rankClass(i)}">${t.isUnassigned ? '—' : String(i + 1).padStart(2, '0')}</td>
+            <td style="${t.isUnassigned ? '' : `border-left:3px solid ${t.color};padding-left:8px;`}">${escapeHtml(t.name)}</td>
+            <td class="ev" style="color:var(--green);font-weight:bold;">${fmtPts(t.total)}</td>
+            <td class="ev">${loyal}</td>
+          </tr>
+          <tr class="slim-detail-row" id="${rowId}">
+            <td colspan="4">
+              <div class="slim-detail-label">MEMBERS</div>
+              <div class="slim-detail-extra">${escapeHtml(membersStr)}</div>
+              <div class="slim-detail-inner">${roundBadges}</div>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+  } catch (err) {
+    console.error('[loadTeamedStandings]', err);
+    setHTML('teamed-standings-tbody', emptyRow(10, 'ERROR', 'Could not load standings.'));
+    setHTML('teamed-standings-slim-tbody', emptyRow(4, 'ERROR', 'Could not load standings.'));
+  }
+}
+
+/** Car Ratings für aktive Teamed-Championship laden. */
+async function loadTeamedCarRatings() {
+  const tbody = document.querySelector('#tab-teamed-carratings .cr-table tbody');
+  if (!tbody) return;
+
+  if (!_teamedChampId) await loadTeamedResults();
+
+  try {
+    const ratings = await sb('car_ratings', `select=*&championship_id=eq.${_teamedChampId}&order=cr_value.desc`);
+
+    if (!ratings.length) {
+      tbody.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-title">NO CAR RATINGS SET</div><div class="empty-sub">Configure via Admin before the season starts.</div></div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = ratings.map((r, i) => `
+      <tr>
+        <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
+        <td>${escapeHtml(r.vehicle) || '—'}</td>
+        <td style="font-size:12px;color:#aaa;">${r.era || r.surface || '—'}</td>
+        <td class="ev">${Number(r.cr_value).toFixed(2)}</td>
+      </tr>`).join('');
+
+    setText('teamed-cr-hdr', `CAR RATINGS — ${ratings.length} VEHICLES`);
+  } catch (err) {
+    console.error('[loadTeamedCarRatings]', err);
+  }
+}
+
+/** Bonus Rules (Challenges) für aktive Teamed-Championship laden. Nutzt
+ *  dieselbe CHALLENGE_INFO-Beschreibungstabelle wie Themed (siehe oben,
+ *  vor loadChallenges()). */
+async function loadTeamedChallenges() {
+  const hdr  = $('teamed-challenges-hdr');
+  const list = $('teamed-challenges-list');
+  if (!list) return;
+
+  if (!_teamedChampId) await loadTeamedResults();
+
+  try {
+    const rules = await sb('championship_rules', `championship_id=eq.${_teamedChampId}&select=rule_type,is_active,points,description`);
+    const byType = {};
+    rules.forEach(r => { byType[r.rule_type] = r; });
+
+    const champs    = await sb('championships', `select=name&id=eq.${_teamedChampId}&limit=1`);
+    const champName = champs[0]?.name || 'CHAMPIONSHIP';
+    setText('teamed-challenges-hdr', `${champName} — ACTIVE CHALLENGES`);
+
+    const items = [];
+
+    items.push({ ...CHALLENGE_INFO.loyalty, points: 50, active: true, name: CHALLENGE_INFO.loyalty.name });
+
+    ['stage_improvement', 'penalty_challenge', 'survivor_bonus', 'livery_challenge'].forEach(type => {
+      const rule = byType[type];
+      const info = CHALLENGE_INFO[type];
+      items.push({
+        ...info,
+        points: rule?.points ?? null,
+        active: !!rule?.is_active,
+      });
+    });
+
+    rules.filter(r => r.rule_type === 'custom' && r.is_active).forEach(r => {
+      items.push({
+        name: r.description || 'Custom Challenge',
+        desc: CHALLENGE_INFO.custom.desc,
+        badge: CHALLENGE_INFO.custom.badge,
+        points: r.points,
+        active: true,
+      });
+    });
+
+    if (!items.some(i => i.active)) {
+      list.innerHTML = `<div class="empty"><div class="empty-title">NO CHALLENGES CONFIGURED</div><div class="empty-sub">Set up rules in Admin → Championship Setup.</div></div>`;
+      return;
+    }
+
+    list.innerHTML = items.map(i => {
+      const badgeClass = i.badge === 'auto' ? 'ch-auto' : 'ch-manual';
+      const badgeLabel = i.badge === 'auto' ? 'AUTO' : 'MANUAL';
+      const inactiveTag = i.active ? '' : ' <span style="font-size:10px;color:#444;margin-left:8px;">— NOT ACTIVE THIS SEASON</span>';
+      const rewardTxt = i.points != null
+        ? `+${i.points} points${i.badge === 'manual' ? ' — manually awarded' : ''}`
+        : '—';
+      return `
+        <div class="challenge-item${i.active ? '' : ' inactive'}">
+          <div class="ch-name">${escapeHtml(i.name)} <span class="ch-badge ${badgeClass}">${badgeLabel}</span>${inactiveTag}</div>
+          <div class="ch-desc">${escapeHtml(i.desc)}</div>
+          <div class="ch-reward">${rewardTxt}</div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('[loadTeamedChallenges]', err);
+    list.innerHTML = `<div class="empty"><div class="empty-title">ERROR</div><div class="empty-sub">Could not load challenges.</div></div>`;
+  }
+}
+// ═══════════════════════════════════════ ENDE TEAMED PAGE (Abschnitt 7b) ═
 
 
 // ── 8. ELO PAGE ───────────────────────────────────────────────
