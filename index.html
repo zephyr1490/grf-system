@@ -1211,9 +1211,10 @@ textarea.inp-std { resize:vertical; }
        Championship. Struktur ist 1:1 von Themed übernommen,
        Standings zeigt direkt die Team-Ansicht (Teamed hostet per
        Definition nur Team-Championships, kein Einzelfahrer-Zweig
-       nötig). Sobald die aktuell laufende Themed-Team-Championship
-       vorbei ist, wird der temporäre Team-Zweig aus Themed entfernt
-       — siehe Kommentar dort.
+       nötig). Die frühere Themed-Team-Championship ist inzwischen
+       beendet, der temporäre Team-Zweig in Themed wurde deaktiviert
+       (siehe Kommentar dort in loadStandings()) — Themed zeigt wieder
+       Einzelfahrer-Standings, Teamed läuft ab jetzt eigenständig.
   ══════════════════════════════════════════ -->
   <div class="page" id="page-teamed">
 
@@ -3105,25 +3106,21 @@ async function loadStandings() {
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // TEMPORÄRER TEAM-STANDINGS-ZWEIG (Session 3, Owner-Anweisung)
-    // ─────────────────────────────────────────────────────────────────────
-    // GRF Themed hostet normalerweise NIE Team-Championships — dieser Zweig
-    // existiert nur, weil die AKTUELL laufende Championship zufällig Teams
-    // hat und präsentierbare Ergebnisse gebraucht werden, bevor die künftige
-    // GRF-Teamed-Struktur (eigener Club, eigener Tab, aktuell leer) steht.
+    // TEAM-STANDINGS-ZWEIG — DEAKTIVIERT (war temporär für die inzwischen
+    // beendete Team-Championship, Session 3). Die Team-Logik läuft jetzt
+    // aktiv im GRF-Teamed-Tab (loadTeamedStandings(), eigener Code dort).
+    // Themed zeigt seitdem wieder standardmäßig Einzelfahrer-Standings.
     //
-    // TODO (nur auf explizite Owner-Anweisung, sobald diese Championship
-    // vorbei ist): diesen kompletten Zweig (renderTeamStandings-Aufruf +
-    // Funktion darunter) HIER ENTFERNEN und stattdessen im GRF-Teamed-Tab
-    // neu verdrahten — dort gehört die Logik langfristig hin. Der normale
-    // Einzelfahrer-Zweig unten bleibt für Themed unverändert bestehen.
+    // Bewusst auskommentiert statt gelöscht: nützliche Vorlage für eine
+    // künftige "Archived Championships"-Ansicht, die alte Team-Championships
+    // (Daten bleiben unverändert in Supabase) wieder anzeigen könnte.
     // ═══════════════════════════════════════════════════════════════════════
-    const _teamsForThisChamp = await sb('teams', `championship_id=eq.${_themedChampId}&select=id,name,color,team_members(driver_name)`);
-    if (_teamsForThisChamp.length) {
-      await renderTeamStandings(_teamsForThisChamp, driverMap, evs, evOrder);
-      setText('champ-drivers', Object.keys(driverMap).length);
-      return;
-    }
+    // const _teamsForThisChamp = await sb('teams', `championship_id=eq.${_themedChampId}&select=id,name,color,team_members(driver_name)`);
+    // if (_teamsForThisChamp.length) {
+    //   await renderTeamStandings(_teamsForThisChamp, driverMap, evs, evOrder);
+    //   setText('champ-drivers', Object.keys(driverMap).length);
+    //   return;
+    // }
     // ═══════════════════════════════════════════ ENDE TEAM-STANDINGS-ZWEIG ═
 
     const sorted = Object.values(driverMap).sort((a, b) => b.total - a.total);
@@ -3217,9 +3214,11 @@ async function loadStandings() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TEMPORÄR — siehe Marker in loadStandings() oben. Gehört langfristig zum
-// GRF-Teamed-Tab, nicht hierher. Beim Verschieben: komplette Funktion +
-// den Aufruf-Block in loadStandings() zusammen umziehen.
+// UNGENUTZT seit Deaktivierung des Team-Zweigs in loadStandings() oben
+// (Team-Championship beendet, Team-Logik läuft jetzt eigenständig im
+// GRF-Teamed-Tab über loadTeamedStandings()). Diese Funktion wird aktuell
+// von nirgends mehr aufgerufen — bewusst nicht gelöscht, da sie als
+// Vorlage für eine künftige "Archived Championships"-Ansicht dienen kann.
 // ═══════════════════════════════════════════════════════════════════════
 async function renderTeamStandings(teams, driverMap, evs, evOrder) {
   // Fahrer -> Team-Zuordnung
