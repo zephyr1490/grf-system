@@ -283,41 +283,113 @@ def _is_dnf_ms(ms, all_ms=None):
             if ms < med * 1.3: return False
     return True
 
-def _compute_cr(vehicle_times: dict, all_times_ms: list, top_pct: float, exponent: float, min_n: int):
+def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
     """
-    CR-Berechnung — portiert aus points_auto_fixed_28.py Normalisierungs-Logik.
+    Pro-Stage-Normalisierung — 1:1 aus points_auto_fixed_28.py portiert.
 
-    vehicle_times: {vehicle_name: [time_ms, ...]}
-    all_times_ms:  alle validen Zeiten (für Top-% Referenz)
-    top_pct:       Top-Prozent als Referenzzeit (z.B. 25 = Top 25%)
-    exponent:      CR-Kurven-Exponent
-    min_n:         Mindestanzahl Einträge pro Fahrzeug
+    Für JEDE Strecke einzeln: pro Auto wird dessen EIGENE Top-top_pct%-Zeit
+    als Referenz genommen (nicht eine globale Cutoff-Zeit über alle Autos
+    gemischt — das gleicht unterschiedliche Stichprobengrößen pro Auto aus).
+    Das schnellste Auto AUF DIESER STRECKE bekommt Faktor 1.0, alle anderen
+    einen Wert >= 1.0 relativ dazu. Diese Pro-Stage-Normalisierung ist nötig,
+    bevor mehrere Strecken (mit völlig unterschiedlichen absoluten Zeiten)
+    überhaupt miteinander verglichen werden dürfen.
 
-    CR = (ref_time / car_avg_time) ^ exponent
-    ref_time = Durchschnitt der Top-top_pct% aller validen Zeiten
+    Gibt (factors_by_car, n_total) zurück, oder (None, 0) wenn die Stage
+    übersprungen werden muss (zu wenig Autos / min_n pro Stage nicht erreicht).
     """
-    if not all_times_ms: return []
+    stage_ms = [_parse_time_ms(e.get("time","")) for e in entries]
+    stage_ms = [t for t in stage_ms if t]
 
-    # Globale Referenzzeit: Top-% der schnellsten Zeiten über alle Fahrzeuge
-    sorted_times = sorted(all_times_ms)
-    cutoff       = max(1, int(len(sorted_times) * top_pct / 100))
-    ref_time_ms  = statistics.mean(sorted_times[:cutoff])
+    times_by_car: dict[str, list] = {}
+    for e in entries:
+        ms = _parse_time_ms(e.get("time",""))
+        if not ms: continue
+        if _is_dnf_ms(ms, stage_ms): continue
+        vehicle = e.get("vehicle", "Unknown")
+        times_by_car.setdefault(vehicle, []).append(ms)
 
-    results = []
-    for vehicle, times in vehicle_times.items():
-        if len(times) < min_n: continue
-        avg_ms = statistics.mean(times)
-        cr     = round((ref_time_ms / avg_ms) ** exponent, 4)
-        results.append({
-            "vehicle":      vehicle,
-            "n":            len(times),
-            "car_avg_ms":   int(avg_ms),
-            "ref_time_ms":  int(ref_time_ms),
-            "cr":           cr,
-        })
+    if len(times_by_car) < 2:
+        return None, 0
 
-    results.sort(key=lambda x: x["cr"], reverse=True)
-    return results
+    for car in times_by_car:
+        times_by_car[car].sort()
+
+    # min_n gilt PRO STAGE, nicht global über alle Strecken summiert
+    if any(len(t) < min_n for t in times_by_car.values()):
+        return None, 0
+
+    n_total = sum(len(t) for t in times_by_car.values())
+
+    # Pro Auto: eigene Top-top_pct%-Stelle in seiner eigenen sortierten Liste
+    ref_times = {}
+    for car, times in times_by_car.items():
+        n_car  = len(times)
+        stelle = max(1, min(round(top_pct / 100 * n_car), n_car))
+        ref_times[car] = times[stelle - 1]
+
+    best_ref = min(ref_times.values())
+    if best_ref <= 0:
+        return None, 0
+
+    factors = {car: ref / best_ref for car, ref in ref_times.items()}
+    return factors, n_total
+
+
+def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int):
+    """
+    CR-Berechnung — vollständig nach points_auto_fixed_28.py:
+
+    1. Pro Stage einzeln normalisieren (_compute_stage_factors, s.o.)
+    2. Über alle Stages gewichtet mitteln — Gewicht = Teilnehmerzahl der
+       jeweiligen Stage (eine Strecke mit 80 Fahrern zählt mehr als eine
+       mit 12)
+    3. Erste Normierung: durch das Minimum teilen → insgesamt schnellstes
+       Auto liegt exakt bei 1.0
+    4. Exponent anwenden, danach NOCHMAL normieren → garantiert exakt 1.0
+       für das schnellste Auto, unabhängig von Anzahl/Auswahl der Autos
+    """
+    wsum: dict[str, float] = {}
+    wtot: dict[str, float] = {}
+    stages_used    = 0
+    stages_skipped = 0
+    total_entries  = 0
+
+    for (route_id, class_id), entries in leaderboards.items():
+        if not entries:
+            stages_skipped += 1
+            continue
+        factors, n_total = _compute_stage_factors(entries, top_pct, min_n)
+        if factors is None:
+            stages_skipped += 1
+            continue
+        stages_used   += 1
+        total_entries += n_total
+        for car, fac in factors.items():
+            wsum[car] = wsum.get(car, 0.0) + fac * n_total
+            wtot[car] = wtot.get(car, 0.0) + n_total
+
+    if not wsum:
+        return [], {"stages_used": 0, "stages_skipped": stages_skipped, "total_entries": 0}
+
+    # Gewichteter Durchschnitt über alle Stages
+    wavg = {car: wsum[car] / wtot[car] for car in wsum if wtot[car] > 0}
+
+    # Erste Normierung: bestes Auto (insgesamt) = exakt 1.0
+    best_avg    = min(wavg.values())
+    raw_factors = {car: v / best_avg for car, v in wavg.items()} if best_avg > 0 else wavg
+
+    # Exponent anwenden, dann NOCHMAL normieren — garantiert exakt 1.0
+    powered  = {car: f ** exponent for car, f in raw_factors.items()}
+    best_pow = min(powered.values())
+    final_cr = {car: v / best_pow for car, v in powered.items()} if best_pow > 0 else powered
+
+    results = [
+        {"vehicle": car, "n": int(wtot[car]), "cr": round(cr, 4)}
+        for car, cr in final_cr.items()
+    ]
+    results.sort(key=lambda x: x["cr"])
+    return results, {"stages_used": stages_used, "stages_skipped": stages_skipped, "total_entries": total_entries}
 
 
 @app.route("/cr/values", methods=["GET"])
@@ -374,41 +446,18 @@ def cr_calculate():
     except Exception as e:
         return jsonify({"error": f"RaceNet error: {e}"}), 500
 
-    # Alle Einträge sammeln
-    vehicle_times: dict[str, list] = {}
-    all_valid_ms  = []
-    total_entries = 0
-    stages_loaded = 0
+    results, stats = _compute_cr(leaderboards, top_pct, exponent, min_n)
 
-    for (route_id, class_id), entries in leaderboards.items():
-        if not entries: continue
-        stages_loaded += 1
-
-        # Alle Zeiten dieser Stage für DNF-Kontext
-        stage_ms = [_parse_time_ms(e.get("time","")) for e in entries]
-        stage_ms = [t for t in stage_ms if t]
-
-        for e in entries:
-            ms = _parse_time_ms(e.get("time",""))
-            if not ms: continue
-            if _is_dnf_ms(ms, stage_ms): continue  # DNF raus
-            vehicle = e.get("vehicle", "Unknown")
-            vehicle_times.setdefault(vehicle, []).append(ms)
-            all_valid_ms.append(ms)
-            total_entries += 1
-
-    if not all_valid_ms:
-        return jsonify({"error": "No valid times found"}), 404
-
-    results = _compute_cr(vehicle_times, all_valid_ms, top_pct, exponent, min_n)
+    if not results:
+        return jsonify({"error": f"No valid stages found (min N={min_n} per stage, at least 2 cars per stage required)"}), 404
 
     return jsonify({
         "results": results,
         "stats": {
-            "total_entries": total_entries,
-            "stages_loaded": stages_loaded,
-            "ref_time_ms":   int(statistics.mean(sorted(all_valid_ms)[:max(1, int(len(all_valid_ms)*top_pct/100))])),
-            "vehicles_found": len(vehicle_times),
+            "total_entries":  stats["total_entries"],
+            "stages_loaded":  stats["stages_used"],
+            "stages_skipped": stats["stages_skipped"],
+            "vehicles_found": len(results),
         }
     })
 

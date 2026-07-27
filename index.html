@@ -408,11 +408,6 @@ body::after {
 }
 .cr-table td { padding:7px 10px; border-bottom:1px solid #2a2d31; font-size:15px; color:var(--gray-light); }
 .cr-table tr:hover td { background:#2d1515; }
-.cr-badge {
-  display:inline-block; padding:1px 6px;
-  font-family:'VT323',monospace; font-size:18px;
-}
-.cr-s  { color:#FFD700; } .cr-a  { color:var(--red); } .cr-b  { color:var(--gray); }
 .cr-bar-bg { height:4px; background:#2a2d31; width:80px; display:inline-block; vertical-align:middle; }
 .cr-bar-fg { height:4px; background:linear-gradient(90deg,var(--red-dark),var(--red-bright)); }
 
@@ -1605,18 +1600,18 @@ textarea.inp-std { resize:vertical; }
           </div>
           <div class="elo-wrap full-wrap" style="margin:0;">
             <table class="cr-table">
-              <thead><tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>N</th><th>AVG TOP TIME</th><th>CAR AVG TIME</th><th>CR VALUE</th><th>RATING</th></tr></thead>
+              <thead><tr><th>#</th><th>VEHICLE</th><th>CLASS</th><th>N</th><th>CR VALUE</th></tr></thead>
               <tbody id="cr-preview-tbody">
-                <tr><td colspan="8"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select championship, locations, classes → Calculate.</div></div></td></tr>
+                <tr><td colspan="5"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select championship, locations, classes → Calculate.</div></div></td></tr>
               </tbody>
             </table>
           </div>
           <div class="elo-wrap slim-wrap" style="margin:0;">
             <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR FULL BREAKDOWN →</div>
             <table class="cr-table slim-table">
-              <thead><tr><th>#</th><th>VEHICLE</th><th>CR</th><th>RATING</th></tr></thead>
+              <thead><tr><th>#</th><th>VEHICLE</th><th>CR</th></tr></thead>
               <tbody id="cr-preview-slim-tbody">
-                <tr><td colspan="4"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select championship, locations, classes → Calculate.</div></div></td></tr>
+                <tr><td colspan="3"><div class="empty"><div class="empty-title">NO CALCULATION YET</div><div class="empty-sub">Select championship, locations, classes → Calculate.</div></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -4716,9 +4711,9 @@ async function crCalculate() {
   _crLastResults = [];
 
   const tbody = $('cr-preview-tbody');
-  if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-title">LOADING…</div><div class="empty-sub">Fetching RaceNet time trial leaderboards. This may take 30–60 seconds.</div></div></td></tr>`;
+  if (tbody) tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-title">LOADING…</div><div class="empty-sub">Fetching RaceNet time trial leaderboards. This may take 30–60 seconds.</div></div></td></tr>`;
   const slimTbodyLoading = $('cr-preview-slim-tbody');
-  if (slimTbodyLoading) slimTbodyLoading.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div><div class="empty-sub">Fetching RaceNet time trial leaderboards. This may take 30–60 seconds.</div></div></td></tr>`;
+  if (slimTbodyLoading) slimTbodyLoading.innerHTML = `<tr><td colspan="3"><div class="empty"><div class="empty-title">LOADING…</div><div class="empty-sub">Fetching RaceNet time trial leaderboards. This may take 30–60 seconds.</div></div></td></tr>`;
 
   try {
     const res  = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
@@ -4740,16 +4735,12 @@ async function crCalculate() {
     _crLastResults = results;
 
     if (!results.length) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
       const slimTbodyEmpty = $('cr-preview-slim-tbody');
-      if (slimTbodyEmpty) slimTbodyEmpty.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
+      if (slimTbodyEmpty) slimTbodyEmpty.innerHTML = `<tr><td colspan="3"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
       setText('cr-status', 'No results for selected filters.');
       return;
     }
-
-    const fmtMs  = ms => { if (!ms) return '—'; const s = ms/1000; const m = Math.floor(s/60); return `${m}:${(s%60).toFixed(3).padStart(6,'0')}`; };
-    const crBadge = cr => cr >= 1.15 ? 'cr-s' : cr >= 1.05 ? 'cr-a' : cr >= 0.95 ? 'cr-b' : 'cr-c';
-    const crLabel = cr => cr >= 1.15 ? 'S' : cr >= 1.05 ? 'A' : cr >= 0.95 ? 'B' : 'C';
 
     if (tbody) {
       tbody.innerHTML = results.map((r, i) => `
@@ -4758,10 +4749,7 @@ async function crCalculate() {
           <td style="text-align:left;" data-label="VEHICLE">${escapeHtml(r.vehicle)}</td>
           <td style="font-size:11px;color:#888;" data-label="ERA">${r.era || '—'}</td>
           <td data-label="N">${r.n}</td>
-          <td data-label="AVG TOP TIME">${fmtMs(r.avg_top_time_ms)}</td>
-          <td data-label="CAR AVG">${fmtMs(r.car_avg_ms)}</td>
           <td style="color:var(--green);" data-label="CR">${r.cr.toFixed(4)}</td>
-          <td data-label="TIER"><span class="cr-badge ${crBadge(r.cr)}">${crLabel(r.cr)}</span></td>
         </tr>`).join('');
     }
 
@@ -4774,15 +4762,12 @@ async function crCalculate() {
             <td>${i + 1}</td>
             <td style="text-align:left;">${escapeHtml(r.vehicle)}</td>
             <td style="color:var(--green);">${r.cr.toFixed(4)}</td>
-            <td><span class="cr-badge ${crBadge(r.cr)}">${crLabel(r.cr)}</span></td>
           </tr>
           <tr class="slim-detail-row" id="${rowId}">
-            <td colspan="4">
+            <td colspan="3">
               <div class="slim-detail-inner">
                 <div class="slim-badge"><div class="slim-badge-lbl">CLASS</div><div class="slim-badge-val">${r.era || '—'}</div></div>
                 <div class="slim-badge"><div class="slim-badge-lbl">N</div><div class="slim-badge-val">${r.n}</div></div>
-                <div class="slim-badge"><div class="slim-badge-lbl">AVG TOP</div><div class="slim-badge-val">${fmtMs(r.avg_top_time_ms)}</div></div>
-                <div class="slim-badge"><div class="slim-badge-lbl">CAR AVG</div><div class="slim-badge-val">${fmtMs(r.car_avg_ms)}</div></div>
               </div>
             </td>
           </tr>`;
