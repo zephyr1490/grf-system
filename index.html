@@ -941,7 +941,7 @@ textarea.inp-std { resize:vertical; }
         <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val">GRF Themed</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val" id="champ-season-val">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val" id="champ-rounds">—</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Current Round</div><div class="tm-val" id="champ-current-round">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl" id="champ-round-lbl">Current Round</div><div class="tm-val" id="champ-current-round">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="champ-status">—</div></div>
       </div>
     </div>
@@ -1224,7 +1224,7 @@ textarea.inp-std { resize:vertical; }
         <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val">GRF Teamed</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val" id="teamed-champ-season-val">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val" id="teamed-champ-rounds">—</div></div>
-        <div class="themed-meta-item"><div class="tm-lbl">Current Round</div><div class="tm-val" id="teamed-champ-current-round">—</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl" id="teamed-champ-round-lbl">Current Round</div><div class="tm-val" id="teamed-champ-current-round">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="teamed-champ-status">—</div></div>
       </div>
     </div>
@@ -1742,10 +1742,14 @@ textarea.inp-std { resize:vertical; }
                 <div><label class="inp-lbl">START DATE</label><input id="cs-e-start" type="date" class="inp-std" style="color-scheme:dark;"></div>
                 <div><label class="inp-lbl">END DATE</label><input id="cs-e-end" type="date" class="inp-std" style="color-scheme:dark;"></div>
               </div>
-              <div>
-                <label class="inp-lbl">BEST OF <span style="color:#555;font-weight:normal;">— leer = alle Events zählen, schlechtestes wird sonst automatisch gestrichen</span></label>
-                <input id="cs-e-bestof" type="number" min="1" placeholder="z.B. 3 (von 4 Events)" class="inp-std">
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div><label class="inp-lbl">SEASON</label><input id="cs-e-season" type="number" min="1" placeholder="z.B. 5" class="inp-std"></div>
+                <div>
+                  <label class="inp-lbl">BEST OF <span style="color:#555;font-weight:normal;">— leer = alle</span></label>
+                  <input id="cs-e-bestof" type="number" min="1" placeholder="z.B. 3 (von 4)" class="inp-std">
+                </div>
               </div>
+              <div style="font-size:10px;color:#444;margin-top:-6px;">BEST OF leer = alle Events zählen, sonst wird automatisch das schlechteste gestrichen</div>
               <div>
                 <label class="inp-lbl">KLASSE</label>
                 <select id="cs-e-class" onchange="csClassChanged()" class="inp-std">
@@ -2808,27 +2812,42 @@ async function loadThemedResults() {
     // Hero Meta: Rounds, Status
     setText('champ-rounds', evs.length || '—');
 
-    const activeEvs    = evs.filter(e => e.status === 1);
-    const hasActive    = activeEvs.length > 0;
-    const statusEl     = $('champ-status');
-    if (statusEl) {
-      statusEl.textContent  = hasActive ? '● LIVE' : 'FINISHED';
-      statusEl.style.color  = hasActive ? 'var(--green)' : '#999';
+    // status: 0 = upcoming, 1 = live, 2 = finished (siehe grf_sync.py)
+    const liveEvs     = evs.filter(e => e.status === 1);
+    const finishedEvs = evs.filter(e => e.status === 2);
+    const upcomingEvs = evs.filter(e => e.status !== 1 && e.status !== 2);
+
+    const statusEl = $('champ-status');
+    const roundLbl = $('champ-round-lbl');
+    let roundEvent = null;
+
+    if (liveEvs.length) {
+      if (statusEl) { statusEl.textContent = '● LIVE'; statusEl.style.color = 'var(--green)'; }
+      if (roundLbl) roundLbl.textContent = 'Current Round';
+      roundEvent = liveEvs[0];
+    } else if (evs.length && finishedEvs.length === evs.length) {
+      if (statusEl) { statusEl.textContent = 'FINISHED'; statusEl.style.color = '#999'; }
+      if (roundLbl) roundLbl.textContent = 'Final Round';
+      roundEvent = evs[evs.length - 1];
+    } else if (upcomingEvs.length) {
+      if (statusEl) { statusEl.textContent = 'UPCOMING'; statusEl.style.color = '#999'; }
+      if (roundLbl) roundLbl.textContent = 'Next Round';
+      roundEvent = upcomingEvs[0]; // evs bereits nach round_number sortiert geladen
     }
 
-    // Aktuelle Runde
-    const currentRound = activeEvs[0] || evs[evs.length - 1];
-    if (currentRound) {
+    if (roundEvent) {
       setText('champ-current-round',
-        `RD.${currentRound.round_number || '?'} — ${currentRound.location || currentRound.name || '—'}`
+        `RD.${roundEvent.round_number || '?'} — ${roundEvent.location || roundEvent.name || '—'}`
       );
+    } else {
+      setText('champ-current-round', '—');
     }
 
     // 4. Event-Selector aufbauen (neuestes/aktives zuerst aktiv)
     const selectorEl = $('themed-event-selector');
     if (selectorEl && evs.length) {
-      // Aktives Event bevorzugen, sonst letztes
-      const defaultEv = activeEvs[0] || evs[evs.length - 1];
+      // Live-Event bevorzugen, sonst nächste anstehende Runde, sonst letzte
+      const defaultEv = liveEvs[0] || upcomingEvs[0] || evs[evs.length - 1];
       if (!_themedActiveEventId) _themedActiveEventId = defaultEv.id;
 
       selectorEl.innerHTML =
@@ -3561,26 +3580,41 @@ async function loadTeamedResults() {
     // Hero Meta: Rounds, Status
     setText('teamed-champ-rounds', evs.length || '—');
 
-    const activeEvs    = evs.filter(e => e.status === 1);
-    const hasActive    = activeEvs.length > 0;
-    const statusEl     = $('teamed-champ-status');
-    if (statusEl) {
-      statusEl.textContent  = hasActive ? '● LIVE' : 'FINISHED';
-      statusEl.style.color  = hasActive ? 'var(--green)' : '#999';
+    // status: 0 = upcoming, 1 = live, 2 = finished (siehe grf_sync.py)
+    const liveEvs     = evs.filter(e => e.status === 1);
+    const finishedEvs = evs.filter(e => e.status === 2);
+    const upcomingEvs = evs.filter(e => e.status !== 1 && e.status !== 2);
+
+    const statusEl = $('teamed-champ-status');
+    const roundLbl = $('teamed-champ-round-lbl');
+    let roundEvent = null;
+
+    if (liveEvs.length) {
+      if (statusEl) { statusEl.textContent = '● LIVE'; statusEl.style.color = 'var(--green)'; }
+      if (roundLbl) roundLbl.textContent = 'Current Round';
+      roundEvent = liveEvs[0];
+    } else if (evs.length && finishedEvs.length === evs.length) {
+      if (statusEl) { statusEl.textContent = 'FINISHED'; statusEl.style.color = '#999'; }
+      if (roundLbl) roundLbl.textContent = 'Final Round';
+      roundEvent = evs[evs.length - 1];
+    } else if (upcomingEvs.length) {
+      if (statusEl) { statusEl.textContent = 'UPCOMING'; statusEl.style.color = '#999'; }
+      if (roundLbl) roundLbl.textContent = 'Next Round';
+      roundEvent = upcomingEvs[0];
     }
 
-    // Aktuelle Runde
-    const currentRound = activeEvs[0] || evs[evs.length - 1];
-    if (currentRound) {
+    if (roundEvent) {
       setText('teamed-champ-current-round',
-        `RD.${currentRound.round_number || '?'} — ${currentRound.location || currentRound.name || '—'}`
+        `RD.${roundEvent.round_number || '?'} — ${roundEvent.location || roundEvent.name || '—'}`
       );
+    } else {
+      setText('teamed-champ-current-round', '—');
     }
 
     // 4. Event-Selector aufbauen (neuestes/aktives zuerst aktiv)
     const selectorEl = $('teamed-event-selector');
     if (selectorEl && evs.length) {
-      const defaultEv = activeEvs[0] || evs[evs.length - 1];
+      const defaultEv = liveEvs[0] || upcomingEvs[0] || evs[evs.length - 1];
       if (!_teamedActiveEventId) _teamedActiveEventId = defaultEv.id;
 
       selectorEl.innerHTML =
@@ -4800,7 +4834,13 @@ async function crCalculate() {
     _crRenderPreview(results);
 
     setText('cr-preview-info', `${results.length} vehicles · ${stats.stages_loaded} stages · ${stats.total_entries} entries · exp=${exponent}`);
-    setText('cr-status', `✓ ${results.length} vehicles — review preview, then confirm to save.`);
+
+    const skipped = stats.stages_skipped || 0;
+    if (skipped > 0) {
+      setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${skipped} of ${stats.stages_loaded + skipped} selected stage(s) were skipped</span> (RaceNet timeout, too few cars, or min N=${minN} not reached on that stage). Review preview carefully before saving.`);
+    } else {
+      setText('cr-status', `✓ ${results.length} vehicles — all ${stats.stages_loaded} selected stages used, review preview then confirm to save.`);
+    }
     if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'block';
 
   } catch (err) {
@@ -5188,6 +5228,7 @@ async function csLoadExistingChampionship(champId) {
   $('cs-e-name').value      = c.name || '';
   $('cs-e-start').value     = c.start_date || '';
   $('cs-e-end').value       = c.end_date || '';
+  $('cs-e-season').value    = c.season_number || '';
   $('cs-e-narrative').value = c.narrative || '';
   $('cs-e-bestof').value    = c.best_of_events || '';
   setText('cs-status-badge', '');
@@ -5442,6 +5483,7 @@ async function csSaveAll() {
         vehicle_class: csGetSelectedClass(),
         start_date:    $('cs-e-start')?.value || null,
         end_date:      $('cs-e-end')?.value   || null,
+        season_number: $('cs-e-season')?.value ? parseInt($('cs-e-season').value) : null,
         narrative:     $('cs-e-narrative')?.value.trim(),
         best_of_events: $('cs-e-bestof')?.value ? parseInt($('cs-e-bestof').value) : null,
       }
