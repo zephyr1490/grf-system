@@ -2116,14 +2116,13 @@ const CHANGELOG = [
   {
     version: '1.4',
     date:    '2026-07-27',
-    label:   'Car Rating rework + smaller fixes',
+    label:   'Small fixes',
     notes: [
-      'Car Rating calculator got a real fix: the formula behind it was inverted, so slower cars were ending up with a rating below 1.0 instead of above it — backwards from how it\\u2019s supposed to work. It also wasn\\u2019t comparing multiple locations correctly, and the fastest car in a batch wasn\\u2019t guaranteed to land exactly on 1.0. All three are fixed now, matched back against my original local tool to make sure the numbers line up. If you\\u2019ve got a CR set calculated before today, it\\u2019s worth recalculating — the old numbers weren\\u2019t reliable.',
-      'Car Ratings tab: now shows all 4 decimal places instead of rounding to 2, sorted lowest (best car) to highest, and dropped the gold/silver/bronze podium colours on the ranking — they didn\\u2019t mean anything here.',
-      'GRF Themed now shows individual driver standings again — the temporary team scoring from the last championship has moved over to GRF Teamed, where it belongs going forward.',
-      'Fixed the championship header showing "FINISHED" and the last round for a championship that hasn\\u2019t even started yet. It now correctly shows "UPCOMING" with the next round, or "LIVE" with the current one.',
-      'A few Handbook/FAQ corrections: the points example now matches the current scoring table, the challenge bonus is no longer listed at a fixed +25 (it varies per challenge, announced separately), and added the fair-play note about keeping at least one tire on the road.',
-      'Various smaller admin-side fixes (RaceNet import, CR-set handling) — nothing player-facing, just smoother for me behind the scenes.',
+      'Car Rating calculator had a real bug in the math — fixed, and checked against my original tool to make sure the numbers are right. If you calculated a CR set before today, worth recalculating.',
+      'Car Ratings tab now shows full precision and is sorted best to worst.',
+      'GRF Themed is back to individual driver standings — team scoring now lives over on GRF Teamed for good.',
+      'Δ 7D on the ELO page was randomly missing for some drivers even though their rating had genuinely changed. Data was always fine, just a display bug — fixed.',
+      'A few small Handbook/FAQ wording fixes, plus some admin-only backend cleanup.',
     ],
   },
   {
