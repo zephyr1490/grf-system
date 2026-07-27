@@ -28,7 +28,7 @@ Function-Timeout (z.B. Vercel Serverless, 10s/60s) für diesen Endpoint aus
 — Railway (oder ein anderer Dauerprozess-Host) ist hier Voraussetzung,
 solange dieser Endpoint nicht umgebaut wird.
 
-## Aktuelle ELO-Formel (Stand: nach Session 8, live)
+## Aktuelle ELO-Formel (unverändert seit Session 8, live)
 
 - `BASE_K = 55`
 - `SIGMA_DECAY = 0.94` (Anzeige-Sigma)
@@ -45,6 +45,38 @@ solange dieser Endpoint nicht umgebaut wird.
   (`era:historic`, `surface:gravel`, ...). Keine Kombination mehrerer
   Tracks, keine Quervergleiche (andere Skala).
 
+## Car-Rating-System (Session 9, komplett überarbeitet)
+
+- **Algorithmus** (`admin_api.py`, `_compute_stage_factors` + `_compute_cr`) ist
+  jetzt 1:1 nach dem Original-Tool `points_auto_fixed_28.py` (Desktop-App,
+  Owner-lokal, **nicht im Repo** — bei Bedarf für tiefere Änderungen erneut
+  vom Owner anfordern) portiert:
+  1. Pro Strecke einzeln normalisieren (jedes Auto bekommt seine EIGENE
+     Top-`top_pct`%-Zeit als Referenz, nicht eine globale Cutoff-Zeit über
+     alle Autos gemischt — sonst sind Strecken mit unterschiedlichen
+     absoluten Zeiten nicht vergleichbar)
+  2. `min_n` gilt PRO STRECKE, nicht global über alle Strecken summiert
+  3. Gewichteter Durchschnitt über alle Strecken (Gewicht = Teilnehmerzahl)
+  4. Doppelte Normierung (nach Mittelung UND nach Exponent) — garantiert,
+     dass das schnellste Auto in JEDER Berechnung exakt CR=1.0 bekommt,
+     unabhängig von Anzahl/Auswahl der Autos
+  - Die alte Version (vor Session 9) hatte die Formel invertiert (lieferte
+    <1 für langsame statt >1), warf Rohzeiten mehrerer Strecken ungefiltert
+    in einen Topf, und hatte `max_results` künstlich auf 200 gedeckelt
+    (Original: 99999) — alles gefixt.
+- **CR Sets** sind bewusst championship-unabhängig speicherbar (`car_ratings`
+  mit `championship_id IS NULL` + `set_name`), Zuweisung zu einer konkreten
+  Championship über `/cr/assign`. Gespeicherte Sets sind im Car Rating Calc
+  Tab jetzt anklickbar (zeigt Werte read-only in der Vorschau).
+- **Bekannter Stolperstein, gefixt:** `/cr/vehicles` baute seine Fahrzeug-
+  liste früher NUR aus `stage_results` — für eine Championship OHNE
+  Ergebnisse (z.B. vor Saisonstart, wenn CR ja gerade zugewiesen wird) blieb
+  die Liste leer, obwohl `/cr/assign` die Werte korrekt in `car_ratings`
+  gespeichert hatte. Jetzt Vereinigung aus `stage_results` UND `car_ratings`.
+  **Vorsicht bei ähnlichen Endpoints:** jeder Endpoint, der eine Liste nur
+  aus tatsächlichen Renn-Ergebnissen baut, hat potenziell dasselbe Problem
+  für noch nicht gestartete Championships.
+
 ## Wichtige Tabellen (Supabase)
 
 - `drivers` — Overall-Ratings + `elo_inactive`-Flag
@@ -56,6 +88,20 @@ solange dieser Endpoint nicht umgebaut wird.
   alle `"public read"` (`FOR SELECT USING (true)`) für den `anon`-Key
 
 ## Bekannte Stolperfallen
+
+- **RaceNet-Feldpfade NIE unabhängig neu raten** (Session 9): `admin_api.py`
+  hatte eine eigene, falsche Parsing-Logik für Datum/Location beim
+  Championship-Import (`startAt`/`closeAt`, die es bei RaceNet gar nicht
+  gibt; Location direkt auf dem Event-Objekt statt in `eventSettings`).
+  `grf_sync.py`s `extract_dates()` ist die einzige geprüfte, funktionierende
+  Referenz — `admin_api.py` importiert sie jetzt (`from grf_sync import
+  extract_dates, parse_date`) statt sie zu duplizieren. Bei jedem neuen
+  RaceNet-Feldzugriff: erst in `grf_sync.py`/`racenet_client.py` nachsehen,
+  ob's das schon gibt, bevor man rät.
+- **"Klasse" (vehicle_class) kommt NICHT zuverlässig von RaceNet** — ist eine
+  rein owner-gepflegte Taxonomie (`vehicle_classes_data.py`), RaceNet kennt
+  sie nicht in nutzbarer Form. Bleibt bewusst manuelle Admin-Auswahl im
+  Championship Setup, kein Bug.
 
 - **Versions-Badge** im Seitenkopf (`#site-version-badge` in `index.html`,
   ~Zeile 714) ist reines statisches HTML, wird NICHT automatisch aus dem
@@ -78,6 +124,23 @@ TrueSkill, Glicko-2, rollierendes Form-Fenster, kompletter Sigma-Verzicht
 kombinierte Track-Filter gleichzeitig (Engine unterstützt das strukturell
 nicht — jeder Track ist unabhängig).
 
+## Championship Setup — Zielbild: 3 Modi (Owner-Vorgabe, Session 9)
+
+Admin → Championship Setup soll perspektivisch klar in drei Modi getrennt
+sein, mit unterschiedlichen Untermenüs. Aktueller Bau-Status:
+
+1. **Classic** (normales Themed, ein Club) — größtenteils fertig nach
+   Session 9: Name, Best-of, Klasse (manuell, s.o.), CR-Set-Zuweisung,
+   Bonus-Regeln, Narrative funktionieren. RaceNet-Liste zeigt jetzt
+   Locations/Klasse/Datum zur Identifizierung (RaceNet-Championships haben
+   keinen brauchbaren eigenen Namen).
+2. **Teams** (wie Classic, plus Team-Erstellung, nur für den Teamed-Club) —
+   Team-Erstellung funktioniert. **Nachträgliches Bearbeiten bestehender
+   Teams ist noch nicht getestet worden** — offener Punkt.
+3. **Multiclass** (zwei parallele Championships/Clubs, gemeinsame Wertung,
+   idealerweise ein gemeinsames CR-Set über beide Klassen) — **komplett
+   unbegonnen**, technisch unklar wie zu lösen. Siehe Offene Punkte.
+
 ## Offene Punkte
 
 1. **Δ 7 Tage für Track-Ansichten** existiert nicht — `elo_history` hat
@@ -97,11 +160,23 @@ nicht — jeder Track ist unabhängig).
    Captain statt vollem Account-System). Owner-Plan: erst ein analoger
    Testlauf mit den Captains, bevor irgendetwas gebaut wird. Noch nicht
    begonnen.
+5. **Teams nachträglich bearbeiten** (Championship Setup, Teams-Modus) —
+   Erstellung funktioniert, ob das Bearbeiten bestehender Teams
+   (Mitglieder ändern, Team umbenennen etc.) sauber funktioniert, ist noch
+   nicht getestet.
+6. **Multiclass-Modus** (Championship Setup) — komplett unbegonnen. Zwei
+   parallele Championships/Clubs (identische Events/Stages, je eigene
+   Klasse), sollen eine gemeinsame Wertung bekommen, idealerweise auch ein
+   gemeinsames CR-Set über beide Klassen hinweg. Technischer Lösungsweg
+   noch offen — braucht eigene Planungsrunde, bevor Code entsteht.
 
 ## Angekündigt für separate, eigene Chats (noch keine Details)
 
-- **"Themed" und "Teamed" im Backend trennen** — unklar ob DB-Schema,
-  API, Frontend oder alles. Owner erklärt Details im entsprechenden Chat.
+- **"Themed" und "Teamed" im Backend trennen** — Kern-Teil in Session 9
+  erledigt (temporärer Team-Zweig in Themed deaktiviert, Teamed läuft mit
+  eigenem Club/eigenem Code eigenständig). Falls der Owner noch weitere
+  Trennung meinte (DB-Schema/API tiefer als bisher) — im nächsten Gespräch
+  dazu klären, ob das damit erledigt ist oder noch mehr gemeint war.
 - **"3 von 4 Events zählen"-Regel** — Streichresultat fürs
   Championship-Ranking (bestes 3 von 4 zählt, schlechtestes wird
   automatisch gestrichen). Aktuell zählt vermutlich noch jedes Event
