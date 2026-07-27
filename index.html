@@ -4693,6 +4693,61 @@ function crToggleLocation(locId, checked) {
   crUpdateCounts();
 }
 
+function _crRenderPreview(results) {
+  const tbody = $('cr-preview-tbody');
+  if (tbody) {
+    tbody.innerHTML = results.map((r, i) => `
+      <tr>
+        <td data-label="#">${i + 1}</td>
+        <td style="text-align:left;" data-label="VEHICLE">${escapeHtml(r.vehicle)}</td>
+        <td style="font-size:11px;color:#888;" data-label="ERA">${r.era || '—'}</td>
+        <td data-label="N">${r.n ?? '—'}</td>
+        <td style="color:var(--green);" data-label="CR">${r.cr.toFixed(4)}</td>
+      </tr>`).join('');
+  }
+
+  const slimTbody = $('cr-preview-slim-tbody');
+  if (slimTbody) {
+    slimTbody.innerHTML = results.map((r, i) => {
+      const rowId = `cr-preview-slim-${i}`;
+      return `
+        <tr onclick="toggleSlimDetail('${rowId}')">
+          <td>${i + 1}</td>
+          <td style="text-align:left;">${escapeHtml(r.vehicle)}</td>
+          <td style="color:var(--green);">${r.cr.toFixed(4)}</td>
+        </tr>
+        <tr class="slim-detail-row" id="${rowId}">
+          <td colspan="3">
+            <div class="slim-detail-inner">
+              <div class="slim-badge"><div class="slim-badge-lbl">CLASS</div><div class="slim-badge-val">${r.era || '—'}</div></div>
+              <div class="slim-badge"><div class="slim-badge-lbl">N</div><div class="slim-badge-val">${r.n ?? '—'}</div></div>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+}
+
+async function crViewSet(name) {
+  setText('cr-status', `⏳ Loading "${name}"…`);
+  try {
+    const rows = await adminFetch(`/cr/sets/values?name=${encodeURIComponent(name)}`, null, 'GET');
+    if (!rows.length) {
+      setText('cr-status', `⚠ "${name}" has no saved values.`);
+      return;
+    }
+    const results = rows
+      .map(r => ({ vehicle: r.vehicle, cr: r.cr_value }))
+      .sort((a, b) => a.cr - b.cr);
+    _crRenderPreview(results);
+    setText('cr-preview-info', `${results.length} vehicles · saved set "${name}" (read-only — recalculate to make changes)`);
+    setText('cr-status', `✓ Showing saved set "${name}".`);
+    if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'none';
+  } catch (e) {
+    setText('cr-status', `❌ ${e.message}`);
+  }
+}
+
 async function crCalculate() {
   const topPct   = parseFloat($('cr-top-pct')?.value)  || 25;
   const minN     = parseInt($('cr-min-n')?.value)       || 10;
@@ -4719,7 +4774,7 @@ async function crCalculate() {
     const res  = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
-      body: JSON.stringify({ route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, exponent, max_results: 200 }),
+      body: JSON.stringify({ route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, exponent, max_results: 99999 }),
     });
 
     if (!res.ok) {
@@ -4742,37 +4797,7 @@ async function crCalculate() {
       return;
     }
 
-    if (tbody) {
-      tbody.innerHTML = results.map((r, i) => `
-        <tr>
-          <td data-label="#">${i + 1}</td>
-          <td style="text-align:left;" data-label="VEHICLE">${escapeHtml(r.vehicle)}</td>
-          <td style="font-size:11px;color:#888;" data-label="ERA">${r.era || '—'}</td>
-          <td data-label="N">${r.n}</td>
-          <td style="color:var(--green);" data-label="CR">${r.cr.toFixed(4)}</td>
-        </tr>`).join('');
-    }
-
-    const slimTbody = $('cr-preview-slim-tbody');
-    if (slimTbody) {
-      slimTbody.innerHTML = results.map((r, i) => {
-        const rowId = `cr-preview-slim-${i}`;
-        return `
-          <tr onclick="toggleSlimDetail('${rowId}')">
-            <td>${i + 1}</td>
-            <td style="text-align:left;">${escapeHtml(r.vehicle)}</td>
-            <td style="color:var(--green);">${r.cr.toFixed(4)}</td>
-          </tr>
-          <tr class="slim-detail-row" id="${rowId}">
-            <td colspan="3">
-              <div class="slim-detail-inner">
-                <div class="slim-badge"><div class="slim-badge-lbl">CLASS</div><div class="slim-badge-val">${r.era || '—'}</div></div>
-                <div class="slim-badge"><div class="slim-badge-lbl">N</div><div class="slim-badge-val">${r.n}</div></div>
-              </div>
-            </td>
-          </tr>`;
-      }).join('');
-    }
+    _crRenderPreview(results);
 
     setText('cr-preview-info', `${results.length} vehicles · ${stats.stages_loaded} stages · ${stats.total_entries} entries · exp=${exponent}`);
     setText('cr-status', `✓ ${results.length} vehicles — review preview, then confirm to save.`);
@@ -4820,10 +4845,10 @@ async function crLoadExisting() {
       return;
     }
     tbody.innerHTML = sets.map(s => `
-      <tr>
+      <tr onclick="crViewSet('${escapeHtml(s.name).replace(/'/g,"\\'")}')" style="cursor:pointer;">
         <td style="text-align:left;" data-label="NAME">${escapeHtml(s.name)}</td>
         <td style="font-size:11px;color:#888;" data-label="VEHICLES">${s.vehicle_count} vehicle(s)</td>
-        <td><button data-set-name="${escapeHtml(s.name)}" onclick="crDeleteSet(this.dataset.setName)" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
+        <td><button data-set-name="${escapeHtml(s.name)}" onclick="event.stopPropagation(); crDeleteSet(this.dataset.setName)" style="background:var(--red-dark);color:var(--white);border:none;font-family:var(--ui-font);font-size:11px;padding:2px 8px;cursor:pointer;">DEL</button></td>
       </tr>`).join('');
 
     // Auch CR-Set Dropdown in Championship Setup befüllen

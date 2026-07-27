@@ -431,7 +431,7 @@ def cr_calculate():
     top_pct     = float(body.get("top_pct",  25))
     min_n       = int(body.get("min_n",      10))
     exponent    = float(body.get("exponent", 1.5))
-    max_results = int(body.get("max_results", 200))
+    max_results = int(body.get("max_results", 99999))
 
     if not route_ids or not class_ids:
         return jsonify({"error": "route_ids and class_ids required"}), 400
