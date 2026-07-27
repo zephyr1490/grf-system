@@ -5105,14 +5105,18 @@ async function csRnLoadChamps() {
       list.innerHTML = '<div style="color:#555;font-size:11px;padding:10px;text-align:center;">No championships found</div>';
       return;
     }
-    list.innerHTML = champs.map(c => `
+    list.innerHTML = champs.map(c => {
+      const locStr   = c.locations?.length ? c.locations.join(' → ') : 'no locations found';
+      const label     = c.name || `${c.vehicle_class || 'Unknown class'} · ${c.event_count || 0} event(s)`;
+      return `
       <div class="rn-champ-row" onclick="csRnSelect(this, ${JSON.stringify(c).replace(/"/g,'&quot;')})">
-        <div style="color:var(--gray-light);font-weight:bold;">${escapeHtml(c.name)}</div>
+        <div style="color:var(--gray-light);font-weight:bold;">${escapeHtml(label)}</div>
         <div style="font-size:10px;color:#555;margin-top:2px;">
-          ${c.start_at ? c.start_at.split('T')[0] : '?'} → ${c.close_at ? c.close_at.split('T')[0] : '?'}
-          · ID: ${c.racenet_id}
+          ${c.start_at || '?'} → ${c.close_at || '?'} · ${escapeHtml(c.vehicle_class || '—')} · ID: ${c.racenet_id}
         </div>
-      </div>`).join('');
+        <div style="font-size:10px;color:#444;margin-top:1px;">${escapeHtml(locStr)}</div>
+      </div>`;
+    }).join('');
   } catch (e) {
     list.innerHTML = `<div style="color:#c44;font-size:11px;padding:10px;">❌ ${e.message}</div>`;
   }
@@ -5122,8 +5126,9 @@ function csRnSelect(el, champ) {
   document.querySelectorAll('.rn-champ-row').forEach(r => r.classList.remove('selected'));
   el.classList.add('selected');
   _csSelectedRnChamp = champ;
+  const locStr = champ.locations?.length ? champ.locations.join(' → ') : '—';
   setText('cs-rn-preview',
-    `${champ.name}\nStart: ${champ.start_at?.split('T')[0] || '—'}\nClose: ${champ.close_at?.split('T')[0] || '—'}\nRaceNet ID: ${champ.racenet_id}`);
+    `${champ.name || '(no name on RaceNet)'}\nStart: ${champ.start_at || '—'}\nClose: ${champ.close_at || '—'}\nClass: ${champ.vehicle_class || '—'}\nEvents (${champ.event_count || 0}): ${locStr}\nRaceNet ID: ${champ.racenet_id}`);
   $('cs-rn-preview').style.whiteSpace = 'pre-line';
   if ($('cs-rn-name')) $('cs-rn-name').value = '';
 }
@@ -5140,11 +5145,12 @@ async function csCreateRacenet() {
     const res = await adminFetch('/championship/create', {
       mode: 'racenet',
       championship: {
-        club_id:    $('cs-rn-club')?.value,
-        racenet_id: _csSelectedRnChamp.racenet_id,
+        club_id:       $('cs-rn-club')?.value,
+        racenet_id:    _csSelectedRnChamp.racenet_id,
         name,
-        start_date: _csSelectedRnChamp.start_at?.split('T')[0] || null,
-        end_date:   _csSelectedRnChamp.close_at?.split('T')[0] || null,
+        start_date:    _csSelectedRnChamp.start_at || null,
+        end_date:      _csSelectedRnChamp.close_at || null,
+        vehicle_class: _csSelectedRnChamp.vehicle_class || null,
       },
       rules: [],
     });

@@ -15,6 +15,11 @@ from flask import Flask, request, jsonify
 from functools import wraps
 from racenet_client import RacenetClient
 from vehicle_classes_data import VEHICLE_CLASSES
+# extract_dates/parse_date: dieselbe, bereits bewährte Parsing-Logik wie im
+# laufenden Sync (grf_sync.py) — bewusst wiederverwendet statt hier separat
+# neu implementiert, das war die Ursache für die falschen/fehlenden RaceNet-
+# Felder (Datum, Location, Klasse) im Admin-Championship-Import (Session X).
+from grf_sync import extract_dates, parse_date
 
 app = Flask(__name__)
 
@@ -636,23 +641,22 @@ def _import_racenet_events(client, champ_id: str, racenet_champ_id: str, club_id
 
     imported = []
     for i, ev in enumerate(events_raw, 1):
-        location = ev.get("location", {})
-        loc_name = location.get("name", "") if isinstance(location, dict) else str(location)
-        if not loc_name:
-            loc_name = ev.get("locationName", ev.get("name", f"Event {i}"))
+        # Location liegt bei RaceNet verschachtelt in eventSettings, nicht
+        # direkt auf dem Event-Objekt (gleiche Struktur wie in grf_sync.py).
+        ev_settings = ev.get("eventSettings") or {}
+        loc_name = ev_settings.get("location") or ev_settings.get("locationName") or f"Event {i}"
 
         name = f"Rd.{i} — {loc_name}"
 
-        start_date = ev.get("startAt") or ev.get("startDate") or None
-        end_date   = ev.get("closeAt") or ev.get("endDate")   or None
+        start_date, end_date = extract_dates(ev)
         row = {
             "championship_id":  champ_id,
             "racenet_event_id": str(ev.get("id", ev.get("eventId", ""))),
             "name":             name,
             "location":         loc_name,
             "round_number":     i,
-            "start_date":       start_date[:10] if start_date else None,
-            "end_date":         end_date[:10]   if end_date   else None,
+            "start_date":       start_date,
+            "end_date":         end_date,
         }
         sb_post("events", row)
         imported.append(row)
@@ -678,14 +682,46 @@ def championship_racenet_list():
         for cid in ids:
             try:
                 c = client.get_championship(club_id, cid)
+
+                settings  = c.get("settings") or c.get("championshipSettings") or {}
+                veh_class = settings.get("vehicleClass") or ""
+
+                start, end = extract_dates(c)
+                events = c.get("events", []) or c.get("legs", [])
+
+                # Championship selbst hat oft keine eigenen Datumsfelder —
+                # dann aus erstem/letztem Event ableiten (gleiche Fallback-
+                # Logik wie im Sync).
+                if not start and events:
+                    start, _ = extract_dates(events[0])
+                if not end and events:
+                    _, end = extract_dates(events[-1])
+
+                # Locations je Event sammeln — RaceNet-Championships haben
+                # meist keinen brauchbaren Namen, Locations sind daher das
+                # wichtigste Erkennungsmerkmal für den Admin.
+                locations = []
+                for ev in events:
+                    ev_settings = ev.get("eventSettings") or {}
+                    loc = ev_settings.get("location") or ev_settings.get("locationName") or ""
+                    if loc:
+                        locations.append(loc)
+
                 result.append({
-                    "racenet_id": str(c.get("id", cid)),
-                    "name":       c.get("name", ""),
-                    "start_at":   c.get("startAt") or c.get("startDate", ""),
-                    "close_at":   c.get("closeAt") or c.get("endDate", ""),
+                    "racenet_id":    str(c.get("id", cid)),
+                    "name":          settings.get("name") or c.get("name", ""),
+                    "start_at":      start or "",
+                    "close_at":      end or "",
+                    "vehicle_class": veh_class,
+                    "event_count":   len(events),
+                    "locations":     locations,
                 })
             except Exception:
-                result.append({"racenet_id": str(cid), "name": f"Championship {cid}", "start_at": "", "close_at": ""})
+                result.append({
+                    "racenet_id": str(cid), "name": f"Championship {cid}",
+                    "start_at": "", "close_at": "", "vehicle_class": "",
+                    "event_count": 0, "locations": [],
+                })
         # Sort by start_at descending (newest first)
         result.sort(key=lambda x: x.get("start_at") or "", reverse=True)
         return jsonify(result)
