@@ -1123,12 +1123,16 @@ def cr_vehicles():
     if not valid_id(champ):
         return jsonify({"error": "invalid championship_id"}), 400
     try:
-        # Aus stage_results alle vehicles sammeln
-        rows = sb_get("stage_results", f"championship_id=eq.{champ}&select=vehicle")
-        vehicles = sorted({r["vehicle"] for r in rows if r.get("vehicle")})
-        # Aktuelle CR-Werte laden
-        cr_rows = sb_get("car_ratings", f"championship_id=eq.{champ}&select=vehicle,cr_value")
+        # Fahrzeugliste aus BEIDEN Quellen: stage_results (schon gefahren)
+        # UND car_ratings (schon zugewiesen, ggf. VOR Saisonstart ohne
+        # Ergebnisse). Nur stage_results allein lässt CR-Zuweisungen für noch
+        # nicht gestartete Championships unsichtbar werden, obwohl sie korrekt
+        # in car_ratings gespeichert sind — das war der eigentliche Bug hinter
+        # "Assign Set tut nichts, Werte bleiben leer/Platzhalter".
+        sr_rows = sb_get("stage_results", f"championship_id=eq.{champ}&select=vehicle")
+        cr_rows = sb_get("car_ratings",   f"championship_id=eq.{champ}&select=vehicle,cr_value")
         cr_map  = {r["vehicle"]: r["cr_value"] for r in cr_rows}
+        vehicles = sorted({r["vehicle"] for r in sr_rows if r.get("vehicle")} | set(cr_map.keys()))
         return jsonify([{"vehicle": v, "cr_value": cr_map.get(v)} for v in vehicles])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
