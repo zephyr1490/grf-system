@@ -4699,12 +4699,9 @@ function crToggleLocation(locId, checked) {
 }
 
 async function crCalculate() {
-  const champId  = $('cr-champ-select')?.value;
   const topPct   = parseFloat($('cr-top-pct')?.value)  || 25;
   const minN     = parseInt($('cr-min-n')?.value)       || 10;
   const exponent = parseFloat($('cr-exponent')?.value)  || 1.5;
-
-  if (!champId) { setText('cr-status', '⚠ Select a championship first.'); return; }
 
   const routeIds  = [...document.querySelectorAll('input[name="cr-route"]:checked')].map(c => parseInt(c.value));
   const classIds  = [...document.querySelectorAll('input[name="cr-cls"]:checked')].map(c => parseInt(c.value));
