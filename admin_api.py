@@ -17,8 +17,14 @@ from racenet_client import RacenetClient
 from vehicle_classes_data import VEHICLE_CLASSES
 # extract_dates/parse_date: dieselbe, bereits bewährte Parsing-Logik wie im
 # laufenden Sync (grf_sync.py) — bewusst wiederverwendet statt hier separat
-# neu implementiert, das war die Ursache für die falschen/fehlenden RaceNet-
-# Felder (Datum, Location, Klasse) im Admin-Championship-Import (Session X).
+# neu implementiert, das war die Ursache für falsche/fehlende RaceNet-Felder
+# (Datum, Location) im Admin-Championship-Import (Session X).
+#
+# NACHTRAG: "Klasse" (vehicle_class) NICHT über RaceNet automatisierbar —
+# GRFs Klassen-Taxonomie (vehicle_classes_data.py) ist eine eigene, owner-
+# gepflegte Zuordnung, die RaceNet nicht kennt. settings.get("vehicleClass")
+# liefert dafür nichts Brauchbares (verifiziert: Feld existiert dort nicht
+# in nutzbarer Form). Klasse bleibt bewusst manuelle Admin-Auswahl.
 from grf_sync import extract_dates, parse_date
 
 app = Flask(__name__)
