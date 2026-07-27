@@ -1195,7 +1195,7 @@ textarea.inp-std { resize:vertical; }
         </table>
       </div>
       <div style="padding:6px 8px; font-size:11px; color:#555; background:var(--black); border-top:1px solid #1a1a1a;">
-        <span id="elo-result-count">— drivers shown</span> &nbsp;·&nbsp; ELO base: 1500 &nbsp;·&nbsp; Established threshold: 20 starts
+        <span id="elo-result-count">— drivers shown</span> &nbsp;·&nbsp; ELO base: 1500 &nbsp;·&nbsp; Established threshold: 20 starts &nbsp;·&nbsp; <span id="elo-delta-asof"></span>
       </div>
     </div>
 
@@ -2450,9 +2450,21 @@ function dnfRateHTML(rate) {
  * Fahrer im Ergebnis-Objekt einfach nicht auf — Aufrufer behandelt das als
  * "keine Daten", nicht als "Änderung = 0".
  */
+/** Gibt das Cutoff-Datum (YYYY-MM-DD) für ein N-Tage-Delta zurück — eigene
+ *  Funktion statt Inline-Berechnung, damit fetchEloDeltaMap() und die
+ *  UI-Anzeige des Stichtags garantiert exakt dasselbe Datum verwenden. */
+function eloDeltaCutoffDate(days = 7) {
+  return new Date(Date.now() - days * 86400 * 1000).toISOString().slice(0, 10);
+}
+
 async function fetchEloDeltaMap(days = 7) {
-  const cutoff = new Date(Date.now() - days * 86400 * 1000).toISOString().slice(0, 10);
-  const rows = await sb('elo_history', `select=driver_name,elo&snapshot_date=eq.${cutoff}`);
+  const cutoff = eloDeltaCutoffDate(days);
+  // sbAll() statt sb() — bei der Fahrerzahl übers gesamte System kann eine
+  // Tages-Abfrage über elo_history die ~1000-Zeilen-Grenze von sb() (Supabase/
+  // PostgREST-Standard-Cap) erreichen. sb() liefert dann nur eine zufällige,
+  // unvollständige Teilmenge — dadurch fehlte Δ7 bei manchen Fahrern
+  // scheinbar willkürlich, obwohl ihre elo_history-Daten korrekt waren.
+  const rows = await sbAll('elo_history', `select=driver_name,elo&snapshot_date=eq.${cutoff}&order=driver_name.asc`);
   const map = {};
   rows.forEach(r => { map[r.driver_name] = r.elo; });
   return map;
@@ -4502,6 +4514,7 @@ function eloRender() {
   }
 
   setText('elo-result-count', `${data.length} driver${data.length !== 1 ? 's' : ''} shown`);
+  setText('elo-delta-asof', _eloTrack === 'overall' ? `Δ 7D vs. ${eloDeltaCutoffDate(7)}` : '');
 
   if (_eloData.length) {
     setText('elo-count',            _eloTotalDriverCount ?? _eloData.length);
