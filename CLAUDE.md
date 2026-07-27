@@ -12,11 +12,13 @@ periodischer Sync gegen RaceNet-Daten, Speicherung in Supabase.
   aus und der Service wurde deshalb gestoppt).
 - **Datenbank:** **Supabase** (extern, nicht auf Railway). Railway hostet
   nur die API, kein eigenes DB-Hosting nötig.
-- **Sync:** `grf_sync.py` / `racenet_client.py` ziehen Daten von RaceNet.
-  ELO-Neuberechnung läuft über den Endpoint `/elo/update` in `admin_api.py`,
-  ausgelöst als **Railway Cron Job, alle 4 Stunden** (`0 */4 * * *`), plus
-  manuell über das Admin-Panel (mit `force_reset`-Option für kompletten
-  Neuaufbau).
+- **Sync:** `grf_sync.py` / `racenet_client.py` ziehen Daten von RaceNet, läuft
+  als **Railway Cron Job alle 10 Minuten** (`*/10 * * * *`). `grf_sync.py`
+  triggert danach selbst den Endpoint `/elo/update` in `admin_api.py` für die
+  ELO-Neuberechnung (kein separater Cron dafür) — plus manuell über das
+  Admin-Panel (mit `force_reset`-Option für kompletten Neuaufbau). Bei
+  jedem Lauf wird u.a. der Tages-Snapshot in `elo_history` überschrieben
+  (siehe Δ7-Abschnitt unten) — nicht nur einmal pro Woche, sondern laufend.
 - **9 Clubs** werden synchronisiert; größere Clubs haben Events mit ~80+
   Teilnehmern.
 
@@ -44,6 +46,33 @@ solange dieser Endpoint nicht umgebaut wird.
   Rating-Berechnung, gespeichert geprefixt in `elo_state.state_json.ratings`
   (`era:historic`, `surface:gravel`, ...). Keine Kombination mehrerer
   Tracks, keine Quervergleiche (andere Skala).
+
+### Δ 7 Tage (elo_history) — Mechanik + Session-9-Fix
+
+- **Kein wöchentliches Ereignis** — rollierender Vergleich, bei jedem
+  Seitenaufruf neu berechnet: `ELO jetzt − ELO von vor genau 7 Tagen`. Dafür
+  braucht's täglich (nicht nur einmal pro Woche) einen Snapshot in
+  `elo_history` — der wird bei JEDEM Cron-Lauf (alle 10 Min) für den
+  aktuellen Tag überschrieben (`on_conflict="driver_name,snapshot_date"`).
+- **Gefixt (Session 9):** `fetchEloDeltaMap()` im Frontend nutzte `sb()`
+  statt `sbAll()` — bei der Fahrerzahl übers Gesamtsystem (9 Clubs) kam die
+  Tages-Abfrage über `elo_history` in die Nähe von Supabase/PostgRESTs
+  ~1000-Zeilen-Cap, wodurch zufällige Fahrer beim Δ7 nicht angezeigt wurden
+  (Daten in `elo_history` selbst waren immer korrekt, reines
+  Anzeige-/Pagination-Problem). **Vorsicht bei jeder neuen Abfrage gegen
+  potenziell große Tabellen: `sb()` cappt bei ~1000 Zeilen, `sbAll()`
+  paginiert vollständig — im Zweifel `sbAll()` nutzen.**
+- **Bekannte, nicht gefixte Eigenheit:** `date.today()` im Backend
+  (`admin_api.py`, Snapshot-Schreibstelle) läuft ohne explizite Zeitzone —
+  nutzt die Server-Zeit des Railway-Containers, vermutlich UTC (keine
+  `TZ`-Env-Var im Projekt gefunden). Der Tageswechsel für den Snapshot
+  passiert dadurch um Mitternacht UTC = 1–2 Uhr CET/CEST, nicht um
+  Mitternacht bei der Community. Für den Großteil des Tages praktisch
+  irrelevant, nur im 1-2h-Fenster um Mitternacht CET könnte ein Ergebnis
+  technisch dem "falschen" Tag zugeordnet werden. Owner-Wunsch (noch nicht
+  umgesetzt): Snapshot-Tag an CET ausrichten, idealerweise an den
+  tatsächlichen Club-Wochenrhythmus (Dienstag 12:00 CET) anlehnen statt an
+  reine Kalendertage — eigene Design-Entscheidung, kein Ein-Zeilen-Fix.
 
 ## Car-Rating-System (Session 9, komplett überarbeitet)
 
@@ -169,6 +198,27 @@ sein, mit unterschiedlichen Untermenüs. Aktueller Bau-Status:
    Klasse), sollen eine gemeinsame Wertung bekommen, idealerweise auch ein
    gemeinsames CR-Set über beide Klassen hinweg. Technischer Lösungsweg
    noch offen — braucht eigene Planungsrunde, bevor Code entsteht.
+7. **Weitere ~10 Clubs einbinden** (Session 9, Owner-Idee, noch nicht
+   entschieden ob's umgesetzt wird): werden bereits fürs ELO ausgelesen/
+   existieren in Supabase, haben aber keine eigene Website-Präsenz wie
+   Themed. Nicht im vollen Themed-Umfang gedacht (kein CR/Bonusregeln/
+   Narrative), eher schlank: Archiv + ggf. Live-Daten. Perspektivisch
+   evtl. mehrere Club-Admins mit eigenen Custom-Point-Systemen — **ein
+   geteiltes Admin-Passwort ist für den Owner ok** (3-4 vertraute Leute,
+   überschaubares Risiko), kein separates Auth-System nötig. Owner will
+   sich das erst überlegen, ob's den Aufwand wert ist, bevor was gebaut
+   wird — bei geringem Aufwand direkt ans bestehende Admin-Panel anbinden.
+8. **Status-Kacheln** (Supabase OK / RaceNet OK / Event Active) und die
+   "LIVE"-Kachel oben rechts sind aktuell reine Platzhalter ohne Funktion
+   — Owner will sie entweder sinnvoll verknüpfen oder ersetzen (Idee:
+   Anzeige "welche Clubs laufen gerade", sobald Punkt 7 oben umgesetzt
+   ist) oder ganz entfernen, falls nicht sinnvoll/machbar.
+9. **Δ7-Snapshot an CET/Club-Wochenrhythmus ausrichten** statt UTC-
+   Kalendertag — siehe Δ7-Abschnitt weiter oben, Design-Entscheidung,
+   noch nicht umgesetzt.
+10. **Ressourceneffizienz beim 10-Minuten-Cron** — Owner will das nächstes
+    Mal besprechen (nicht jetzt), noch keine Details, was genau daran
+    geprüft/optimiert werden soll.
 
 ## Angekündigt für separate, eigene Chats (noch keine Details)
 
