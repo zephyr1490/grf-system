@@ -1297,8 +1297,10 @@ def elo_update():
         # ── Events laden: pro Championship chronologisch nach round_number ─
         # Wir speichern (champ_start_date, round_number, RawEvent) für globale Sortierung
         raw_events_with_date = []
-        # Auch end_date der letzten Stage pro Fahrer für Decay-Berechnung
-        driver_last_event_date: dict = {}  # {driver_name: "YYYY-MM-DD"}
+        # driver_last_event_date kommt seit dem Egress-Fix (Session 10) NICHT
+        # mehr aus einem Rescan von event_results, sondern aus state (siehe
+        # elo_state.py — wird von process_racenet_events()/mark_driver_seen()
+        # pro Event mitgepflegt, sobald es einmal verarbeitet wurde).
 
         # ── Events + Ergebnisse in Batches bulk-laden statt N+1 Einzel-Reads ──
         # Vorher: 1 sb_get() pro Championship (Events) + 1 sb_get() pro
@@ -1327,9 +1329,35 @@ def elo_update():
         for ev in all_events:
             events_by_champ.setdefault(ev["championship_id"], []).append(ev)
 
+        # Composite raw event_id + Event-Datum lassen sich schon aus den
+        # (billigen) Events-Metadaten ableiten, ganz OHNE event_results.
+        # Damit kann VOR dem teuren event_results-Fetch gefiltert werden,
+        # welche Events überhaupt noch unverarbeitet sind.
+        ev_meta_by_id: dict = {}   # {ev["id"]: (raw_event_id, ev_end, champ, ev)}
+        for champ in champ_rows:
+            champ_id    = champ["id"]
+            champ_start = champ.get("start_date") or ""
+            for ev in events_by_champ.get(champ_id, []):
+                if ev.get("status", 0) != 2:
+                    continue
+                ev_id = ev["id"]
+                raw_event_id = f"{champ['club_id']}:{champ_id}:{ev_id}"
+                ev_end = (ev.get("end_date") or ev.get("start_date") or
+                          champ.get("end_date") or champ_start or "")
+                ev_meta_by_id[ev_id] = (raw_event_id, ev_end, champ, ev)
+
+        # ── Egress-Fix (Session 10) ─────────────────────────────────────────
+        # Vorher: ALLE Completed-Events im (bei Delta-Syncs: 90-Tage-)Fenster
+        # wurden bei JEDEM Lauf komplett neu aus event_results geladen — der
+        # Skip bereits verarbeiteter Events passierte erst intern in
+        # process_racenet_events() (elo_pipeline.py), also NACHDEM das
+        # Egress schon verbraucht war. Jetzt: state.is_event_processed()
+        # bereits hier prüfen, VOR dem Fetch. Im Regelfall (kein neues Event
+        # seit dem letzten 10-Minuten-Lauf) ist completed_event_ids dadurch
+        # leer — 0 Zeilen event_results statt der kompletten Fenster-Historie.
         completed_event_ids = [
-            ev["id"] for evs in events_by_champ.values() for ev in evs
-            if ev.get("status", 0) == 2
+            ev_id for ev_id, (raw_id, _, _, _) in ev_meta_by_id.items()
+            if force or not state.is_event_processed(raw_id)
         ]
 
         results_by_event: dict = {}
@@ -1342,54 +1370,44 @@ def elo_update():
             )
             for r in rows:
                 results_by_event.setdefault(r["event_id"], []).append(r)
-        log(f"Loaded event_results for {len(completed_event_ids)} completed "
-            f"events in {-(-len(completed_event_ids) // BATCH) if completed_event_ids else 0} batch(es)")
+        log(f"Loaded event_results for {len(completed_event_ids)} new/unprocessed "
+            f"events (of {len(ev_meta_by_id)} completed in window) in "
+            f"{-(-len(completed_event_ids) // BATCH) if completed_event_ids else 0} batch(es)")
 
-        for champ in champ_rows:
-            champ_id    = champ["id"]
+        for ev_id, (raw_event_id, ev_end, champ, ev) in ev_meta_by_id.items():
+            if ev_id not in completed_event_ids:
+                continue  # bereits verarbeitet (state.processed_event_ids) — nichts zu tun
+
+            results = results_by_event.get(ev_id, [])
+            if not results:
+                continue
+
+            finishers = []
+            dnf_list  = []
+            for r in results:
+                driver  = r.get("driver_name","")
+                rank    = r.get("position")
+                vehicle = r.get("vehicle","Unknown")
+                is_dnf  = r.get("is_dnf", False)
+                if not driver:
+                    continue
+                if is_dnf:
+                    dnf_list.append((driver, vehicle, driver))
+                elif rank:
+                    finishers.append((driver, rank, vehicle, driver))
+
+            if not finishers and not dnf_list:
+                continue
+
+            raw_event = RawEvent(
+                event_id=raw_event_id,
+                location=ev.get("location") or ev.get("name",""),
+                finishers=finishers,
+                dnf_drivers=dnf_list,
+                event_date=ev_end,
+            )
             champ_start = champ.get("start_date") or ""
-
-            ev_rows = events_by_champ.get(champ_id, [])
-            for ev in ev_rows:
-                ev_id  = ev["id"]
-                if ev.get("status", 0) != 2:
-                    continue
-
-                results = results_by_event.get(ev_id, [])
-                if not results:
-                    continue
-
-                finishers = []
-                dnf_list  = []
-                for r in results:
-                    driver  = r.get("driver_name","")
-                    rank    = r.get("position")
-                    vehicle = r.get("vehicle","Unknown")
-                    is_dnf  = r.get("is_dnf", False)
-                    if not driver:
-                        continue
-                    # Letztes Event-Datum pro Fahrer tracken (für Decay)
-                    ev_end = (ev.get("end_date") or ev.get("start_date") or
-                              champ.get("end_date") or champ_start or "")
-                    if ev_end:
-                        if driver not in driver_last_event_date or ev_end > driver_last_event_date[driver]:
-                            driver_last_event_date[driver] = ev_end
-                    if is_dnf:
-                        dnf_list.append((driver, vehicle, driver))
-                    elif rank:
-                        finishers.append((driver, rank, vehicle, driver))
-
-                if not finishers and not dnf_list:
-                    continue
-
-                event_id = f"{champ['club_id']}:{champ_id}:{ev_id}"
-                raw_event = RawEvent(
-                    event_id=event_id,
-                    location=ev.get("location") or ev.get("name",""),
-                    finishers=finishers,
-                    dnf_drivers=dnf_list,
-                )
-                raw_events_with_date.append((champ_start, ev.get("round_number", 0), raw_event))
+            raw_events_with_date.append((champ_start, ev.get("round_number", 0), raw_event))
 
         # Global chronologisch sortieren: erst nach Championship-Startdatum, dann Round
         raw_events_with_date.sort(key=lambda x: (x[0] or "", x[1]))
@@ -1453,7 +1471,7 @@ def elo_update():
         transition_log = []
         no_date_count = 0
         for driver_name in overall_ratings.keys():
-            last_date_str = driver_last_event_date.get(driver_name)
+            last_date_str = state.driver_last_event_date.get(driver_name)
             if not last_date_str:
                 no_date_count += 1
                 continue

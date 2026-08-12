@@ -131,6 +131,18 @@ def is_dnf_ms(ms: int | None) -> bool:
     return ms >= DNF_MIN_MS and (ms % DNF_MODULUS_MS) == 0
 
 
+def pg_in_list(values: list[str]) -> str:
+    """
+    Baut die Werteliste für einen PostgREST `in.(...)`-Filter aus Freitext-
+    Werten (z.B. Fahrernamen, die roh/ungefiltert von RaceNet kommen und
+    Kommas oder Anführungszeichen enthalten könnten). Jeder Wert wird in
+    doppelte Anführungszeichen gesetzt, enthaltene " werden auf "" verdoppelt
+    (PostgREST-CSV-Quoting-Regel) — sonst würde z.B. ein Name mit Komma den
+    Filter in mehrere falsche Werte zerreißen.
+    """
+    return ",".join('"' + v.replace('"', '""') + '"' for v in values)
+
+
 def get_base_points(position: int, is_dnf: bool) -> int:
     if is_dnf or position <= 0:
         return DNF_POINTS
@@ -223,24 +235,27 @@ class SupabaseClient:
             offset += page_size
         return all_rows
 
-    def upsert(self, table: str, data: dict | list, on_conflict: str = "id") -> list:
+    def upsert(self, table: str, data: dict | list, on_conflict: str = "id") -> None:
+        # Egress-Fix (Session 10): return=minimal statt return=representation —
+        # kein Aufrufer dieser Methode hat je den Rückgabewert genutzt (geprüft,
+        # alle 8 Aufrufstellen), Supabase hat also bei jedem einzelnen Schreib-
+        # vorgang unnötig die komplette geschriebene Zeile zurückgeschickt.
         if isinstance(data, dict):
             data = [data]
         h = {**self.headers,
-             "Prefer": "resolution=merge-duplicates,return=representation"}
+             "Prefer": "resolution=merge-duplicates,return=minimal"}
         r = requests.post(
             f"{self.url}/rest/v1/{table}?on_conflict={on_conflict}",
             headers=h, json=data, timeout=15,
         )
         r.raise_for_status()
-        return r.json()
 
     def insert_ignore(self, table: str, data: list, on_conflict: str = "id") -> None:
         """Insert, silently skip duplicates."""
         if not data:
             return
         h = {**self.headers,
-             "Prefer": "resolution=ignore-duplicates,return=representation"}
+             "Prefer": "resolution=ignore-duplicates,return=minimal"}
         requests.post(
             f"{self.url}/rest/v1/{table}?on_conflict={on_conflict}",
             headers=h, json=data, timeout=15,
@@ -658,31 +673,49 @@ def sync_event(db: SupabaseClient, client,
             time.sleep(0.1)
 
     # ── 5. Ensure drivers exist in drivers table ──────────────────────────────
+    # Egress-Fix (Session 10): statt der KOMPLETTEN drivers-Tabelle (2200+
+    # Namen) bei jedem Event-Sync nur die Namen abfragen, die in DIESEM Event
+    # tatsächlich mitgefahren sind (driver_info, typischerweise 20-40 Fahrer).
+    # Kein club_id/championship_id-Filter — bewusst weiterhin fahrer-, nicht
+    # event-gescoped (siehe Schritt 6).
     existing_drivers: set = set()
-    if not test:
-        # Paginiert (select_all) statt select — bei 2219+ Fahrern schnitt der
-        # alte unpaginierte Read hier still bei ~1000 ab (gleiche Cap-Bug-Klasse
-        # wie Step 6 vor dem Fix), was neue Fahrer fälschlich als "neu" markiert
-        # hätte (harmlos dank insert_ignore) und v.a. dem Upsert unten in Step 6
-        # eine unvollständige Referenzliste gegeben hätte.
-        existing_drivers = {r["name"] for r in db.select_all("drivers", "select=name")}
-        if driver_info:
-            new_drivers = [
-                {"name": name, "elo": 1000, "wins": 0, "starts": 0, "country": ""}
-                for name in driver_info
-                if name and name not in existing_drivers
-            ]
-            if new_drivers:
-                db.insert_ignore("drivers", new_drivers, on_conflict="name")
-                log(f"      👤 {len(new_drivers)} new driver(s) added")
-                existing_drivers |= {d["name"] for d in new_drivers}
+    if not test and driver_info:
+        names = list(driver_info.keys())
+        name_list = pg_in_list(names)
+        existing_drivers = {
+            r["name"] for r in db.select_all("drivers", f"name=in.({name_list})&select=name")
+        }
+        new_drivers = [
+            {"name": name, "elo": 1000, "wins": 0, "starts": 0, "country": ""}
+            for name in names
+            if name and name not in existing_drivers
+        ]
+        if new_drivers:
+            db.insert_ignore("drivers", new_drivers, on_conflict="name")
+            log(f"      👤 {len(new_drivers)} new driver(s) added")
+            existing_drivers |= {d["name"] for d in new_drivers}
 
-    # ── 6. Update driver stats (starts, wins) ──────────────────────────────────
-    if not test:
+    # ── 6. Update driver stats (starts, wins) ───────────────────────────────
+    # Egress-Fix (Session 10): vorher wurde bei JEDEM Event-Sync die KOMPLETTE
+    # event_results-Tabelle (25k+ Zeilen, alle Fahrer, alle Clubs) geladen,
+    # nur um starts/wins für ALLE Fahrer neu zu berechnen. Jetzt: nur die
+    # event_results der Fahrer laden, die in DIESEM Event mitgefahren sind —
+    # via driver_name IN (...), bewusst OHNE club_id/championship_id-Filter,
+    # damit jeder Fahrer weiterhin seine korrekte, clubübergreifende
+    # Gesamt-Statistik bekommt (ein Fahrer ohne Themed-Start, aber mit
+    # Starts in anderen Clubs, zählt weiterhin richtig). Ergebnis ist
+    # identisch zum alten Vollrecompute — nur die Datenmenge pro Aufruf
+    # schrumpft von "ganze Liga" auf "die paar Fahrer, die gerade gefahren
+    # sind".
+    if not test and driver_info:
         try:
-            all_results = db.select_all("event_results", "select=driver_name,position,is_dnf")
+            names = list(driver_info.keys())
+            name_list = pg_in_list(names)
+            their_results = db.select_all(
+                "event_results", f"driver_name=in.({name_list})&select=driver_name,position,is_dnf"
+            )
             stats: dict = {}
-            for r in all_results:
+            for r in their_results:
                 name = r.get("driver_name", "")
                 if not name:
                     continue

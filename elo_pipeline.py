@@ -58,6 +58,13 @@ class RawEvent:
     location: str
     finishers: List[tuple]
     dnf_drivers: List[tuple] = field(default_factory=list)
+    # Egress-Fix (Session 10): ISO-Datum (oder Timestamp) des Events, optional.
+    # Wird nur gebraucht, damit state.driver_last_event_date beim Verarbeiten
+    # mitgepflegt werden kann (siehe elo_state.py) — ersetzt das frühere
+    # Nachladen der kompletten event_results-Historie in admin_api.py nur um
+    # dieses Datum zu ermitteln. Leer lassen, wenn kein Datum bekannt ist
+    # (z.B. ältere Aufrufer) — dann bleibt driver_last_event_date unverändert.
+    event_date: str = ""
 
 
 def _unpack_finisher(t: tuple) -> tuple:
@@ -100,10 +107,10 @@ def _process_single_event(state: EloState, event: RawEvent, lookups: CategoryLoo
 
     for d, _, _, name in finishers:
         state.update_label(d, name)
-        state.mark_driver_seen(d)
+        state.mark_driver_seen(d, event.event_date)
     for d, _, name in dnfs:
         state.update_label(d, name)
-        state.mark_driver_seen(d)
+        state.mark_driver_seen(d, event.event_date)
 
     club_id = event.event_id.split(":")[0] if ":" in event.event_id else event.event_id
     for r in raw_results:

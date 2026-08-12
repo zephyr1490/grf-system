@@ -69,19 +69,42 @@ class EloState:
     driver_inactive: Dict[str, bool] = field(default_factory=dict)
     total_events_processed: int = 0   # globaler Zähler über alle Events
 
+    # Egress-Fix (Session 10): echtes Kalenderdatum (ISO "YYYY-MM-DD") der
+    # letzten Teilnahme pro Fahrer — {driver_id: date}. Wird von
+    # mark_driver_seen() bei JEDER Event-Verarbeitung mitgepflegt (nur beim
+    # ERSTEN Verarbeiten eines Events, danach per processed_event_ids
+    # übersprungen — genau wie ratings/driver_clubs). admin_api.py's
+    # /elo/update las dieses Datum vorher bei JEDEM 10-Minuten-Cron-Lauf neu
+    # aus der KOMPLETTEN event_results-Historie der letzten 90 Tage — Haupt-
+    # treiber des Supabase-Egress-Problems (siehe CLAUDE.md). Jetzt einmal
+    # pro Event berechnet und dauerhaft im State mitgeführt, kein Rescan mehr
+    # nötig, unabhängig davon wie lange das Event schon zurückliegt.
+    driver_last_event_date: Dict[str, str] = field(default_factory=dict)
+
     def add_driver_club(self, driver_id: str, club_id: str) -> None:
         clubs = self.driver_clubs.setdefault(driver_id, [])
         if club_id not in clubs:
             clubs.append(club_id)
 
-    def mark_driver_seen(self, driver_id: str) -> None:
+    def mark_driver_seen(self, driver_id: str, event_date: str | None = None) -> None:
         """
         Markiert einen Fahrer als beim aktuellen Event-Zählerstand gesehen.
         Setzt driver_inactive NICHT mehr selbst (Session 7: der alte 20-
         Events-Mechanismus ist entfernt) — das Flag wird ausschließlich von
         admin_api.py (kalenderbasiert) gesetzt.
+
+        event_date (optional, ISO "YYYY-MM-DD" oder länger, z.B. Timestamp —
+        nur die ersten 10 Zeichen zählen): wenn gesetzt und neuer als das
+        bisher gespeicherte Datum, wird driver_last_event_date aktualisiert.
+        Reiner String-Vergleich reicht, da ISO-Daten lexikografisch sortierbar
+        sind. Fehlt event_date (z.B. ältere Aufrufer), bleibt das bisherige
+        Datum unverändert.
         """
         self.driver_last_seen[driver_id] = self.total_events_processed
+        if event_date:
+            prev = self.driver_last_event_date.get(driver_id)
+            if not prev or event_date[:10] > prev[:10]:
+                self.driver_last_event_date[driver_id] = event_date[:10]
 
     def is_inactive(self, driver_id: str) -> bool:
         return self.driver_inactive.get(driver_id, False)
@@ -131,6 +154,7 @@ class EloState:
             "driver_last_seen": self.driver_last_seen,
             "driver_inactive": self.driver_inactive,
             "total_events_processed": self.total_events_processed,
+            "driver_last_event_date": self.driver_last_event_date,
         }
 
     @staticmethod
@@ -147,6 +171,7 @@ class EloState:
         st.driver_last_seen = d.get("driver_last_seen", {})
         st.driver_inactive = {k: bool(v) for k, v in d.get("driver_inactive", {}).items()}
         st.total_events_processed = d.get("total_events_processed", 0)
+        st.driver_last_event_date = d.get("driver_last_event_date", {})
         return st
 
 
