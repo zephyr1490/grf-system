@@ -2804,11 +2804,11 @@ function tallyDrivers(rows, predicate, topN = 10) {
 }
 
 /** Rendert eine Ranking-Liste im "Most Improved"-Look (Rang/Name/Bar/Zahl). */
-function renderRankedList(containerId, rows) {
+function renderRankedList(containerId, rows, emptyLabel = 'NO RESULTS YET') {
   const container = $(containerId);
   if (!container) return;
   if (!rows.length) {
-    container.innerHTML = '<div class="empty"><div class="empty-title">NO DATA YET</div></div>';
+    container.innerHTML = `<div class="empty"><div class="empty-title">${escapeHtml(emptyLabel)}</div></div>`;
     return;
   }
   const maxVal = rows[0].count;
@@ -2832,6 +2832,21 @@ function backToClubDirectory() {
 
 async function showClubDetail(clubId) {
   if (!clubId) return;
+
+  // Bug-Fix: von Home aus geklickt existiert page-clubs zwar im DOM, ist
+  // aber nicht die aktive .page — ohne diesen Schritt wurden nur die
+  // (unsichtbaren) Unteransichten innerhalb von page-clubs umgeschaltet,
+  // sichtbar passierte optisch nichts. showPage() NICHT wiederverwenden
+  // (würde zusätzlich loadClubDirectory() feuern und einen zweiten,
+  // überflüssigen History-Eintrag erzeugen) — daher hier bewusst nur die
+  // Kern-Seitenumschaltung dupliziert, ohne den Rest von showPage().
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+  const clubsPage = $('page-clubs');
+  if (clubsPage) clubsPage.classList.add('active');
+  const clubsMenuEl = _findMenuEl('clubs');
+  if (clubsMenuEl) clubsMenuEl.classList.add('active');
+
   const directoryView = $('club-directory-view');
   const detailView    = $('club-detail-view');
   if (directoryView) directoryView.style.display = 'none';
@@ -2851,8 +2866,8 @@ async function showClubDetail(clubId) {
     const champIds = champs.map(c => c.id);
 
     if (!champIds.length) {
-      renderRankedList('club-detail-podiums', []);
-      renderRankedList('club-detail-stagewins', []);
+      renderRankedList('club-detail-podiums', [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
+      renderRankedList('club-detail-stagewins', [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
       return;
     }
 
