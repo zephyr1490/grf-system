@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Global Rally Fans</title>
+
+<!-- ── PWA: installierbar, kein Offline-Caching (s. sw.js) ────────────── -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e2124">
+<link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GRF">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Exo+2:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=VT323&family=Oswald:wght@400;600;700&display=swap');
 
@@ -5818,6 +5827,14 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(r => r.json())
     .then(d => setText('page-views', d.page_views != null ? d.page_views.toLocaleString() : '—'))
     .catch(() => setText('page-views', '—'));
+
+  // PWA: Service Worker registrieren (nur für Installierbarkeit, s. sw.js —
+  // cacht bewusst nichts, alle Daten bleiben live aus Supabase).
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.warn('[SW] Registrierung fehlgeschlagen:', err);
+    });
+  }
 });
 </script>
 
