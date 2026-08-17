@@ -909,21 +909,57 @@ textarea.inp-std { resize:vertical; }
   </div>
 
   <!-- ══════════════════════════════════════════
-       CLUBS PAGE — Directory aller ~11 GRF-Clubs.
-       Schritt 1+2 der Multi-Club-Roadmap (s. CLAUDE.md): Datenquelle +
-       eigener Nav-Tab. Klick auf eine Zeile führt noch NICHT zu einer
-       eigenen Club-Unterseite — das generische Club-Template (Punkt 6
-       der Roadmap) existiert noch nicht. Kommt in einem späteren Schritt.
+       CLUBS PAGE — Directory aller ~11 GRF-Clubs (Schritt 1+2) + generisches
+       Club-Detail/Archiv (Schritt 6+7 der Multi-Club-Roadmap, s. CLAUDE.md).
+       Bewusst EIN generischer Detail-Container statt einer eigenen Seite
+       pro Club — Config kommt zur Laufzeit aus den geladenen Club-Daten,
+       nicht aus hartcodiertem HTML pro Club (s. Roadmap Punkt 6: DOM-/
+       Code-Größe soll mit der Anzahl an Modulen skalieren, nicht mit der
+       Anzahl an Clubs). GRF Themed/Teamed nutzen das NICHT — die haben
+       weiterhin ihre eigene, unangetastete Seite (page-themed/page-teamed)
+       mit vollem Funktionsumfang.
   ══════════════════════════════════════════ -->
   <div class="page" id="page-clubs">
-    <div class="col-hdr">CLUB DIRECTORY
-      <span class="col-hdr-right">STATUS</span>
-    </div>
-    <div class="club-directory-wrap">
-      <div id="club-directory-list">
-        <div class="empty"><div class="empty-title">LOADING…</div></div>
+
+    <div id="club-directory-view">
+      <div class="col-hdr">CLUB DIRECTORY
+        <span class="col-hdr-right">STATUS</span>
+      </div>
+      <div class="club-directory-wrap">
+        <div id="club-directory-list">
+          <div class="empty"><div class="empty-title">LOADING…</div></div>
+        </div>
       </div>
     </div>
+
+    <!-- Generisches Club-Detail — Archiv + Stats (Podiums/Stage-Wins).
+         Standardmäßig versteckt, wird von showClubDetail() befüllt und
+         eingeblendet. -->
+    <div id="club-detail-view" style="display:none;">
+      <div class="col-hdr" style="cursor:pointer;" onclick="backToClubDirectory()">‹ ALL CLUBS
+        <span class="col-hdr-right" id="club-detail-name">—</span>
+      </div>
+
+      <div class="club-directory-wrap">
+        <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
+          <span class="col-hdr-right">TOP 1-3 FINISHES</span>
+        </div>
+        <div id="club-detail-podiums">
+          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="club-directory-wrap" style="margin-top:6px;">
+        <div class="col-hdr" style="border-bottom:none;">MOST STAGE WINS
+          <span class="col-hdr-right">STAGE POSITION 1</span>
+        </div>
+        <div id="club-detail-stagewins">
+          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -2505,7 +2541,17 @@ function showPage(name, el) {
 
   if (name === 'themed')   loadThemedResults();
   if (name === 'teamed')   loadTeamedResults();
-  if (name === 'clubs')    loadClubDirectory();
+  if (name === 'clubs') {
+    // Immer zurück zur Listen-Ansicht, falls man vorher in einem Club-
+    // Detail war (z.B. normaler Klick auf den Nav-Tab "Clubs") — nur ein
+    // Deep-Link mit Sub-Pfad (#clubs/<id>, s. applyRoute()) öffnet danach
+    // gezielt wieder ein Detail.
+    const directoryView = $('club-directory-view');
+    const detailView    = $('club-detail-view');
+    if (directoryView) directoryView.style.display = '';
+    if (detailView)    detailView.style.display    = 'none';
+    loadClubDirectory();
+  }
   // Standard-Filter ist 'active' (siehe _eloFilterMode-Default) — das ist
   // eine eigene Dimension zu "Established" (20+ Career-Starts) und sollte
   // nicht heimlich darauf verengt sein. Session 8: genau das ist bisher
@@ -2610,6 +2656,10 @@ function applyRoute() {
     showTeamedSubTab(subtab, _findSubTabEl('#page-teamed', subtab));
   } else if (page === 'admin') {
     showAdminTab(subtab, _findSubTabEl('#admin-panel', subtab));
+  } else if (page === 'clubs') {
+    // subtab ist hier keine feste Tab-ID, sondern die club_id selbst
+    // (z.B. #clubs/23847) — Deep-Link direkt in ein generisches Club-Detail.
+    showClubDetail(subtab);
   }
 }
 
@@ -2706,11 +2756,15 @@ function renderClubDirectory(list) {
         const dotClass = CLUB_STATUS_DOT[c.status];
         const dotHtml  = dotClass ? `<span class="ss-dot ${dotClass}"></span>` : '';
         const route    = CLUB_PAGE_ROUTE[c.club_id];
-        const rowAttrs = route
-          ? `class="club-row club-row--linked" onclick="showPage('${route}', _findMenuEl('${route}'))"`
-          : `class="club-row club-row--pending"`;
+        // Themed/Teamed -> ihre eigene, volle Seite. Alle anderen Clubs ->
+        // generisches Club-Detail (Archiv + Stats, s. showClubDetail()).
+        // Seit dem generischen Template (Roadmap Punkt 6) ist JEDE Zeile
+        // klickbar, nicht mehr nur die zwei mit fertiger Sonderseite.
+        const onclick  = route
+          ? `showPage('${route}', _findMenuEl('${route}'))`
+          : `showClubDetail('${c.club_id}')`;
         return `
-      <div ${rowAttrs}>
+      <div class="club-row club-row--linked" onclick="${onclick}">
         <span class="club-row-name">${escapeHtml(c.name)}</span>
         <span class="club-row-status">${dotHtml}${CLUB_STATUS_LABEL[c.status]}</span>
       </div>`;
@@ -2720,6 +2774,113 @@ function renderClubDirectory(list) {
     const container = $(id);
     if (container) container.innerHTML = html;
   });
+}
+
+
+// ── 4d. CLUB DETAIL (generisches Template, Roadmap Punkt 6+7) ───
+// Archiv-Ansicht für alle Clubs außer Themed/Teamed: Most Podiums (Event-
+// Position 1-3) + Most Stage Wins (Stage-Position 1). Ursprünglicher
+// Auslöser der ganzen Multi-Club-Roadmap (Wunsch des GRF-Daily-Admins).
+// Bewusst EIN generischer Satz Funktionen, parametrisiert über club_id,
+// nicht pro Club dupliziert — s. HTML-Kommentar bei page-clubs oben.
+// Keine neue Tabelle/kein neuer Backend-Endpoint nötig: event_results und
+// stage_results sind bereits public-read, championship_id verknüpft beide
+// mit dem jeweiligen Club (championships.club_id). Gleiches in.()-Filter-
+// Muster wie admin_api.py (s. dortige Kommentare zu Batches von 100).
+
+/**
+ * Reine Funktion, kein DOM-Zugriff — zählt, wie oft pro driver_name eine
+ * Bedingung zutrifft, sortiert absteigend. topN begrenzt die Ausgabe.
+ */
+function tallyDrivers(rows, predicate, topN = 10) {
+  const counts = {};
+  rows.forEach(r => {
+    if (predicate(r)) counts[r.driver_name] = (counts[r.driver_name] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, topN);
+}
+
+/** Rendert eine Ranking-Liste im "Most Improved"-Look (Rang/Name/Bar/Zahl). */
+function renderRankedList(containerId, rows) {
+  const container = $(containerId);
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-title">NO DATA YET</div></div>';
+    return;
+  }
+  const maxVal = rows[0].count;
+  container.innerHTML = rows.map((r, i) => `
+    <div class="improved-row">
+      <div class="improved-rank">${i + 1}</div>
+      <div class="improved-name">${escapeHtml(r.name)}</div>
+      <div class="improved-bar-wrap">
+        <div class="improved-bar-bg">
+          <div class="improved-bar-fg" style="width:${Math.round((r.count / maxVal) * 100)}%"></div>
+        </div>
+      </div>
+      <div class="improved-delta">${r.count}</div>
+    </div>`).join('');
+}
+
+/** Zurück von der Detail-Ansicht zur vollen Directory-Liste. */
+function backToClubDirectory() {
+  showPage('clubs', _findMenuEl('clubs'));
+}
+
+async function showClubDetail(clubId) {
+  if (!clubId) return;
+  const directoryView = $('club-directory-view');
+  const detailView    = $('club-detail-view');
+  if (directoryView) directoryView.style.display = 'none';
+  if (detailView)    detailView.style.display    = '';
+
+  _syncHash('clubs', clubId);
+
+  const cached = _clubDirectory.find(c => c.club_id === String(clubId));
+  setText('club-detail-name', cached ? cached.name : `Club ${clubId}`);
+
+  const loadingHtml = '<div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>';
+  setHTML('club-detail-podiums', loadingHtml);
+  setHTML('club-detail-stagewins', loadingHtml);
+
+  try {
+    const champs   = await sbAll('championships', `select=id&club_id=eq.${encodeURIComponent(clubId)}`);
+    const champIds = champs.map(c => c.id);
+
+    if (!champIds.length) {
+      renderRankedList('club-detail-podiums', []);
+      renderRankedList('club-detail-stagewins', []);
+      return;
+    }
+
+    // In Batches von 100 wie admin_api.py (PostgREST-URL-Längenlimit) —
+    // bei einem einzelnen Club realistisch nie relevant, aber konsistent
+    // mit dem einzigen bestehenden in.()-Vorbild im Projekt.
+    const eventResults = [];
+    const stageResults = [];
+    for (let i = 0; i < champIds.length; i += 100) {
+      const batch = champIds.slice(i, i + 100).join(',');
+      const [evRes, stRes] = await Promise.all([
+        sbAll('event_results', `select=driver_name,position,is_dnf&championship_id=in.(${batch})`),
+        sbAll('stage_results',  `select=driver_name,stage_position,is_dnf&championship_id=in.(${batch})`),
+      ]);
+      eventResults.push(...evRes);
+      stageResults.push(...stRes);
+    }
+
+    const podiumRows   = tallyDrivers(eventResults, r => !r.is_dnf && r.position != null && r.position >= 1 && r.position <= 3);
+    const stageWinRows = tallyDrivers(stageResults, r => !r.is_dnf && r.stage_position === 1);
+
+    renderRankedList('club-detail-podiums', podiumRows);
+    renderRankedList('club-detail-stagewins', stageWinRows);
+  } catch (err) {
+    console.error('[showClubDetail]', err);
+    renderRankedList('club-detail-podiums', []);
+    renderRankedList('club-detail-stagewins', []);
+  }
 }
 
 
