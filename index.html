@@ -2674,6 +2674,12 @@ function showPage(name, el) {
 
   if (name === 'themed')   loadThemedResults();
   if (name === 'teamed')   loadTeamedResults();
+  // Home erneut laden, wenn man von einer anderen Seite zurück zu Home
+  // navigiert — sonst bleiben die Daten bis zum nächsten Auto-Reload-Tick
+  // (RELOAD_INTERVAL_MS) stehen. loadHome() selbst prüft ohnehin, ob Home
+  // gerade aktiv ist (s. dortiger Kommentar), daher hier unkonditional
+  // aufrufbar.
+  if (name === 'home') loadHome();
   if (name === 'clubs') {
     // Immer zurück zur Listen-Ansicht, falls man vorher in einem Club-
     // Detail war (z.B. normaler Klick auf den Nav-Tab "Clubs") — nur ein
@@ -3345,6 +3351,20 @@ function _setEndCountdownTarget(isoDate) {
 // ── 6. HOME PAGE ──────────────────────────────────────────────
 
 async function loadHome() {
+  // Bug-Fix (Session 10): loadHome() feuerte bisher UNBEDINGT beim Laden
+  // JEDER Seite, auch bei einem Deep-Link direkt auf #clubs/.../stats —
+  // das hat drivers/elo_history/clubs/events (Home) gleichzeitig mit den
+  // eigentlich angeforderten Club-/Stats-Daten abgefeuert, unnötig viele
+  // parallele Anfragen auf einen Schlag (sichtbar u.a. als vereinzelte
+  // "NetworkError"s bei instabiler Verbindung/VPN, wenn zu viele Requests
+  // gleichzeitig laufen). Jetzt lädt Home nur noch, wenn Home auch
+  // tatsächlich die sichtbare Seite ist — sowohl beim initialen Aufruf als
+  // auch bei jedem periodischen Auto-Reload-Tick (setInterval), der sonst
+  // auch im Hintergrund weiterfeuern würde, während man z.B. auf der
+  // Clubs-Seite ist.
+  const homePage = $('page-home');
+  if (!homePage || !homePage.classList.contains('active')) return;
+
   try {
     // Home lädt nur noch, was tatsächlich noch angezeigt wird: "Most
     // Improved" (braucht drivers + 7-Tage-Delta) und die Club-Directory.
@@ -6448,14 +6468,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // Countdown starten
   setInterval(_tickCountdown, 1000);
 
-  // Home-Seite initital laden + Auto-Reload
-  loadHome();
-  setInterval(loadHome, RELOAD_INTERVAL_MS);
-
   // Router: falls die Seite mit einem Hash geöffnet wurde (Deep-Link, z.B.
   // aus Discord), gleich den richtigen Tab anzeigen statt immer auf Home
   // zu landen. Ohne Hash bleibt sauber Home aktiv (Default in applyRoute()).
+  // WICHTIG: muss VOR loadHome() laufen — legt fest, welche .page aktiv
+  // ist, und loadHome() lädt seine Daten nur noch, wenn Home das auch
+  // tatsächlich ist (s. dortiger Kommentar).
   applyRoute();
+
+  // Home-Seite initial laden (nur falls sie durch applyRoute() gerade aktiv
+  // wurde) + Auto-Reload, während man auf Home bleibt.
+  loadHome();
+  setInterval(loadHome, RELOAD_INTERVAL_MS);
 
   // Changelog ist statisch (kein Supabase-Fetch nötig) — einmal beim Laden rendern
   renderChangelog();
