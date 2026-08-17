@@ -717,8 +717,23 @@ textarea.inp-std { resize:vertical; }
   .slim-table th, .slim-table td { padding:5px 6px; font-size:12px; white-space:nowrap; }
   .slim-table tr[onclick] { cursor:pointer; }
   .slim-table tr[onclick]:active { background:#251010; }
+  /* Bug-Fix (Session 10): nur DRIVER (Spalte 2) hatte eine Breiten-
+     begrenzung. Lange Fahrzeugnamen (Spalte 3, z.B. "Volkswagen Polo R
+     WRC 2013") liefen dadurch auf Mobile ungebremst breit und drängten
+     die letzte Spalte (TIME/TOTAL) über den Bildschirmrand hinaus, statt
+     dass sie horizontal abgeschnitten wurde — sichtbar z.B. bei den
+     generischen Club-Ergebnissen. Fix: Spalte 3 bekommt jetzt dieselbe
+     Ellipsis-Begrenzung wie Spalte 2, dadurch bleibt für die letzte Spalte
+     zuverlässig Platz. Betrifft alle .slim-table-Instanzen der Seite
+     (Themed/Teamed/generische Club-Ergebnisse, ELO, Manual Bonuses) —
+     bei kurzem Inhalt (z.B. ELO-Zahlen) greift die Ellipsis ohnehin nie,
+     harmlos für alle anderen Tabellen.
+  */
   .slim-table td:nth-child(2), .slim-table th:nth-child(2) {
-    max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .slim-table td:nth-child(3), .slim-table th:nth-child(3) {
+    max-width:68px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .slim-detail-row td { padding:0 !important; border-bottom:1px solid #1a1a1a; }
   .slim-detail-row .slim-detail-inner, .slim-detail-row .slim-detail-label, .slim-detail-row .slim-detail-extra { display:none; }
