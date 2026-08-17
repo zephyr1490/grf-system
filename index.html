@@ -246,6 +246,21 @@ body::after {
 }
 .col-hdr-right { margin-left:auto; font-size:11px; color:rgba(255,255,255,0.55); font-family:var(--ui-font); }
 
+/* CLUB DIRECTORY */
+.club-directory-wrap {
+  border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
+  margin:6px; background:var(--black);
+}
+.club-row {
+  display:flex; align-items:center; gap:10px;
+  padding:9px 12px; border-bottom:1px solid #2a2d31;
+  cursor:pointer; font-size:14px;
+}
+.club-row:last-child { border-bottom:none; }
+.club-row:hover { background:#251010; }
+.club-row-name { color:var(--gray-light); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.club-row-status { display:flex; align-items:center; gap:6px; font-size:11px; letter-spacing:1px; color:#888; font-family:var(--ui-font); flex-shrink:0; }
+
 /* ELO TABLE */
 .elo-wrap {
   border:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
@@ -807,6 +822,7 @@ textarea.inp-std { resize:vertical; }
   <!-- MENU BAR -->
   <div class="menubar">
     <div class="menu-item active" data-tab="home" onclick="showPage('home',this)">Home</div>
+    <div class="menu-item" data-tab="clubs" onclick="showPage('clubs',this)">Clubs</div>
     <div class="menu-item" data-tab="themed" onclick="showPage('themed',this)">GRF Themed</div>
     <div class="menu-item" data-tab="teamed" onclick="showPage('teamed',this)">GRF Teamed</div>
     <div class="menu-item" data-tab="elo" onclick="showPage('elo',this)">ELO Rankings</div>
@@ -931,6 +947,24 @@ textarea.inp-std { resize:vertical; }
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       CLUBS PAGE — Directory aller ~11 GRF-Clubs.
+       Schritt 1+2 der Multi-Club-Roadmap (s. CLAUDE.md): Datenquelle +
+       eigener Nav-Tab. Klick auf eine Zeile führt noch NICHT zu einer
+       eigenen Club-Unterseite — das generische Club-Template (Punkt 6
+       der Roadmap) existiert noch nicht. Kommt in einem späteren Schritt.
+  ══════════════════════════════════════════ -->
+  <div class="page" id="page-clubs">
+    <div class="col-hdr">CLUB DIRECTORY
+      <span class="col-hdr-right">ALL GRF CLUBS</span>
+    </div>
+    <div class="club-directory-wrap">
+      <div id="club-directory-list">
+        <div class="empty"><div class="empty-title">LOADING…</div></div>
+      </div>
     </div>
   </div>
 
@@ -2513,6 +2547,7 @@ function showPage(name, el) {
 
   if (name === 'themed')   loadThemedResults();
   if (name === 'teamed')   loadTeamedResults();
+  if (name === 'clubs')    loadClubDirectory();
   // Standard-Filter ist 'active' (siehe _eloFilterMode-Default) — das ist
   // eine eigene Dimension zu "Established" (20+ Career-Starts) und sollte
   // nicht heimlich darauf verengt sein. Session 8: genau das ist bisher
@@ -2581,7 +2616,7 @@ function showAdminTab(name, el) {
 // location.hash =, damit kein zusätzliches 'hashchange'-Event ausgelöst
 // wird (sonst Endlosschleife mit applyRoute()).
 
-const ROUTE_PAGES = ['home', 'themed', 'teamed', 'elo', 'handbook', 'admin'];
+const ROUTE_PAGES = ['home', 'clubs', 'themed', 'teamed', 'elo', 'handbook', 'admin'];
 
 function _syncHash(page, subtab) {
   const path = subtab ? `${page}/${subtab}` : page;
@@ -2621,6 +2656,91 @@ function applyRoute() {
 }
 
 window.addEventListener('popstate', applyRoute);
+
+
+// ── 4c. CLUB DIRECTORY ──────────────────────────────────────────
+// Datenquelle: Supabase-Tabelle 'clubs' (public read, wird von grf_sync.py
+// bei jedem Cron-Lauf für alle am RaceNet-Account hängenden Clubs befüllt)
+// + 'events' für den Live/Upcoming-Status. Bewusst NICHT der Live-RaceNet-
+// Endpoint /elo/clubs — der ist @auth-geschützt (Admin-Passwort), für eine
+// öffentliche Seite ungeeignet. Bekannter Nachteil: 'clubs' ist dadurch
+// höchstens ~10 Min hinter RaceNet (Cron-Intervall) — für eine
+// Übersichtsliste unkritisch, kein Live-Ticker.
+
+let _clubDirectory = []; // [{club_id, name, status}], zuletzt geladener Stand
+
+/**
+ * Reine Funktion, kein DOM-Zugriff — leicht isoliert testbar.
+ * events: alle events-Zeilen EINES Clubs. today: 'YYYY-MM-DD'.
+ * Rückgabe: 'active' (Event läuft gerade) | 'upcoming' (Start in der
+ * Zukunft) | 'idle' (nichts Anstehendes).
+ */
+function computeClubStatus(events, today) {
+  if (events.some(e => e.status === 1)) return 'active';
+  if (events.some(e => e.status === 0 && e.start_date && e.start_date >= today)) return 'upcoming';
+  return 'idle';
+}
+
+/**
+ * Reine Funktion — gruppiert eine flache events-Liste nach club_id.
+ * Getrennt von computeClubStatus(), damit beide unabhängig testbar sind.
+ */
+function groupEventsByClub(events) {
+  const byClub = {};
+  events.forEach(e => {
+    const cid = String(e.club_id);
+    (byClub[cid] = byClub[cid] || []).push(e);
+  });
+  return byClub;
+}
+
+const CLUB_STATUS_LABEL = { active: 'LIVE', upcoming: 'UPCOMING', idle: 'NO EVENT' };
+const CLUB_STATUS_DOT   = { active: 'ss-green', upcoming: 'ss-yellow', idle: '' };
+
+async function loadClubDirectory() {
+  const container = $('club-directory-list');
+  if (!container) return;
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const [clubs, events] = await Promise.all([
+      sbAll('clubs',  'select=club_id,name&order=name.asc'),
+      sbAll('events', 'select=club_id,status,start_date'),
+    ]);
+
+    const eventsByClub = groupEventsByClub(events);
+    _clubDirectory = clubs.map(c => {
+      const cid = String(c.club_id);
+      return {
+        club_id: cid,
+        name:    c.name || `Club ${cid}`,
+        status:  computeClubStatus(eventsByClub[cid] || [], today),
+      };
+    });
+
+    renderClubDirectory(_clubDirectory);
+  } catch (err) {
+    console.error('[loadClubDirectory]', err);
+    container.innerHTML = '<div class="empty"><div class="empty-title">CLUBS COULD NOT BE LOADED</div><div class="empty-sub">Please try again shortly.</div></div>';
+  }
+}
+
+function renderClubDirectory(list) {
+  const container = $('club-directory-list');
+  if (!container) return;
+  if (!list.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-title">NO CLUBS FOUND</div></div>';
+    return;
+  }
+  container.innerHTML = list.map(c => {
+    const dotClass = CLUB_STATUS_DOT[c.status];
+    const dotHtml  = dotClass ? `<span class="ss-dot ${dotClass}"></span>` : '';
+    return `
+      <div class="club-row">
+        <span class="club-row-name">${escapeHtml(c.name)}</span>
+        <span class="club-row-status">${dotHtml}${CLUB_STATUS_LABEL[c.status]}</span>
+      </div>`;
+  }).join('');
+}
 
 
 // ── 5. CLOCK & COUNTDOWN ──────────────────────────────────────
