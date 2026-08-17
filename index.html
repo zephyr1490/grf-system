@@ -806,12 +806,12 @@ textarea.inp-std { resize:vertical; }
 
   <!-- MENU BAR -->
   <div class="menubar">
-    <div class="menu-item active" onclick="showPage('home',this)">Home</div>
-    <div class="menu-item" onclick="showPage('themed',this)">GRF Themed</div>
-    <div class="menu-item" onclick="showPage('teamed',this)">GRF Teamed</div>
-    <div class="menu-item" onclick="showPage('elo',this)">ELO Rankings</div>
-    <div class="menu-item" onclick="showPage('handbook',this)">Handbook</div>
-    <div class="menu-item" onclick="showPage('admin',this)">Admin</div>
+    <div class="menu-item active" data-tab="home" onclick="showPage('home',this)">Home</div>
+    <div class="menu-item" data-tab="themed" onclick="showPage('themed',this)">GRF Themed</div>
+    <div class="menu-item" data-tab="teamed" onclick="showPage('teamed',this)">GRF Teamed</div>
+    <div class="menu-item" data-tab="elo" onclick="showPage('elo',this)">ELO Rankings</div>
+    <div class="menu-item" data-tab="handbook" onclick="showPage('handbook',this)">Handbook</div>
+    <div class="menu-item" data-tab="admin" onclick="showPage('admin',this)">Admin</div>
     <div class="menu-right">
       <div class="live-pill"><div class="live-dot"></div> LIVE</div>
     </div>
@@ -957,10 +957,10 @@ textarea.inp-std { resize:vertical; }
 
     <!-- SUB NAV -->
     <div class="themed-subnav">
-      <div class="sub-tab active" onclick="showSubTab('results',this)">Live Results</div>
-      <div class="sub-tab" onclick="showSubTab('standings',this)">Championship Standings</div>
-      <div class="sub-tab" onclick="showSubTab('carratings',this)">Car Ratings</div>
-      <div class="sub-tab" onclick="showSubTab('challenges',this)">Challenges</div>
+      <div class="sub-tab active" data-tab="results" onclick="showSubTab('results',this)">Live Results</div>
+      <div class="sub-tab" data-tab="standings" onclick="showSubTab('standings',this)">Championship Standings</div>
+      <div class="sub-tab" data-tab="carratings" onclick="showSubTab('carratings',this)">Car Ratings</div>
+      <div class="sub-tab" data-tab="challenges" onclick="showSubTab('challenges',this)">Challenges</div>
     </div>
 
     <!-- TAB: LIVE RESULTS -->
@@ -1240,10 +1240,10 @@ textarea.inp-std { resize:vertical; }
 
     <!-- SUB NAV -->
     <div class="themed-subnav">
-      <div class="sub-tab active" onclick="showTeamedSubTab('results',this)">Live Results</div>
-      <div class="sub-tab" onclick="showTeamedSubTab('standings',this)">Championship Standings</div>
-      <div class="sub-tab" onclick="showTeamedSubTab('carratings',this)">Car Ratings</div>
-      <div class="sub-tab" onclick="showTeamedSubTab('challenges',this)">Bonus Rules</div>
+      <div class="sub-tab active" data-tab="results" onclick="showTeamedSubTab('results',this)">Live Results</div>
+      <div class="sub-tab" data-tab="standings" onclick="showTeamedSubTab('standings',this)">Championship Standings</div>
+      <div class="sub-tab" data-tab="carratings" onclick="showTeamedSubTab('carratings',this)">Car Ratings</div>
+      <div class="sub-tab" data-tab="challenges" onclick="showTeamedSubTab('challenges',this)">Bonus Rules</div>
     </div>
 
     <!-- TAB: LIVE RESULTS -->
@@ -1489,13 +1489,13 @@ textarea.inp-std { resize:vertical; }
 
       <!-- ADMIN SUB NAV -->
       <div class="themed-subnav">
-        <div class="sub-tab active" onclick="showAdminTab('car-rating',this)">Car Rating Calc</div>
-        <div class="sub-tab" onclick="showAdminTab('cr-manual',this)">CR Manual</div>
-        <div class="sub-tab" onclick="showAdminTab('champ-setup',this)">Championship Setup</div>
-        <div class="sub-tab" onclick="showAdminTab('manual-bonuses',this)">Manual Bonuses</div>
-        <div class="sub-tab" onclick="showAdminTab('narratives',this)">Narratives</div>
-        <div class="sub-tab" onclick="showAdminTab('elo-update',this)">ELO Update</div>
-        <div class="sub-tab" onclick="showAdminTab('font-switcher',this)">Font Switcher</div>
+        <div class="sub-tab active" data-tab="car-rating" onclick="showAdminTab('car-rating',this)">Car Rating Calc</div>
+        <div class="sub-tab" data-tab="cr-manual" onclick="showAdminTab('cr-manual',this)">CR Manual</div>
+        <div class="sub-tab" data-tab="champ-setup" onclick="showAdminTab('champ-setup',this)">Championship Setup</div>
+        <div class="sub-tab" data-tab="manual-bonuses" onclick="showAdminTab('manual-bonuses',this)">Manual Bonuses</div>
+        <div class="sub-tab" data-tab="narratives" onclick="showAdminTab('narratives',this)">Narratives</div>
+        <div class="sub-tab" data-tab="elo-update" onclick="showAdminTab('elo-update',this)">ELO Update</div>
+        <div class="sub-tab" data-tab="font-switcher" onclick="showAdminTab('font-switcher',this)">Font Switcher</div>
       </div>
 
       <!-- ── TAB: CAR RATING CALCULATOR ── -->
@@ -2521,6 +2521,10 @@ function showPage(name, el) {
   // hier includeAll=true, nicht der schnellere establishment-only Fetch.
   if (name === 'elo')      loadEloData(true);
   if (name === 'handbook') renderChangelog();
+
+  // Router: URL-Hash auf die neue Hauptseite ausrichten (kein Sub-Tab mehr
+  // aktiv, da wir gerade erst auf die Seite gewechselt sind).
+  _syncHash(name);
 }
 
 /**
@@ -2538,6 +2542,8 @@ function showSubTab(name, el) {
   if (name === 'standings')  loadStandings();
   if (name === 'carratings') loadCarRatings();
   if (name === 'challenges') loadChallenges();
+
+  _syncHash('themed', name);
 }
 
 /**
@@ -2557,7 +2563,64 @@ function showAdminTab(name, el) {
   // Tab-specific init
   if (name === 'cr-manual')   crManualLoad();
   if (name === 'champ-setup') csInit();
+
+  _syncHash('admin', name);
 }
+
+// ── 4b. HASH-ROUTER (Deep-Links, z.B. #themed/standings) ───────
+// Bewusst hash-basiert (nicht History-API mit echten Pfaden): der Hash-Teil
+// geht nie an den Server, funktioniert also unverändert nach Domain-
+// Wechseln und braucht keine Server-seitigen Rewrites (statisches Hosting
+// auf Vercel). Format: "#seite" oder "#seite/subtab", z.B. "#themed",
+// "#themed/standings", "#admin/manual-bonuses".
+//
+// _syncHash() wird von showPage()/showSubTab()/showTeamedSubTab()/
+// showAdminTab() selbst aufgerufen (s.o.) — jeder Aufruf dieser Funktionen,
+// egal ob per Klick oder aus anderem Code (z.B. viewEventInThemed()),
+// aktualisiert automatisch die URL. history.pushState() statt
+// location.hash =, damit kein zusätzliches 'hashchange'-Event ausgelöst
+// wird (sonst Endlosschleife mit applyRoute()).
+
+const ROUTE_PAGES = ['home', 'themed', 'teamed', 'elo', 'handbook', 'admin'];
+
+function _syncHash(page, subtab) {
+  const path = subtab ? `${page}/${subtab}` : page;
+  if (location.hash.slice(1) !== path) {
+    history.pushState(null, '', '#' + path);
+  }
+}
+
+function _findMenuEl(page) {
+  return document.querySelector(`.menu-item[data-tab="${page}"]`);
+}
+
+function _findSubTabEl(scopeSelector, subtab) {
+  return document.querySelector(`${scopeSelector} .sub-tab[data-tab="${subtab}"]`);
+}
+
+/**
+ * Liest den aktuellen URL-Hash und schaltet Haupt-/Sub-Tab entsprechend
+ * um. Wird beim initialen Laden UND bei Vor-/Zurück-Navigation (popstate)
+ * aufgerufen. Unbekannte/leere Hashes fallen sauber auf 'home' zurück.
+ */
+function applyRoute() {
+  const raw = location.hash.replace(/^#/, '');
+  const [pageRaw, subtab] = raw.split('/');
+  const page = ROUTE_PAGES.includes(pageRaw) ? pageRaw : 'home';
+
+  showPage(page, _findMenuEl(page));
+
+  if (!subtab) return;
+  if (page === 'themed') {
+    showSubTab(subtab, _findSubTabEl('#page-themed', subtab));
+  } else if (page === 'teamed') {
+    showTeamedSubTab(subtab, _findSubTabEl('#page-teamed', subtab));
+  } else if (page === 'admin') {
+    showAdminTab(subtab, _findSubTabEl('#admin-panel', subtab));
+  }
+}
+
+window.addEventListener('popstate', applyRoute);
 
 
 // ── 5. CLOCK & COUNTDOWN ──────────────────────────────────────
@@ -3566,6 +3629,8 @@ function showTeamedSubTab(name, el) {
   if (name === 'standings')  loadTeamedStandings();
   if (name === 'carratings') loadTeamedCarRatings();
   if (name === 'challenges') loadTeamedChallenges();
+
+  _syncHash('teamed', name);
 }
 
 /**
@@ -5816,6 +5881,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Home-Seite initital laden + Auto-Reload
   loadHome();
   setInterval(loadHome, RELOAD_INTERVAL_MS);
+
+  // Router: falls die Seite mit einem Hash geöffnet wurde (Deep-Link, z.B.
+  // aus Discord), gleich den richtigen Tab anzeigen statt immer auf Home
+  // zu landen. Ohne Hash bleibt sauber Home aktiv (Default in applyRoute()).
+  applyRoute();
 
   // Changelog ist statisch (kein Supabase-Fetch nötig) — einmal beim Laden rendern
   renderChangelog();
