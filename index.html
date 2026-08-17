@@ -2456,6 +2456,32 @@ async function sb(table, params = '') {
 }
 
 /**
+ * Ruft eine Postgres-Funktion via PostgREST-RPC auf (POST statt GET) —
+ * für Fälle, in denen die Datenbank selbst rechnen/zählen soll, statt
+ * Rohdaten in den Browser zu laden (s. club_podium_stats/
+ * club_stage_win_stats, angelegt über club_stats_functions.sql).
+ * Params gehen als JSON-Body mit, keine URL-Längenprobleme möglich,
+ * unabhängig von der Datenmenge, die die Funktion intern verarbeitet.
+ */
+async function sbRpc(fnName, params = {}) {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/${fnName}`, {
+      method: 'POST',
+      headers: { ...sbHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      console.error(`[SB RPC] ${fnName}: HTTP ${res.status}`);
+      return [];
+    }
+    return await res.json();
+  } catch (err) {
+    console.error(`[SB RPC] ${fnName}:`, err);
+    return [];
+  }
+}
+
+/**
  * Holt NUR die exakte Zeilenanzahl einer Tabelle (optional gefiltert),
  * ohne irgendwelche Zeilendaten zu übertragen — nutzt Supabase/PostgREST's
  * "Prefer: count=exact" + "Range: 0-0" Kombination, die die Gesamtzahl im
@@ -3056,8 +3082,7 @@ async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWin
   try {
     // Nur EIN leichtgewichtiger Check, ob überhaupt eine Championship für
     // den Club existiert (für die "NO CHAMPIONSHIP..." vs. "NO RESULTS..."-
-    // Unterscheidung in der Anzeige) — die eigentlichen Ergebnisse werden
-    // NICHT mehr darüber gefiltert, s. Kommentar unten.
+    // Unterscheidung in der Anzeige).
     const champExists = await sb('championships', `select=id&club_id=eq.${encodeURIComponent(clubId)}&limit=1`);
 
     if (!champExists.length) {
@@ -3066,24 +3091,26 @@ async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWin
       return;
     }
 
-    // Bug-Fix (Session 10): vorher wurden erst ALLE championship_ids des
-    // Clubs geladen und dann in Batches von 100 als "in.(id1,id2,...)" in
-    // die URL gepackt. Bei Clubs mit ein paar hundert Championships (nach
-    // grf_sync.py --full ganz normal) wurde diese URL zu lang und die
-    // Anfrage schlug fehl — sichtbar als leere Stats, obwohl die Daten in
-    // Supabase längst da waren. Fix: PostgREST kann über die bestehende
-    // Fremdschlüssel-Beziehung event_results/stage_results.championship_id
-    // → championships.id direkt gefiltert werden ("!inner(id)" erzwingt
-    // den Join, "championships.club_id=eq...." filtert darüber) — eine
-    // einzige, kurze Anfrage pro Tabelle, unabhängig von der Anzahl der
-    // Championships.
-    const [eventResults, stageResults] = await Promise.all([
-      sbAll('event_results', `select=driver_name,position,is_dnf,championships!inner(id)&championships.club_id=eq.${encodeURIComponent(clubId)}`),
-      sbAll('stage_results',  `select=driver_name,stage_position,is_dnf,championships!inner(id)&championships.club_id=eq.${encodeURIComponent(clubId)}`),
+    // Bug-Fix (Session 10, zweiter Anlauf): sowohl die ursprüngliche
+    // in.()-Batch-Liste als auch der Versuch, direkt über die embedded-
+    // resource-Filter-Syntax von PostgREST zu filtern
+    // (championships!inner(id)&championships.club_id=eq...), haben in der
+    // Praxis nicht zuverlässig funktioniert (NetworkErrors bzw. leere
+    // Ergebnisse, auch bei Clubs mit sehr wenig Daten — kein reines
+    // Datenmengen-/Timeout-Problem, sondern etwas an der Abfrage selbst).
+    // Jetzt zählt die Datenbank selbst über zwei Postgres-Funktionen
+    // (club_podium_stats/club_stage_win_stats, s.
+    // club_stats_functions.sql) — der Browser bekommt nur noch die
+    // fertigen Top-10-Zeilen zurück. Zuverlässiger UND sparsamer
+    // (Egress), unabhängig davon wie viele Championships/Ergebnisse ein
+    // Club hat.
+    const [podiumRes, stageWinRes] = await Promise.all([
+      sbRpc('club_podium_stats',    { p_club_id: String(clubId) }),
+      sbRpc('club_stage_win_stats', { p_club_id: String(clubId) }),
     ]);
 
-    const podiumRows   = tallyDrivers(eventResults, r => !r.is_dnf && r.position != null && r.position >= 1 && r.position <= 3);
-    const stageWinRows = tallyDrivers(stageResults, r => !r.is_dnf && r.stage_position === 1);
+    const podiumRows   = podiumRes.map(r => ({ name: r.driver_name, count: Number(r.podiums) }));
+    const stageWinRows = stageWinRes.map(r => ({ name: r.driver_name, count: Number(r.stage_wins) }));
 
     renderRankedList(podiumsId, podiumRows);
     renderRankedList(stageWinsId, stageWinRows);
