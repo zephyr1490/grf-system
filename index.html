@@ -147,6 +147,7 @@ body::after {
   text-shadow:4px 4px 0 var(--red-dark); letter-spacing:3px; margin-bottom:12px;
 }
 .hero-title .r { color:var(--red); }
+.hero-title-compact { display:none; } /* nur auf Mobile sichtbar, s. @media unten */
 .hero-sub { font-size:14px; color:#bbb; line-height:1.6; max-width:400px; margin-bottom:16px; }
 .hero-sub em { color:var(--gray); font-style:normal; }
 
@@ -193,21 +194,16 @@ body::after {
 .kachel-lbl { font-size:12px; color:#bbb; letter-spacing:2px; text-transform:uppercase; margin-top:3px; }
 .kachel-sub { font-size:12px; color:#666; margin-top:2px; }
 
-/* HOME GRID */
-.home-grid {
-  display:grid; grid-template-columns:1fr 1fr;
-  grid-template-areas:
-    "elo events"
-    "elo improved"
-    "elo changelog";
-  border-top:2px solid var(--gray-dark);
+/* HOME GRID — einfacher Stack (Directory → Most Improved → Changelog),
+   bewusst kein Mehrspalten-Layout mehr (Session 10): mit nur noch 3
+   Sektionen statt vorher 4 (ELO-Top10 + Events entfernt) ist ein Grid mit
+   Spalten/Areas unnötige Komplexität; ein Stack funktioniert identisch
+   auf Mobile UND Desktop, keine separate @media-Umsortierung nötig. */
+.home-grid { border-top:2px solid var(--gray-dark); }
+.home-col {
+  border-bottom:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
 }
-.he-elo       { grid-area:elo; }
-.he-events    { grid-area:events; }
-.he-improved  { grid-area:improved; }
-.he-changelog { grid-area:changelog; }
-.home-col { border-right:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
-.he-events, .he-improved, .he-changelog { border-right:none; }
+.home-col:last-child { border-bottom:none; }
 
 /* COL HEADER */
 .elo-filter-bar {
@@ -254,10 +250,12 @@ body::after {
 .club-row {
   display:flex; align-items:center; gap:10px;
   padding:9px 12px; border-bottom:1px solid #2a2d31;
-  cursor:pointer; font-size:14px;
+  font-size:14px;
 }
 .club-row:last-child { border-bottom:none; }
-.club-row:hover { background:#251010; }
+.club-row--linked { cursor:pointer; }
+.club-row--linked:hover { background:#251010; }
+.club-row--pending { cursor:default; opacity:0.7; }
 .club-row-name { color:var(--gray-light); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .club-row-status { display:flex; align-items:center; gap:6px; font-size:11px; letter-spacing:1px; color:#888; font-family:var(--ui-font); flex-shrink:0; }
 
@@ -680,38 +678,30 @@ textarea.inp-std { resize:vertical; }
   .menu-item { padding:6px 10px; font-size:12px; white-space:nowrap; flex-shrink:0; }
   .menu-right { flex-shrink:0; }
 
-  /* HERO */
-  .hero { padding:12px 14px; gap:6px; min-height:auto; flex-direction:column; align-items:stretch; }
+  /* HERO — auf Mobile nur noch schmale Kopfzeile (Logo + Kurztitel).
+     Eyebrow-Text, Fließtext-Absatz und Discord-Button fallen weg (Session
+     10, Owner-Entscheidung): ~90% der Nutzer sind mobil und kommen
+     wiederkehrend direkt zur Community, nicht als Erstbesucher — der
+     ausführliche Hero kostete hier nur Scroll-Strecke bis zur Club-
+     Directory. Desktop (s. Grundstil oben, kein @media hier) bleibt
+     ausführlich, da dort eher Erstbesucher landen. */
+  .hero {
+    padding:8px 14px; gap:0; min-height:auto;
+    flex-direction:row; align-items:center;
+  }
   .hero::after { display:none; }
-  .hero-eyebrow { font-size:9px; letter-spacing:2px; margin-bottom:0; text-align:center; }
-  .hero-top-row { display:flex; flex-direction:row; align-items:flex-start; gap:12px; }
-  .hero-logo { flex-shrink:0; width:107px; height:107px; font-size:50px; animation:none; }
-  .hero-title { font-size:42px; }
+  .hero-eyebrow, .hero-sub, .hero-discord { display:none; }
+  .hero-top-row { display:flex; flex-direction:row; align-items:center; gap:10px; }
+  .hero-logo { flex-shrink:0; width:36px; height:36px; font-size:20px; animation:none; }
+  .hero-title { display:none; }
+  .hero-title-compact {
+    display:block; font-family:'Oswald',sans-serif; font-size:15px;
+    letter-spacing:2px; color:var(--white); font-weight:600;
+  }
   .hero-copy { flex:none; }
-  .hero-sub { font-size:11px; max-width:100%; margin-bottom:10px; text-align:justify; }
-  .hero-discord { display:block; }
 
   /* STATUS STRIP */
   .status-strip { padding:4px 10px; gap:10px; flex-wrap:wrap; font-size:11px; }
-
-  /* KACHELN — 2x2 */
-  .kacheln { grid-template-columns:1fr 1fr; }
-  .kachel { border-right:2px solid #111; border-bottom:2px solid #111; padding:8px 10px; }
-  .kachel-num { font-size:26px; }
-  .kachel-lbl { font-size:10px; margin-top:1px; }
-  .kachel-sub { font-size:10px; margin-top:0; }
-
-  /* HOME GRID — Events first, Most Improved second, ELO third, Changelog always last */
-  .home-grid {
-    grid-template-columns:1fr;
-    grid-template-areas:
-      "events"
-      "improved"
-      "elo"
-      "changelog";
-  }
-  .home-col { border-right:none !important; border-bottom:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd); }
-  .he-changelog { border-bottom:none; }
 
   /* ══════════════════════════════════════════
      DATA TABLES → "SCHLANK + TAP"
@@ -819,12 +809,16 @@ textarea.inp-std { resize:vertical; }
     <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.4</span></span>
   </div>
 
-  <!-- MENU BAR -->
+  <!-- MENU BAR — GRF Themed/Teamed haben seit Session 10 bewusst KEINEN
+       eigenen Top-Nav-Eintrag mehr (symmetrisches Modell, Owner-
+       Entscheidung: kein bevorzugter Hauptclub mehr). Beide bleiben voll
+       funktionsfähig (page-themed/page-teamed + kompletter bestehender
+       Code unangetastet) und über die Club-Directory (Home/Clubs-Tab)
+       sowie bestehende Deep-Links (#themed, #teamed, #themed/standings
+       etc.) weiterhin erreichbar — nur der Nav-Einstiegspunkt ändert sich. -->
   <div class="menubar">
     <div class="menu-item active" data-tab="home" onclick="showPage('home',this)">Home</div>
     <div class="menu-item" data-tab="clubs" onclick="showPage('clubs',this)">Clubs</div>
-    <div class="menu-item" data-tab="themed" onclick="showPage('themed',this)">GRF Themed</div>
-    <div class="menu-item" data-tab="teamed" onclick="showPage('teamed',this)">GRF Teamed</div>
     <div class="menu-item" data-tab="elo" onclick="showPage('elo',this)">ELO Rankings</div>
     <div class="menu-item" data-tab="handbook" onclick="showPage('handbook',this)">Handbook</div>
     <div class="menu-item" data-tab="admin" onclick="showPage('admin',this)">Admin</div>
@@ -838,89 +832,51 @@ textarea.inp-std { resize:vertical; }
   ══════════════════════════════════════════ -->
   <div class="page active" id="page-home">
 
-    <!-- HERO -->
+    <!-- HERO — auf Mobile stark verschlankt (nur Logo + Kurztitel, s. CSS
+         @media unten), auf Desktop weiterhin der ausführliche Hero. Grund:
+         ~90% der Nutzer sind mobil unterwegs und kommen wiederkehrend
+         direkt zur Community, nicht als Erstbesucher — der ausführliche
+         Hero (Fließtext, Discord-Button) kostet dort nur Scroll-Strecke
+         bis zur eigentlich relevanten Club-Directory. -->
     <div class="hero">
       <div class="hero-eyebrow">// THE RALLY SIM COMMUNITY //</div>
       <div class="hero-top-row">
       <div class="hero-logo" style="overflow:hidden;padding:0;border-radius:2px;"><img src="data:image/png;base64,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" style="width:100%;height:100%;object-fit:cover;" alt="GRF Logo"></div>
       <div class="hero-copy">
         <div class="hero-title">GLOBAL<br><span class="r">RALLY</span><br>FANS</div>
+        <div class="hero-title-compact">GLOBAL RALLY FANS</div>
       </div>
       </div>
-      <div class="hero-sub">The Home For All Rally Sim Racers. With More Than 2000 Discord Members And Over Ten WRC Clubs. A Friendly Community Of Enthusiasts Of The Sport And Beyond. Join Our Discord Server For The Full GRF Experience And Access To All Our Clubs!<br><em>This Page Is Dedicated Mainly For The GRF-Themed Club.</em></div>
+      <div class="hero-sub">The Home For All Rally Sim Racers. With More Than 2000 Discord Members And Over Ten WRC Clubs. A Friendly Community Of Enthusiasts Of The Sport And Beyond. Join Our Discord Server For The Full GRF Experience And Access To All Our Clubs!</div>
       <button class="hero-discord" onclick="window.open('https://discord.gg/global-rally-fans-817110244547100762', '_blank')">JOIN DISCORD</button>
     </div>
 
-    <!-- KACHELN -->
-    <div class="kacheln">
-      <div class="kachel">
-        <!--
-          TODO (nicht gebaut, Owner-Entscheidung Session 3): sollte eigentlich
-          alle Clubs zählen, die im RaceNet-Dummy-Account verknüpft sind UND
-          gerade eine laufende Championship haben (status=1 auf mind. einem
-          Event). Aktuell bewusst nur "Coming Soon" statt hartcodierter
-          falscher Zahl — echte Logik erst bauen, wenn's gebraucht wird.
-        -->
-        <div class="kachel-num" style="font-size:20px;">—</div>
-        <div class="kachel-lbl">Active Clubs</div>
-        <div class="kachel-sub">Coming Soon</div>
-      </div>
-      <div class="kachel">
-        <div class="kachel-num" id="k-members">—</div>
-        <div class="kachel-lbl">GRF Members</div>
-        <div class="kachel-sub">Unique across all clubs</div>
-      </div>
-      <div class="kachel">
-        <div class="kachel-num" id="k-most-events-num">—</div>
-        <div class="kachel-lbl">Most Events</div>
-        <div class="kachel-sub" id="k-most-events-name">—</div>
-      </div>
-      <div class="kachel">
-        <div class="kachel-num" id="k-top-elo">—</div>
-        <div class="kachel-lbl">Top ELO — Verified</div>
-        <div class="kachel-sub" id="k-top-elo-name">—</div>
-      </div>
-    </div>
+    <!-- Alte statische Kacheln (Active Clubs/Members/Most Events/Top ELO)
+         wurden entfernt (Session 10, Owner-Entscheidung): Die Community ist
+         alt genug, dass sich diese Zahlen praktisch nie ändern ("stehen
+         immer die selben zwei Namen") — dafür ist eine Home-Kachel der
+         falsche Ort. Perspektivisch eigene "Hall of Fame"-Seite (Punkt 8
+         der Roadmap, noch nicht gebaut). -->
 
-    <!-- HOME GRID: ELO TOP 10 + EVENTS + MOST IMPROVED + CHANGELOG -->
+    <!-- HOME GRID: CLUB DIRECTORY + MOST IMPROVED + CHANGELOG.
+         ELO-Top10 und die GRF-Themed-spezifische Current/Next-Event-Karte
+         wurden entfernt (Session 10, Owner-Entscheidung): Home soll ein
+         neutraler Community-Verteiler sein, kein heimlich GRF-Themed-
+         zentrierter Einstieg mehr. ELO Top 10 bleibt 1:1 auf der ELO-
+         Rankings-Seite abrufbar, redundant auf Home. Current/Next Event
+         gehört fachlich auf die jeweilige Club-Seite, nicht auf Home. -->
     <div class="home-grid">
 
-      <!-- TOP 10 ELO -->
-      <div class="home-col he-elo">
-        <div class="col-hdr">ELO — TOP 10
-          <span class="col-hdr-right">OVERALL · ALL CLUBS</span>
+      <!-- CLUB DIRECTORY — Kurzfassung, gleiche Datenquelle/Logik wie der
+           volle "Clubs"-Tab (loadClubDirectory()/renderClubDirectory()).
+           Bewusst weit oben, damit sie auf Mobile ohne/mit minimalem
+           Scroll erreichbar ist (s. Hero-Verschlankung oben). -->
+      <div class="home-col he-clubs">
+        <div class="col-hdr">CLUB DIRECTORY
+          <span class="col-hdr-right">ALL GRF CLUBS</span>
         </div>
-        <div class="elo-wrap">
-          <table class="elo-table slim-table">
-            <thead>
-              <tr><th>#</th><th>DRIVER</th><th>ELO</th><th>Δ</th><th>EVENTS</th></tr>
-            </thead>
-            <tbody id="home-elo-tbody">
-              <tr><td colspan="5"><div class="empty"><div class="empty-title">NO ELO DATA YET</div><div class="empty-sub">ELO data will appear after the first events are processed.</div></div></td></tr>
-            </tbody>
-          </table>
-          <div class="see-more" onclick="showPage('elo', document.querySelector('.menu-item:nth-child(4)'))">VIEW FULL ELO RANKINGS ›</div>
-        </div>
-      </div>
-
-      <!-- CURRENT + NEXT EVENT — compact side-by-side pair -->
-      <div class="home-col he-events">
-        <div class="col-hdr">EVENTS — GRF THEMED</div>
-        <div class="event-pair">
-          <div class="event-card" id="current-event-card" style="display:none;">
-            <div class="ec-lbl" style="color:var(--green);">● CURRENT</div>
-            <div class="ec-name" id="current-event-name">—</div>
-            <div class="ec-sub" id="current-event-sub">—</div>
-            <div class="ec-sub" id="current-event-countdown" style="color:var(--red);font-weight:bold;margin-top:-6px;">—</div>
-            <button class="ev-btn active" onclick="viewEventInThemed(_homeCurrentEventId)">VIEW ›</button>
-          </div>
-          <div class="event-card" id="next-event-card" style="display:none;">
-            <div class="ec-lbl">NEXT</div>
-            <div class="ec-name" id="next-event-name">—</div>
-            <div class="ec-sub" id="next-event-sub">—</div>
-            <div class="ec-sub" id="next-event-countdown" style="color:var(--red);font-weight:bold;margin-top:-6px;">—</div>
-            <button class="ev-btn active" onclick="viewEventInThemed(_homeNextEventId)">VIEW ›</button>
-          </div>
+        <div id="home-club-directory-list">
+          <div class="empty"><div class="empty-title">LOADING…</div></div>
         </div>
       </div>
 
@@ -2697,9 +2653,23 @@ function groupEventsByClub(events) {
 const CLUB_STATUS_LABEL = { active: 'LIVE', upcoming: 'UPCOMING', idle: 'NO EVENT' };
 const CLUB_STATUS_DOT   = { active: 'ss-green', upcoming: 'ss-yellow', idle: '' };
 
+// Die zwei Clubs mit fertiger eigener Unterseite (unverändert bestehender
+// Code, s. Roadmap Punkt 6) — einzige Directory-Zeilen, die aktuell
+// irgendwohin klickbar sind. Seit dem Nav-Umbau (Session 10) ist das auch
+// der EINZIGE Weg zu diesen beiden Seiten, da sie keine eigenen Top-Nav-
+// Einträge mehr haben.
+const CLUB_PAGE_ROUTE = { '23799': 'themed', '39230': 'teamed' };
+
+// Directory wird an mehreren Stellen gerendert (voller "Clubs"-Tab +
+// Kurzfassung auf Home) — beide IDs hier eintragen, damit ein Loader
+// beide befüllt statt zwei getrennte Fetches zu brauchen.
+const CLUB_DIRECTORY_CONTAINER_IDS = ['club-directory-list', 'home-club-directory-list'];
+
 async function loadClubDirectory() {
-  const container = $('club-directory-list');
-  if (!container) return;
+  // Bewusst KEIN früher return, falls einer der beiden Container fehlt —
+  // Home und Clubs-Tab sind nie gleichzeitig im DOM aktiv sichtbar, aber
+  // beide existieren immer (nur per CSS .page/.active ein-/ausgeblendet),
+  // daher sind hier normalerweise ohnehin beide vorhanden.
   try {
     const today = new Date().toISOString().split('T')[0];
     const [clubs, events] = await Promise.all([
@@ -2720,26 +2690,34 @@ async function loadClubDirectory() {
     renderClubDirectory(_clubDirectory);
   } catch (err) {
     console.error('[loadClubDirectory]', err);
-    container.innerHTML = '<div class="empty"><div class="empty-title">CLUBS COULD NOT BE LOADED</div><div class="empty-sub">Please try again shortly.</div></div>';
+    CLUB_DIRECTORY_CONTAINER_IDS.forEach(id => {
+      const c = $(id);
+      if (c) c.innerHTML = '<div class="empty"><div class="empty-title">CLUBS COULD NOT BE LOADED</div><div class="empty-sub">Please try again shortly.</div></div>';
+    });
   }
 }
 
 function renderClubDirectory(list) {
-  const container = $('club-directory-list');
-  if (!container) return;
-  if (!list.length) {
-    container.innerHTML = '<div class="empty"><div class="empty-title">NO CLUBS FOUND</div></div>';
-    return;
-  }
-  container.innerHTML = list.map(c => {
-    const dotClass = CLUB_STATUS_DOT[c.status];
-    const dotHtml  = dotClass ? `<span class="ss-dot ${dotClass}"></span>` : '';
-    return `
-      <div class="club-row">
+  const html = !list.length
+    ? '<div class="empty"><div class="empty-title">NO CLUBS FOUND</div></div>'
+    : list.map(c => {
+        const dotClass = CLUB_STATUS_DOT[c.status];
+        const dotHtml  = dotClass ? `<span class="ss-dot ${dotClass}"></span>` : '';
+        const route    = CLUB_PAGE_ROUTE[c.club_id];
+        const rowAttrs = route
+          ? `class="club-row club-row--linked" onclick="showPage('${route}', _findMenuEl('${route}'))"`
+          : `class="club-row club-row--pending"`;
+        return `
+      <div ${rowAttrs}>
         <span class="club-row-name">${escapeHtml(c.name)}</span>
         <span class="club-row-status">${dotHtml}${CLUB_STATUS_LABEL[c.status]}</span>
       </div>`;
-  }).join('');
+      }).join('');
+
+  CLUB_DIRECTORY_CONTAINER_IDS.forEach(id => {
+    const container = $(id);
+    if (container) container.innerHTML = html;
+  });
 }
 
 
@@ -2805,22 +2783,14 @@ function _setEndCountdownTarget(isoDate) {
 
 async function loadHome() {
   try {
-    // Owner-Feedback (Session 3): Home + ELO-Tab luden ALLE 2221 Fahrer +
-    // ALLE 25k+ event_results — spürbar langsam, und von den 2221 Fahrern
-    // sind nur die etablierten (Established, 20+ Starts) tatsächlich relevant für diese
-    // Kacheln. Fix: Fahrer server-seitig auf Established filtern
-    // (starts=gte.20 direkt in der Query, nicht erst nach dem Laden), und
-    // event_results komplett weglassen — beide hier genutzten Kennzahlen
-    // lassen sich aus bereits vorhandenen drivers-Feldern ableiten:
-    //   "GRF Members"  -> sbCount('drivers') — reine Zeilenanzahl, kein
-    //                      Datentransfer, zählt weiterhin ALLE (auch
-    //                      Provisional), nicht nur die gefilterten 300.
-    //   "Most Events"  -> drivers.starts (wird von grf_sync.py schon
-    //                      gepflegt) statt event_id-Set aus event_results.
-    //                      Kleine Abweichung: starts zählt nur Nicht-DNF-
-    //                      Events — für eine Trivia-Kachel unerheblich.
-    const [memberCount, drivers, deltaMap] = await Promise.all([
-      sbCount('drivers'),
+    // Home lädt nur noch, was tatsächlich noch angezeigt wird: "Most
+    // Improved" (braucht drivers + 7-Tage-Delta) und die Club-Directory.
+    // Die alten Kacheln (GRF Members/Most Events/Top ELO) und die ELO-
+    // Top10-Tabelle wurden entfernt (Session 10, s. Home-Grid-Kommentar
+    // oben) — die zugehörigen Fetches (sbCount('drivers') fürs Members-
+    // Kachel, activeDrivers-Filter fürs Top10) sind mitentfernt, kein
+    // unnötiger Datentransfer mehr für nicht mehr existierende Elemente.
+    const [drivers, deltaMap] = await Promise.all([
       sbAll('drivers', 'select=*&starts=gte.20&order=elo.desc'),
       fetchEloDeltaMap(7),
     ]);
@@ -2833,52 +2803,12 @@ async function loadHome() {
       d.elo_change = (past != null && d.elo != null) ? Math.round(d.elo - past) : null;
     });
 
-    // Kachel: GRF Members (echte Gesamtzahl aller Fahrer, nicht nur Established)
-    setText('k-members', memberCount ?? '—');
-
-    // Kachel: Fahrer mit den meisten (nicht-DNF) Events
-    let mostName = '—', mostCount = 0;
-    drivers.forEach(d => {
-      if ((d.starts || 0) > mostCount) { mostCount = d.starts; mostName = d.name; }
-    });
-    setText('k-most-events-num',  mostCount || '—');
-    setText('k-most-events-name', mostName);
-
-    // Kachel: Top ELO + Top-10 — nur ACTIVE Fahrer (established, s.o., ist
-    // eine andere Dimension als active/inactive). Bisher fehlte dieser
-    // Filter hier komplett — fiel nicht auf, solange der alte Inaktivitäts-
-    // Bug lang-inaktive Fahrer ohnehin automatisch Richtung ~975 gedrückt
-    // hat. Jetzt, wo Ratings bei Inaktivität eingefroren bleiben (siehe
-    // Changelog), kann ein hoch bewerteter inaktiver Fahrer sonst permanent
-    // oben stehen bleiben.
-    const activeDrivers = drivers.filter(d => !d.elo_inactive);
-
-    if (activeDrivers.length) {
-      setText('k-top-elo',      activeDrivers[0].elo);
-      setText('k-top-elo-name', activeDrivers[0].name);
-    }
-
-    // ELO Top-10-Tabelle
-    const top10 = activeDrivers.slice(0, 10);
-    const tbody = $('home-elo-tbody');
-    if (tbody) {
-      tbody.innerHTML = top10.length
-        ? top10.map((d, i) => `
-            <tr>
-              <td class="${rankClass(i)}" data-label="#">${String(i + 1).padStart(2, '0')}</td>
-              <td data-label="DRIVER">${escapeHtml(d.country || '')} ${escapeHtml(d.name)}</td>
-              <td class="ev" data-label="ELO">${d.elo || '—'}</td>
-              <td data-label="Δ">${deltaHTML(d.elo_change)}</td>
-              <td data-label="EVENTS">${d.starts || 0}</td>
-            </tr>`).join('')
-        : emptyRow(5, 'NO ELO DATA YET', 'ELO data will appear after the first events are processed.');
-    }
-
     // Most Improved (jetzt mit echtem 7-Tage-Delta aus elo_history)
     renderMostImproved(drivers);
 
-    // Nächstes Event
-    await loadHomeEvents();
+    // Club Directory (Kurzfassung, gleiche Daten/Logik wie der volle
+    // "Clubs"-Tab)
+    await loadClubDirectory();
 
   } catch (err) {
     console.error('[loadHome]', err);
@@ -2890,7 +2820,7 @@ function renderMostImproved(drivers) {
   const withChange = drivers
     .filter(d => d.elo_change && d.elo_change > 0)
     .sort((a, b) => b.elo_change - a.elo_change)
-    .slice(0, 5);
+    .slice(0, 10);
 
   const container = $('most-improved-list');
   if (!container) return;
@@ -2915,63 +2845,14 @@ function renderMostImproved(drivers) {
     </div>`).join('');
 }
 
-/** Lädt das nächste/aktive Event und befüllt den Hero-Bereich auf der Home-Seite. */
-// Current/Next-Event-IDs von der Home-Seite — für die VIEW-Buttons, damit sie
-// auf das jeweils richtige Event in der Themed-Ansicht springen (vorher
-// landeten beide immer auf dem aktiven Event, weil showPage('themed') ohne
-// Event-Kontext aufgerufen wurde).
-let _homeCurrentEventId = null;
-let _homeNextEventId    = null;
-
-/** Springt zur Themed-Seite und wählt gezielt das übergebene Event aus. */
-function viewEventInThemed(eventId) {
-  if (eventId) _themedActiveEventId = eventId;
-  showPage('themed', document.querySelectorAll('.menu-item')[1]);
-}
-
-async function loadHomeEvents() {
-  try {
-    // club_id=eq.23799 (GRF Themed) ist Pflicht — sonst kommt irgendein Event
-    // von irgendeinem Club im RaceNet-Dummy-Account (auch Teamed etc.).
-    const today = new Date().toISOString().split('T')[0];
-
-    const [currentEvs, nextEvs] = await Promise.all([
-      sb('events', 'select=*&club_id=eq.23799&status=eq.1&order=start_date.asc&limit=1'),
-      sb('events', `select=*&club_id=eq.23799&status=eq.0&start_date=gte.${today}&order=start_date.asc&limit=1`),
-    ]);
-
-    // CURRENT EVENT — läuft gerade, kein Start-Countdown (Startdatum liegt in
-    // der Vergangenheit), aber "Ends in..." (End-Countdown) für Positions-
-    // Parität mit der Next-Karte, die "Starts in..." zeigt.
-    const curCard = $('current-event-card');
-    if (currentEvs.length) {
-      const ev = currentEvs[0];
-      _homeCurrentEventId = ev.id;
-      setText('current-event-name', ev.location || ev.name || '—');
-      setText('current-event-sub', 'Rally in progress');
-      if (ev.end_date) _setEndCountdownTarget(ev.end_date);
-      if (curCard) curCard.style.display = '';
-    } else if (curCard) {
-      curCard.style.display = 'none';
-    }
-
-    // NEXT EVENT — echt bevorstehend, Countdown ergibt hier tatsächlich Sinn.
-    const nextCard = $('next-event-card');
-    if (nextEvs.length) {
-      const ev = nextEvs[0];
-      _homeNextEventId = ev.id;
-      setText('next-event-name', ev.location || ev.name || '—');
-      const dateStr = ev.start_date ? `${fmtDate(ev.start_date)} – ${fmtDate(ev.end_date)}` : '—';
-      setText('next-event-sub', dateStr);
-      if (ev.start_date) _setCountdownTarget(ev.start_date);
-      if (nextCard) nextCard.style.display = '';
-    } else if (nextCard) {
-      nextCard.style.display = 'none';
-    }
-  } catch (err) {
-    console.error('[loadHomeEvents]', err);
-  }
-}
+// Hinweis: loadHomeEvents()/viewEventInThemed() (GRF-Themed-spezifische
+// Current/Next-Event-Karte auf Home) wurden entfernt (Session 10) — Home
+// zeigt keine club-spezifischen Events mehr, s. Home-Grid-Kommentar oben.
+// _tickCountdown()/_setCountdownTarget()/_setEndCountdownTarget() (weiter
+// oben in der Datei) bleiben bewusst bestehen: generische, DOM-Element-
+// geprüfte Utilities, falls eine Club-Seite später eigene Countdowns
+// braucht (z.B. im späteren generischen Club-Template, Punkt 6 der
+// Roadmap) — ungenutzt aber harmlos, kein toter Callback-Pfad.
 
 
 // ── 7. THEMED PAGE ────────────────────────────────────────────
