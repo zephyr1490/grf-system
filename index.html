@@ -932,29 +932,103 @@ textarea.inp-std { resize:vertical; }
       </div>
     </div>
 
-    <!-- Generisches Club-Detail — Archiv + Stats (Podiums/Stage-Wins).
-         Standardmäßig versteckt, wird von showClubDetail() befüllt und
-         eingeblendet. -->
+    <!-- Generisches Club-Detail — Live Results (Hauptansicht, im Aufbau von
+         GRF Themed nachgebaut: Event-Selector + Ergebnistabelle + Event-
+         Info) + Stats (Podiums/Stage-Wins) als Unterpunkt. Standardmäßig
+         versteckt, wird von showClubDetail() befüllt und eingeblendet.
+         BEWUSST OHNE CR/Punkte-Spalten (BASE/×CR/TOTAL) — generische
+         Clubs haben kein konfiguriertes Punktesystem wie Themed. Ein Club-
+         Admin hat bereits Interesse an einem eigenen Custom-Punktesystem
+         geäußert — das ist ein separates, späteres Thema (eigene Spalte,
+         nicht Teil dieses generischen Templates). -->
     <div id="club-detail-view" style="display:none;">
       <div class="col-hdr" style="cursor:pointer;" onclick="backToClubDirectory()">‹ ALL CLUBS
         <span class="col-hdr-right" id="club-detail-name">—</span>
       </div>
 
-      <div class="club-directory-wrap">
-        <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
-          <span class="col-hdr-right">TOP 1-3 FINISHES</span>
+      <div class="themed-subnav" style="display:flex;">
+        <div class="sub-tab active" data-tab="results" onclick="showClubDetailTab('results',this)">Live Results</div>
+        <div class="sub-tab" data-tab="stats" onclick="showClubDetailTab('stats',this)">Stats</div>
+      </div>
+
+      <!-- SUB-TAB: LIVE RESULTS -->
+      <div class="themed-tab active" id="cd-tab-results">
+
+        <!-- Current + Next Event — generische Variante der frueheren
+             Home-Karte, jetzt pro Club statt hart auf GRF Themed. -->
+        <div class="event-pair" style="margin:6px;">
+          <div class="event-card" id="cd-current-event-card" style="display:none;">
+            <div class="ec-lbl" style="color:var(--green);">● CURRENT</div>
+            <div class="ec-name" id="cd-current-event-name">—</div>
+            <div class="ec-sub" id="cd-current-event-sub">—</div>
+            <div class="ec-sub" id="cd-current-event-countdown" style="color:var(--red);font-weight:bold;margin-top:-6px;">—</div>
+          </div>
+          <div class="event-card" id="cd-next-event-card" style="display:none;">
+            <div class="ec-lbl">NEXT</div>
+            <div class="ec-name" id="cd-next-event-name">—</div>
+            <div class="ec-sub" id="cd-next-event-sub">—</div>
+            <div class="ec-sub" id="cd-next-event-countdown" style="color:var(--red);font-weight:bold;margin-top:-6px;">—</div>
+          </div>
         </div>
-        <div id="club-detail-podiums">
-          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+
+        <div class="event-selector" id="cd-event-selector">
+          <span class="event-selector-lbl">EVENT:</span>
+          <span style="color:#555;font-size:12px;">Loading events…</span>
+        </div>
+        <div class="live-grid">
+          <div class="live-col">
+            <div class="col-hdr" id="cd-results-hdr">RESULTS — LOADING…</div>
+            <div class="elo-wrap full-wrap">
+              <table class="elo-table">
+                <thead><tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th></tr></thead>
+                <tbody id="cd-results-tbody">
+                  <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="elo-wrap slim-wrap">
+              <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR STAGE TIMES →</div>
+              <table class="elo-table slim-table">
+                <thead><tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th></tr></thead>
+                <tbody id="cd-results-slim-tbody">
+                  <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="live-col">
+            <div class="col-hdr" id="cd-event-info-hdr">EVENT INFO</div>
+            <div style="background:var(--black);margin:6px;padding:12px;">
+              <div style="font-family:'VT323',monospace;font-size:32px;color:var(--white);text-shadow:2px 2px 0 var(--red-dark);line-height:1;margin-bottom:10px;" id="cd-event-info-name">—</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <div class="themed-meta-item"><div class="tm-lbl">Entries</div><div class="tm-val" id="cd-event-info-entries">—</div></div>
+                <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="cd-event-info-status">—</div></div>
+                <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val" id="cd-event-info-start">—</div></div>
+                <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val" id="cd-event-info-end">—</div></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="club-directory-wrap" style="margin-top:6px;">
-        <div class="col-hdr" style="border-bottom:none;">MOST STAGE WINS
-          <span class="col-hdr-right">STAGE POSITION 1</span>
+      <!-- SUB-TAB: STATS (Punkt 7 der Roadmap — Podiums/Stage-Wins) -->
+      <div class="themed-tab" id="cd-tab-stats" style="display:none;">
+        <div class="club-directory-wrap">
+          <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
+            <span class="col-hdr-right">TOP 1-3 FINISHES</span>
+          </div>
+          <div id="club-detail-podiums">
+            <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+          </div>
         </div>
-        <div id="club-detail-stagewins">
-          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+
+        <div class="club-directory-wrap" style="margin-top:6px;">
+          <div class="col-hdr" style="border-bottom:none;">MOST STAGE WINS
+            <span class="col-hdr-right">STAGE POSITION 1</span>
+          </div>
+          <div id="club-detail-stagewins">
+            <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -989,6 +1063,7 @@ textarea.inp-std { resize:vertical; }
       <div class="sub-tab" data-tab="standings" onclick="showSubTab('standings',this)">Championship Standings</div>
       <div class="sub-tab" data-tab="carratings" onclick="showSubTab('carratings',this)">Car Ratings</div>
       <div class="sub-tab" data-tab="challenges" onclick="showSubTab('challenges',this)">Challenges</div>
+      <div class="sub-tab" data-tab="stats" onclick="showSubTab('stats',this)">Stats</div>
     </div>
 
     <!-- TAB: LIVE RESULTS -->
@@ -1117,6 +1192,29 @@ textarea.inp-std { resize:vertical; }
       <div class="challenge-box" id="challenges-box">
         <div class="col-hdr" style="margin-bottom:10px;" id="challenges-hdr">ACTIVE CHALLENGES — LOADING…</div>
         <div id="challenges-list"></div>
+      </div>
+    </div>
+
+    <!-- TAB: STATS — wiederverwendet dieselbe generische Stats-Logik wie
+         die schlanken Clubs (loadClubStats(), tallyDrivers(),
+         renderRankedList()), nur mit eigenen Containern und club_id 23799
+         fest verdrahtet. -->
+    <div class="themed-tab" id="tab-stats">
+      <div class="club-directory-wrap">
+        <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
+          <span class="col-hdr-right">TOP 1-3 FINISHES</span>
+        </div>
+        <div id="themed-stats-podiums">
+          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+        </div>
+      </div>
+      <div class="club-directory-wrap" style="margin-top:6px;">
+        <div class="col-hdr" style="border-bottom:none;">MOST STAGE WINS
+          <span class="col-hdr-right">STAGE POSITION 1</span>
+        </div>
+        <div id="themed-stats-stagewins">
+          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+        </div>
       </div>
     </div>
 
@@ -1272,6 +1370,7 @@ textarea.inp-std { resize:vertical; }
       <div class="sub-tab" data-tab="standings" onclick="showTeamedSubTab('standings',this)">Championship Standings</div>
       <div class="sub-tab" data-tab="carratings" onclick="showTeamedSubTab('carratings',this)">Car Ratings</div>
       <div class="sub-tab" data-tab="challenges" onclick="showTeamedSubTab('challenges',this)">Bonus Rules</div>
+      <div class="sub-tab" data-tab="stats" onclick="showTeamedSubTab('stats',this)">Stats</div>
     </div>
 
     <!-- TAB: LIVE RESULTS -->
@@ -1377,6 +1476,25 @@ textarea.inp-std { resize:vertical; }
       <div class="challenge-box" id="teamed-challenges-box">
         <div class="col-hdr" style="margin-bottom:10px;" id="teamed-challenges-hdr">ACTIVE CHALLENGES — LOADING…</div>
         <div id="teamed-challenges-list"></div>
+      </div>
+    </div>
+
+    <div class="themed-tab" id="tab-teamed-stats">
+      <div class="club-directory-wrap">
+        <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
+          <span class="col-hdr-right">TOP 1-3 FINISHES</span>
+        </div>
+        <div id="teamed-stats-podiums">
+          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+        </div>
+      </div>
+      <div class="club-directory-wrap" style="margin-top:6px;">
+        <div class="col-hdr" style="border-bottom:none;">MOST STAGE WINS
+          <span class="col-hdr-right">STAGE POSITION 1</span>
+        </div>
+        <div id="teamed-stats-stagewins">
+          <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+        </div>
       </div>
     </div>
 
@@ -2581,6 +2699,10 @@ function showSubTab(name, el) {
   if (name === 'standings')  loadStandings();
   if (name === 'carratings') loadCarRatings();
   if (name === 'challenges') loadChallenges();
+  if (name === 'stats' && !_themedStatsLoaded) {
+    _themedStatsLoaded = true;
+    loadClubStats('23799', 'themed-stats-podiums', 'themed-stats-stagewins');
+  }
 
   _syncHash('themed', name);
 }
@@ -2644,7 +2766,9 @@ function _findSubTabEl(scopeSelector, subtab) {
  */
 function applyRoute() {
   const raw = location.hash.replace(/^#/, '');
-  const [pageRaw, subtab] = raw.split('/');
+  const parts = raw.split('/');
+  const pageRaw = parts[0];
+  const subtab  = parts[1];
   const page = ROUTE_PAGES.includes(pageRaw) ? pageRaw : 'home';
 
   showPage(page, _findMenuEl(page));
@@ -2658,8 +2782,9 @@ function applyRoute() {
     showAdminTab(subtab, _findSubTabEl('#admin-panel', subtab));
   } else if (page === 'clubs') {
     // subtab ist hier keine feste Tab-ID, sondern die club_id selbst
-    // (z.B. #clubs/23847) — Deep-Link direkt in ein generisches Club-Detail.
-    showClubDetail(subtab);
+    // (z.B. #clubs/23847 oder #clubs/23847/stats für den Stats-Unterpunkt)
+    // — Deep-Link direkt in ein generisches Club-Detail.
+    showClubDetail(subtab, parts[2]);
   }
 }
 
@@ -2830,7 +2955,17 @@ function backToClubDirectory() {
   showPage('clubs', _findMenuEl('clubs'));
 }
 
-async function showClubDetail(clubId) {
+// State für die generische Club-Detail-Ansicht (analog zu den Themed-
+// Globals _themedChampId/_themedEvents/_themedActiveEventId, aber pro
+// gerade angezeigtem Club — es ist immer nur eine Detail-Ansicht gleich-
+// zeitig sichtbar, daher reichen einfache Globals statt einer Map).
+let _clubDetailId          = null;
+let _clubDetailChampId     = null;
+let _clubDetailEvents      = [];
+let _clubDetailActiveEvent = null;
+let _clubDetailStatsLoaded = false; // Egress-schonend: Stats erst bei Bedarf laden, s.u.
+
+async function showClubDetail(clubId, initialTab = 'results') {
   if (!clubId) return;
 
   // Bug-Fix: von Home aus geklickt existiert page-clubs zwar im DOM, ist
@@ -2852,22 +2987,58 @@ async function showClubDetail(clubId) {
   if (directoryView) directoryView.style.display = 'none';
   if (detailView)    detailView.style.display    = '';
 
-  _syncHash('clubs', clubId);
-
   const cached = _clubDirectory.find(c => c.club_id === String(clubId));
   setText('club-detail-name', cached ? cached.name : `Club ${clubId}`);
 
+  // Neuer Club -> Stats-Cache UND aktives Event zurücksetzen (sonst würde
+  // ein zuvor bei einem ANDEREN Club angeklicktes Event fälschlich hier
+  // weiterverwendet). Live Results ist die Default-Ansicht beim Öffnen
+  // (Owner-Entscheidung, Session 10).
+  _clubDetailId          = String(clubId);
+  _clubDetailStatsLoaded = false;
+  _clubDetailActiveEvent = null;
+
+  const tab = (initialTab === 'stats') ? 'stats' : 'results';
+  showClubDetailTab(tab, _findSubTabEl('#club-detail-view', tab));
+
+  await loadClubResults(clubId);
+}
+
+/** Wechselt zwischen "Live Results" und "Stats" innerhalb eines Club-Details. */
+function showClubDetailTab(tab, el) {
+  const resultsPanel = $('cd-tab-results');
+  const statsPanel   = $('cd-tab-stats');
+  if (resultsPanel) resultsPanel.style.display = (tab === 'results') ? '' : 'none';
+  if (statsPanel)   statsPanel.style.display   = (tab === 'stats')   ? '' : 'none';
+
+  document.querySelectorAll('#club-detail-view .sub-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+
+  _syncHash('clubs', `${_clubDetailId}/${tab}`);
+
+  // Egress-schonend: Stats-Query (liest komplette event_results/
+  // stage_results-Historie des Clubs) erst laden, wenn der Tab
+  // tatsächlich angeklickt wird — nicht bei jedem Öffnen eines Club-
+  // Details automatisch mit, das würde unnötig oft Daten übertragen, die
+  // die meisten Besucher nie ansehen.
+  if (tab === 'stats' && !_clubDetailStatsLoaded) {
+    _clubDetailStatsLoaded = true;
+    loadClubStats(_clubDetailId);
+  }
+}
+
+async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWinsId = 'club-detail-stagewins') {
   const loadingHtml = '<div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>';
-  setHTML('club-detail-podiums', loadingHtml);
-  setHTML('club-detail-stagewins', loadingHtml);
+  setHTML(podiumsId, loadingHtml);
+  setHTML(stageWinsId, loadingHtml);
 
   try {
     const champs   = await sbAll('championships', `select=id&club_id=eq.${encodeURIComponent(clubId)}`);
     const champIds = champs.map(c => c.id);
 
     if (!champIds.length) {
-      renderRankedList('club-detail-podiums', [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
-      renderRankedList('club-detail-stagewins', [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
+      renderRankedList(podiumsId, [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
+      renderRankedList(stageWinsId, [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
       return;
     }
 
@@ -2889,12 +3060,207 @@ async function showClubDetail(clubId) {
     const podiumRows   = tallyDrivers(eventResults, r => !r.is_dnf && r.position != null && r.position >= 1 && r.position <= 3);
     const stageWinRows = tallyDrivers(stageResults, r => !r.is_dnf && r.stage_position === 1);
 
-    renderRankedList('club-detail-podiums', podiumRows);
-    renderRankedList('club-detail-stagewins', stageWinRows);
+    renderRankedList(podiumsId, podiumRows);
+    renderRankedList(stageWinsId, stageWinRows);
   } catch (err) {
-    console.error('[showClubDetail]', err);
-    renderRankedList('club-detail-podiums', []);
-    renderRankedList('club-detail-stagewins', []);
+    console.error('[loadClubStats]', err);
+    renderRankedList(podiumsId, []);
+    renderRankedList(stageWinsId, []);
+  }
+}
+
+
+// ── 4e. CLUB DETAIL — LIVE RESULTS (generische Variante von
+//        loadThemedResults(), s. dortige Kommentare für den Vollausbau
+//        inkl. CR/Punkte. Bewusst OHNE Championship-Narrative/Hero und
+//        OHNE BASE/×CR/TOTAL-Spalten — generische Clubs haben kein
+//        konfiguriertes Punktesystem. Themed/Teamed nutzen weiterhin
+//        ihren eigenen, unangetasteten Code, nicht diesen hier. ──────
+
+async function loadClubResults(clubId) {
+  try {
+    let champ = null;
+
+    const activeEvs0 = await sb('events', `select=championship_id&club_id=eq.${encodeURIComponent(clubId)}&status=eq.1&limit=1`);
+    if (activeEvs0.length) {
+      const found = await sb('championships', `select=*&id=eq.${activeEvs0[0].championship_id}&limit=1`);
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      const found = await sb('championships', `select=*&club_id=eq.${encodeURIComponent(clubId)}&order=start_date.desc&limit=1`);
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      setHTML('cd-event-selector', '<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">No championship found</span>');
+      setHTML('cd-results-tbody', emptyRow(4, 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET'));
+      setHTML('cd-results-slim-tbody', emptyRow(4, 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET'));
+      const curCard = $('cd-current-event-card'); if (curCard) curCard.style.display = 'none';
+      const nextCard = $('cd-next-event-card'); if (nextCard) nextCard.style.display = 'none';
+      return;
+    }
+
+    _clubDetailChampId = champ.id;
+
+    const evs = await sb('events', `select=*&championship_id=eq.${_clubDetailChampId}&order=round_number.asc`);
+    _clubDetailEvents = evs;
+
+    const liveEvs     = evs.filter(e => e.status === 1);
+    const upcomingEvs = evs.filter(e => e.status !== 1 && e.status !== 2);
+
+    // Current + Next Event Karten (generische Variante der früheren
+    // GRF-Themed-only Home-Karte)
+    const curCard = $('cd-current-event-card');
+    if (liveEvs.length) {
+      const ev = liveEvs[0];
+      setText('cd-current-event-name', ev.location || ev.name || '—');
+      setText('cd-current-event-sub', 'Rally in progress');
+      if (ev.end_date) _setEndCountdownTarget(ev.end_date);
+      if (curCard) curCard.style.display = '';
+    } else if (curCard) {
+      curCard.style.display = 'none';
+    }
+
+    const nextCard = $('cd-next-event-card');
+    if (upcomingEvs.length) {
+      const ev = upcomingEvs[0];
+      setText('cd-next-event-name', ev.location || ev.name || '—');
+      const dateStr = ev.start_date ? `${fmtDate(ev.start_date)} – ${fmtDate(ev.end_date)}` : '—';
+      setText('cd-next-event-sub', dateStr);
+      if (ev.start_date) _setCountdownTarget(ev.start_date);
+      if (nextCard) nextCard.style.display = '';
+    } else if (nextCard) {
+      nextCard.style.display = 'none';
+    }
+
+    // Event-Selector
+    const selectorEl = $('cd-event-selector');
+    if (selectorEl && evs.length) {
+      const defaultEv = liveEvs[0] || upcomingEvs[0] || evs[evs.length - 1];
+      if (!_clubDetailActiveEvent) _clubDetailActiveEvent = defaultEv.id;
+
+      selectorEl.innerHTML =
+        `<span class="event-selector-lbl">EVENT:</span>` +
+        evs.map(ev => `
+          <span class="ev-btn${ev.id === _clubDetailActiveEvent ? ' active' : ''}"
+                onclick="selectClubEvent('${ev.id}', this)">
+            RD.${ev.round_number || '?'} ${ev.location || ev.name || ''}
+          </span>`).join('');
+    } else if (selectorEl) {
+      selectorEl.innerHTML = `<span class="event-selector-lbl">EVENT:</span><span style="color:#555;font-size:12px;">No events found</span>`;
+    }
+
+    await _fetchAndRenderClubResults(_clubDetailActiveEvent);
+
+  } catch (err) {
+    console.error('[loadClubResults]', err);
+  }
+}
+
+/** Klick auf Event-Button im Club-Detail-Selector. */
+async function selectClubEvent(eventId, el) {
+  _clubDetailActiveEvent = eventId;
+  document.querySelectorAll('#cd-event-selector .ev-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  await _fetchAndRenderClubResults(eventId);
+}
+
+/** Lädt event_results für ein Event, rendert Tabelle + Event-Info-Panel (generisch, ohne CR/Punkte). */
+async function _fetchAndRenderClubResults(eventId) {
+  if (!eventId) return;
+
+  setText('cd-results-hdr', 'RESULTS — LOADING…');
+  setHTML('cd-results-tbody', emptyRow(4, 'LOADING…'));
+  setHTML('cd-results-slim-tbody', emptyRow(4, 'LOADING…'));
+
+  const ev = _clubDetailEvents.find(e => e.id === eventId) || {};
+  const rdLabel = ev.round_number ? `RD.${ev.round_number}` : '';
+  const evLabel = ev.location || ev.name || eventId;
+
+  setText('cd-event-info-name', ev.location || ev.name || '—');
+
+  const evStatusMap = { 0: 'Upcoming', 1: '● Live', 2: 'Finished' };
+  const evStatusEl  = $('cd-event-info-status');
+  if (evStatusEl) {
+    evStatusEl.textContent = evStatusMap[ev.status] ?? '—';
+    evStatusEl.style.color = ev.status === 1 ? 'var(--green)' : '';
+  }
+  setText('cd-event-info-start', fmtDate(ev.start_date));
+  setText('cd-event-info-end',   fmtDate(ev.end_date));
+
+  try {
+    const [results, stages, stageResults] = await Promise.all([
+      sb('event_results',  `select=*&event_id=eq.${eventId}&order=is_dnf.asc,position.asc`),
+      sb('stages',         `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`),
+      sb('stage_results',  `select=driver_name,stage_id,time_str,stage_position,is_dnf&event_id=eq.${eventId}`),
+    ]);
+
+    setText('cd-event-info-entries', results.length || '—');
+
+    const tbody = $('cd-results-tbody');
+    if (!tbody) return;
+
+    if (!results.length) {
+      tbody.innerHTML = emptyRow(4, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
+      setHTML('cd-results-slim-tbody', emptyRow(4, 'NO RESULTS YET', 'Results appear as drivers finish the event.'));
+      setText('cd-results-hdr', `${rdLabel} ${evLabel} — NO DATA`.trim());
+      return;
+    }
+
+    setText('cd-results-hdr', `${rdLabel} ${evLabel}`.trim());
+
+    const stageIdx = {};
+    stageResults.forEach(r => {
+      if (!stageIdx[r.stage_id]) stageIdx[r.stage_id] = {};
+      stageIdx[r.stage_id][r.driver_name] = r;
+    });
+
+    // Beide Tabellen (voll + schlank) sind hier inhaltlich identisch (nur
+    // 4 Spalten, kein CR/Punkte zum Verstecken) — trotzdem als full-wrap/
+    // slim-wrap-Paar gebaut, konsistent mit dem Rest der Seite (s.
+    // "SCHLANK + TAP"-CSS-Kommentar), damit der 768px-Breakpoint
+    // einheitlich funktioniert.
+    const buildRows = (idPrefix) => results.map((r, i) => {
+      const dnf    = r.is_dnf;
+      const posStr = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
+      const rowId  = `${idPrefix}-${r.driver_id || i}`;
+
+      let stageRow = '';
+      if (stages.length) {
+        const cells = stages.map(st => {
+          const sr = stageIdx[st.id]?.[r.driver_name];
+          if (!sr) return `<td style="color:#555;">—</td>`;
+          const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
+          return `<td ${cls}>${fmtStageTime(sr.time_str) || '—'}</td>`;
+        }).join('');
+        const hdrs = stages.map(st =>
+          `<td style="font-size:10px;color:var(--red);letter-spacing:1px;">SS${st.stage_number}</td>`
+        ).join('');
+        stageRow = `
+          <tr id="${rowId}" style="display:none;background:#0a0a0a;">
+            <td></td>
+            <td colspan="3">
+              <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <tr>${hdrs}</tr>
+                <tr>${cells}</tr>
+              </table>
+            </td>
+          </tr>`;
+      }
+
+      return `
+        <tr${dnf ? ' style="opacity:.55"' : ''} style="cursor:pointer;" onclick="toggleStageRow('${rowId}')">
+          <td class="${rankClass(i)}" data-label="#">${posStr}</td>
+          <td data-label="DRIVER">${escapeHtml(r.driver_name) || '—'}</td>
+          <td style="font-size:12px;color:#aaa;" data-label="VEHICLE">${escapeHtml(r.vehicle) || '—'}</td>
+          <td data-label="TIME">${fmtStageTime(r.time) || '—'}</td>
+        </tr>${stageRow}`;
+    }).join('');
+
+    tbody.innerHTML = buildRows('cd-stages-row');
+    setHTML('cd-results-slim-tbody', buildRows('cd-stages-row-slim'));
+
+  } catch (err) {
+    console.error('[_fetchAndRenderClubResults]', err);
   }
 }
 
@@ -3038,6 +3404,7 @@ function renderMostImproved(drivers) {
 // State
 let _themedChampId       = null;  // aktuelle championship_id (club 23799)
 let _themedActiveEventId = null;  // aktives Event im Selector
+let _themedStatsLoaded   = false; // Egress-schonend: Stats nur einmal pro Seitenbesuch laden, s. showSubTab()
 let _themedEvents        = [];    // alle Events der Championship (sortiert nach round_number)
 
 /**
@@ -3790,6 +4157,7 @@ async function loadChallenges() {
 
 let _teamedChampId       = null;  // aktuelle championship_id (club 39230)
 let _teamedActiveEventId = null;  // aktives Event im Selector
+let _teamedStatsLoaded   = false; // Egress-schonend: Stats nur einmal pro Seitenbesuch laden, s. showTeamedSubTab()
 let _teamedEvents        = [];    // alle Events der Championship (sortiert nach round_number)
 
 /**
@@ -3808,6 +4176,10 @@ function showTeamedSubTab(name, el) {
   if (name === 'standings')  loadTeamedStandings();
   if (name === 'carratings') loadTeamedCarRatings();
   if (name === 'challenges') loadTeamedChallenges();
+  if (name === 'stats' && !_teamedStatsLoaded) {
+    _teamedStatsLoaded = true;
+    loadClubStats('39230', 'teamed-stats-podiums', 'teamed-stats-stagewins');
+  }
 
   _syncHash('teamed', name);
 }
