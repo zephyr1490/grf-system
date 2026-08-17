@@ -821,7 +821,7 @@ textarea.inp-std { resize:vertical; }
 
   <!-- TITLE BAR -->
   <div class="titlebar">
-    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.4</span></span>
+    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.5</span></span>
   </div>
 
   <!-- MENU BAR — GRF Themed/Teamed haben seit Session 10 bewusst KEINEN
@@ -2283,6 +2283,20 @@ textarea.inp-std { resize:vertical; }
 // Admin-UI/DB-Tabelle nötig dafür — ändert sich selten genug, dass ein
 // Code-Eintrag reicht). Neueste ZUERST in der Liste.
 const CHANGELOG = [
+  {
+    version: '1.5',
+    date:    '2026-08-18',
+    label:   'Clubs update',
+    notes: [
+      'New "Clubs" tab — browse every GRF club in one place, see which ones have an event live or coming up right now.',
+      'Every club now gets its own Live Results page (event picker, results, stage times) — not just GRF Themed and Teamed anymore.',
+      'New Stats tab per club: most podiums and most stage wins for that club\u2019s drivers.',
+      'GRF Themed and Teamed moved out of the top menu — find them via the new Clubs tab instead, everything else about them is unchanged.',
+      'Every page and tab now has its own link, so results/standings/stats can be shared directly instead of just the homepage.',
+      'Site can now be installed like an app — look for "Add to Home Screen" in your browser for a proper icon and no address bar.',
+      'Home page decluttered: club directory and most improved drivers up top, old static tiles removed since they barely ever changed.',
+    ],
+  },
   {
     version: '1.4',
     date:    '2026-07-27',
