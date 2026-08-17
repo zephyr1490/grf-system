@@ -1027,7 +1027,7 @@ textarea.inp-std { resize:vertical; }
       </div>
 
       <!-- SUB-TAB: STATS (Punkt 7 der Roadmap — Podiums/Stage-Wins) -->
-      <div class="themed-tab" id="cd-tab-stats" style="display:none;">
+      <div class="themed-tab" id="cd-tab-stats">
         <div class="club-directory-wrap">
           <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
             <span class="col-hdr-right">TOP 1-3 FINISHES</span>
@@ -3053,10 +3053,20 @@ async function showClubDetail(clubId, initialTab = 'results') {
 
 /** Wechselt zwischen "Live Results" und "Stats" innerhalb eines Club-Details. */
 function showClubDetailTab(tab, el) {
-  const resultsPanel = $('cd-tab-results');
-  const statsPanel   = $('cd-tab-stats');
-  if (resultsPanel) resultsPanel.style.display = (tab === 'results') ? '' : 'none';
-  if (statsPanel)   statsPanel.style.display   = (tab === 'stats')   ? '' : 'none';
+  // Bug-Fix (Session 10, nach langer Fehlersuche): .themed-tab ist per
+  // Basis-CSS-Regel IMMER display:none, sichtbar wird ein Tab nur über die
+  // Klasse ".active" (".themed-tab.active { display:block; }" — exakt
+  // dasselbe Muster wie bei showSubTab()/showTeamedSubTab()). Die alte
+  // Version hier hat stattdessen versucht, die Sichtbarkeit direkt per
+  // style.display zu steuern — das hat für "results" zufällig funktioniert
+  // (weil das Panel im HTML von Anfang an die Klasse "active" hatte), aber
+  // "stats" hat nie eine "active"-Klasse bekommen und blieb dadurch über
+  // die CSS-Basisregel permanent versteckt, obwohl die Daten korrekt
+  // geladen und ins DOM gerendert wurden (Netzwerk-Anfragen liefen alle
+  // erfolgreich durch — reines CSS-Sichtbarkeitsproblem, kein Daten-Bug).
+  document.querySelectorAll('#club-detail-view .themed-tab').forEach(t => t.classList.remove('active'));
+  const targetPanel = $('cd-tab-' + tab);
+  if (targetPanel) targetPanel.classList.add('active');
 
   document.querySelectorAll('#club-detail-view .sub-tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
