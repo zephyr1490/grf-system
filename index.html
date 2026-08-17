@@ -3048,29 +3048,33 @@ async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWin
   setHTML(stageWinsId, loadingHtml);
 
   try {
-    const champs   = await sbAll('championships', `select=id&club_id=eq.${encodeURIComponent(clubId)}`);
-    const champIds = champs.map(c => c.id);
+    // Nur EIN leichtgewichtiger Check, ob überhaupt eine Championship für
+    // den Club existiert (für die "NO CHAMPIONSHIP..." vs. "NO RESULTS..."-
+    // Unterscheidung in der Anzeige) — die eigentlichen Ergebnisse werden
+    // NICHT mehr darüber gefiltert, s. Kommentar unten.
+    const champExists = await sb('championships', `select=id&club_id=eq.${encodeURIComponent(clubId)}&limit=1`);
 
-    if (!champIds.length) {
+    if (!champExists.length) {
       renderRankedList(podiumsId, [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
       renderRankedList(stageWinsId, [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
       return;
     }
 
-    // In Batches von 100 wie admin_api.py (PostgREST-URL-Längenlimit) —
-    // bei einem einzelnen Club realistisch nie relevant, aber konsistent
-    // mit dem einzigen bestehenden in.()-Vorbild im Projekt.
-    const eventResults = [];
-    const stageResults = [];
-    for (let i = 0; i < champIds.length; i += 100) {
-      const batch = champIds.slice(i, i + 100).join(',');
-      const [evRes, stRes] = await Promise.all([
-        sbAll('event_results', `select=driver_name,position,is_dnf&championship_id=in.(${batch})`),
-        sbAll('stage_results',  `select=driver_name,stage_position,is_dnf&championship_id=in.(${batch})`),
-      ]);
-      eventResults.push(...evRes);
-      stageResults.push(...stRes);
-    }
+    // Bug-Fix (Session 10): vorher wurden erst ALLE championship_ids des
+    // Clubs geladen und dann in Batches von 100 als "in.(id1,id2,...)" in
+    // die URL gepackt. Bei Clubs mit ein paar hundert Championships (nach
+    // grf_sync.py --full ganz normal) wurde diese URL zu lang und die
+    // Anfrage schlug fehl — sichtbar als leere Stats, obwohl die Daten in
+    // Supabase längst da waren. Fix: PostgREST kann über die bestehende
+    // Fremdschlüssel-Beziehung event_results/stage_results.championship_id
+    // → championships.id direkt gefiltert werden ("!inner(id)" erzwingt
+    // den Join, "championships.club_id=eq...." filtert darüber) — eine
+    // einzige, kurze Anfrage pro Tabelle, unabhängig von der Anzahl der
+    // Championships.
+    const [eventResults, stageResults] = await Promise.all([
+      sbAll('event_results', `select=driver_name,position,is_dnf,championships!inner(id)&championships.club_id=eq.${encodeURIComponent(clubId)}`),
+      sbAll('stage_results',  `select=driver_name,stage_position,is_dnf,championships!inner(id)&championships.club_id=eq.${encodeURIComponent(clubId)}`),
+    ]);
 
     const podiumRows   = tallyDrivers(eventResults, r => !r.is_dnf && r.position != null && r.position >= 1 && r.position <= 3);
     const stageWinRows = tallyDrivers(stageResults, r => !r.is_dnf && r.stage_position === 1);
