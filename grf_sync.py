@@ -814,6 +814,45 @@ def sync_event(db: SupabaseClient, client,
 #  SYNC: championship
 # ─────────────────────────────────────────────────────────────────────────────
 
+def sync_championship_standings(db: SupabaseClient, client, club_id: str, champ_id: str, test: bool = False):
+    """
+    Lädt RaceNets eigenen (dynamischen, fahreranzahl-abhängigen) Championship-
+    Punktestand über den bislang ungenutzten /championship/points/-Endpoint
+    (racenet_client.get_championship_standings, existierte im Client schon,
+    wurde bisher nirgends aufgerufen) und speichert ihn in
+    championship_standings. Wir bauen RaceNets Punkteformel NICHT selbst
+    nach — RaceNet liefert das fertig berechnete Ergebnis direkt mit.
+    Bewusst delete-then-insert (nicht nur upsert): RaceNets Antwort ist ein
+    kompletter Snapshot, kein Delta — Fahrer, die z.B. aus der Championship
+    entfernt wurden, sollen dadurch auch bei uns verschwinden.
+    """
+    try:
+        entries = client.get_championship_standings(club_id, champ_id)
+    except Exception as ex:
+        log(f"    ⚠ Could not load championship standings: {ex}")
+        return
+
+    if not entries:
+        return
+
+    rows = []
+    for e in entries:
+        name = e.get("displayName", "")
+        if not name:
+            continue
+        rows.append({
+            "championship_id":    champ_id,
+            "driver_name":        name,
+            "rank":                e.get("rank"),
+            "points_accumulated": e.get("pointsAccumulated"),
+        })
+
+    if not test and rows:
+        db.delete("championship_standings", f"championship_id=eq.{champ_id}")
+        db.upsert_all("championship_standings", rows, on_conflict="championship_id,driver_name")
+        log(f"    🏆 Standings synced: {len(rows)} driver(s)")
+
+
 def sync_championship(db: SupabaseClient, client,
                       club_id: str, champ: dict,
                       test: bool = False, force_stage_reload: bool = False):
@@ -924,6 +963,9 @@ def sync_championship(db: SupabaseClient, client,
         time.sleep(0.5)
 
     log(f"    📊 Synced: {synced} | Skipped: {skipped}")
+
+    sync_championship_standings(db, client, club_id, champ_id, test=test)
+
     return synced
 
 

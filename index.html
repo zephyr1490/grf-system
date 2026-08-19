@@ -1032,20 +1032,26 @@ textarea.inp-std { resize:vertical; }
 
       <!-- SUB-TAB: STATS (Punkt 7 der Roadmap — Podiums/Stage-Wins) -->
       <div class="themed-tab" id="cd-tab-stats">
+        <div class="event-selector" id="stats-scope-clubDetail" style="margin:6px;">
+          <span class="event-selector-lbl">SCOPE:</span>
+          <span class="ev-btn" onclick="setStatsScope('clubDetail','current',this)">Current Championship</span>
+          <span class="ev-btn" onclick="setStatsScope('clubDetail','championships',this)">Championships Overall</span>
+          <span class="ev-btn active" onclick="setStatsScope('clubDetail','overall',this)">Events Overall</span>
+        </div>
         <div class="club-directory-wrap">
-          <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
-            <span class="col-hdr-right">TOP 1-3 FINISHES</span>
+          <div class="col-hdr" style="border-bottom:none;"><span id="cd-stats-hdr-wins">MOST STAGE WINS</span>
+            <span class="col-hdr-right" id="cd-stats-sub-wins">STAGE POSITION 1</span>
           </div>
-          <div id="club-detail-podiums">
+          <div id="club-detail-stagewins">
             <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
           </div>
         </div>
 
         <div class="club-directory-wrap" style="margin-top:6px;">
-          <div class="col-hdr" style="border-bottom:none;">MOST STAGE WINS
-            <span class="col-hdr-right">STAGE POSITION 1</span>
+          <div class="col-hdr" style="border-bottom:none;"><span id="cd-stats-hdr-podiums">MOST PODIUMS</span>
+            <span class="col-hdr-right" id="cd-stats-sub-podiums">TOP 1-3 FINISHES</span>
           </div>
-          <div id="club-detail-stagewins">
+          <div id="club-detail-podiums">
             <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
           </div>
         </div>
@@ -1244,19 +1250,25 @@ textarea.inp-std { resize:vertical; }
          renderRankedList()), nur mit eigenen Containern und club_id 23799
          fest verdrahtet. -->
     <div class="themed-tab" id="tab-stats">
+      <div class="event-selector" id="stats-scope-themed" style="margin:6px;">
+        <span class="event-selector-lbl">SCOPE:</span>
+        <span class="ev-btn" onclick="setStatsScope('themed','current',this)">Current Championship</span>
+        <span class="ev-btn" onclick="setStatsScope('themed','championships',this)">Championships Overall</span>
+        <span class="ev-btn active" onclick="setStatsScope('themed','overall',this)">Events Overall</span>
+      </div>
       <div class="club-directory-wrap">
-        <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
-          <span class="col-hdr-right">TOP 1-3 FINISHES</span>
+        <div class="col-hdr" style="border-bottom:none;"><span id="themed-stats-hdr-wins">MOST STAGE WINS</span>
+          <span class="col-hdr-right" id="themed-stats-sub-wins">STAGE POSITION 1</span>
         </div>
-        <div id="themed-stats-podiums">
+        <div id="themed-stats-stagewins">
           <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
         </div>
       </div>
       <div class="club-directory-wrap" style="margin-top:6px;">
-        <div class="col-hdr" style="border-bottom:none;">MOST STAGE WINS
-          <span class="col-hdr-right">STAGE POSITION 1</span>
+        <div class="col-hdr" style="border-bottom:none;"><span id="themed-stats-hdr-podiums">MOST PODIUMS</span>
+          <span class="col-hdr-right" id="themed-stats-sub-podiums">TOP 1-3 FINISHES</span>
         </div>
-        <div id="themed-stats-stagewins">
+        <div id="themed-stats-podiums">
           <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
         </div>
       </div>
@@ -1524,19 +1536,25 @@ textarea.inp-std { resize:vertical; }
     </div>
 
     <div class="themed-tab" id="tab-teamed-stats">
+      <div class="event-selector" id="stats-scope-teamed" style="margin:6px;">
+        <span class="event-selector-lbl">SCOPE:</span>
+        <span class="ev-btn" onclick="setStatsScope('teamed','current',this)">Current Championship</span>
+        <span class="ev-btn" onclick="setStatsScope('teamed','championships',this)">Championships Overall</span>
+        <span class="ev-btn active" onclick="setStatsScope('teamed','overall',this)">Events Overall</span>
+      </div>
       <div class="club-directory-wrap">
-        <div class="col-hdr" style="border-bottom:none;">MOST PODIUMS
-          <span class="col-hdr-right">TOP 1-3 FINISHES</span>
+        <div class="col-hdr" style="border-bottom:none;"><span id="teamed-stats-hdr-wins">MOST STAGE WINS</span>
+          <span class="col-hdr-right" id="teamed-stats-sub-wins">STAGE POSITION 1</span>
         </div>
-        <div id="teamed-stats-podiums">
+        <div id="teamed-stats-stagewins">
           <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
         </div>
       </div>
       <div class="club-directory-wrap" style="margin-top:6px;">
-        <div class="col-hdr" style="border-bottom:none;">MOST STAGE WINS
-          <span class="col-hdr-right">STAGE POSITION 1</span>
+        <div class="col-hdr" style="border-bottom:none;"><span id="teamed-stats-hdr-podiums">MOST PODIUMS</span>
+          <span class="col-hdr-right" id="teamed-stats-sub-podiums">TOP 1-3 FINISHES</span>
         </div>
-        <div id="teamed-stats-stagewins">
+        <div id="teamed-stats-podiums">
           <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
         </div>
       </div>
@@ -3106,23 +3124,41 @@ async function showClubDetail(clubId, initialTab = 'results') {
   _clubDetailStatsLoaded      = false;
   _clubDetailStandingsLoaded  = false;
   _clubDetailActiveEvent      = null;
+  // Stats-Scope-Toggle ebenfalls zurücksetzen — sonst könnte der Toggle
+  // optisch noch eine andere Gruppe vom vorher geöffneten Club zeigen,
+  // während der automatische Erst-Load (unten in showClubDetailTab)
+  // bereits wieder "Events Overall" lädt (Konsistenz-Fix, Session 10).
+  // Sowohl JS-State als auch die sichtbaren Toggle-Buttons + Box-
+  // Beschriftungen selbst (die HTML-Buttons/Labels sind statisch, werden
+  // NICHT bei jedem Club-Öffnen neu gebaut).
+  _statsScope.clubDetail = 'overall';
+  const scopeBox = $('stats-scope-clubDetail');
+  if (scopeBox) {
+    // 3. Button ("Events Overall") ist der Default, s. HTML-Reihenfolge.
+    scopeBox.querySelectorAll('.ev-btn').forEach((b, i) => b.classList.toggle('active', i === 2));
+  }
+  setText('cd-stats-hdr-wins', 'MOST STAGE WINS');
+  setText('cd-stats-sub-wins', 'STAGE POSITION 1');
+  setText('cd-stats-hdr-podiums', 'MOST PODIUMS');
+  setText('cd-stats-sub-podiums', 'TOP 1-3 FINISHES');
 
-  // Sub-Tab-Leiste neu aufbauen: Standings + Rules nur für Clubs mit
-  // eigenem, dokumentiertem Punktesystem (CLUB_SCORING_INFO) — alle
-  // anderen generischen Clubs bleiben bei nur Live Results + Stats.
+  // Sub-Tab-Leiste neu aufbauen: Standings gibt's jetzt für JEDEN Club
+  // (RaceNets eigener Punktestand, s. loadClubStandings()) — "Rules" bleibt
+  // exklusiv für Clubs mit eigenem, dokumentiertem Punktesystem
+  // (CLUB_SCORING_INFO), da es für alle anderen nichts zu erklären gibt.
   const scoring = CLUB_SCORING_INFO[String(clubId)];
   const subnav = $('cd-subnav');
   if (subnav) {
     subnav.innerHTML = `
       <div class="sub-tab" data-tab="results" onclick="showClubDetailTab('results',this)">Live Results</div>
-      ${scoring ? `<div class="sub-tab" data-tab="standings" onclick="showClubDetailTab('standings',this)">Standings</div>` : ''}
+      <div class="sub-tab" data-tab="standings" onclick="showClubDetailTab('standings',this)">Standings</div>
       ${scoring ? `<div class="sub-tab" data-tab="rules" onclick="showClubDetailTab('rules',this)">Rules</div>` : ''}
       <div class="sub-tab" data-tab="stats" onclick="showClubDetailTab('stats',this)">Stats</div>
     `;
   }
 
   const tab = (initialTab === 'stats') ? 'stats'
-            : (initialTab === 'standings' && scoring) ? 'standings'
+            : (initialTab === 'standings') ? 'standings'
             : (initialTab === 'rules' && scoring) ? 'rules'
             : 'results';
   showClubDetailTab(tab, _findSubTabEl('#club-detail-view', tab));
@@ -3173,7 +3209,7 @@ function showClubDetailTab(tab, el) {
   }
 }
 
-async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWinsId = 'club-detail-stagewins') {
+async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWinsId = 'club-detail-stagewins', championshipId = null) {
   const loadingHtml = '<div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>';
   setHTML(podiumsId, loadingHtml);
   setHTML(stageWinsId, loadingHtml);
@@ -3203,9 +3239,17 @@ async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWin
     // fertigen Top-10-Zeilen zurück. Zuverlässiger UND sparsamer
     // (Egress), unabhängig davon wie viele Championships/Ergebnisse ein
     // Club hat.
+    //
+    // Overall/Saison-Toggle (Session 10, Teil 2): championshipId optional
+    // -- wenn gesetzt, filtert die DB-Funktion selbst auf genau diese
+    // Championship (p_championship_id-Parameter, s. SQL), sonst bleibt's
+    // beim bisherigen Verhalten (alle Championships des Clubs = "Overall").
+    const rpcParams = { p_club_id: String(clubId) };
+    if (championshipId) rpcParams.p_championship_id = String(championshipId);
+
     const [podiumRes, stageWinRes] = await Promise.all([
-      sbRpc('club_podium_stats',    { p_club_id: String(clubId) }),
-      sbRpc('club_stage_win_stats', { p_club_id: String(clubId) }),
+      sbRpc('club_podium_stats',    rpcParams),
+      sbRpc('club_stage_win_stats', rpcParams),
     ]);
 
     const podiumRows   = podiumRes.map(r => ({ name: r.driver_name, count: Number(r.podiums) }));
@@ -3217,6 +3261,145 @@ async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWin
     console.error('[loadClubStats]', err);
     renderRankedList(podiumsId, []);
     renderRankedList(stageWinsId, []);
+  }
+}
+
+// Overall/Saison-Toggle im Stats-Tab (Session 10, Teil 2) — funktioniert
+// identisch für generische Clubs, Themed und Teamed, da alle drei dieselbe
+// loadClubStats()-Funktion nutzen. "context" wählt aus, welche Container-
+// IDs/State-Variablen gerade gemeint sind.
+const STATS_CONTEXTS = {
+  clubDetail: {
+    podiumsId: 'club-detail-podiums', stageWinsId: 'club-detail-stagewins',
+    hdrWinsId: 'cd-stats-hdr-wins', subWinsId: 'cd-stats-sub-wins',
+    hdrPodiumsId: 'cd-stats-hdr-podiums', subPodiumsId: 'cd-stats-sub-podiums',
+    getClubId: () => _clubDetailId, getChampId: () => _clubDetailChampId,
+  },
+  themed: {
+    podiumsId: 'themed-stats-podiums', stageWinsId: 'themed-stats-stagewins',
+    hdrWinsId: 'themed-stats-hdr-wins', subWinsId: 'themed-stats-sub-wins',
+    hdrPodiumsId: 'themed-stats-hdr-podiums', subPodiumsId: 'themed-stats-sub-podiums',
+    getClubId: () => '23799', getChampId: () => _themedChampId,
+  },
+  teamed: {
+    podiumsId: 'teamed-stats-podiums', stageWinsId: 'teamed-stats-stagewins',
+    hdrWinsId: 'teamed-stats-hdr-wins', subWinsId: 'teamed-stats-sub-wins',
+    hdrPodiumsId: 'teamed-stats-hdr-podiums', subPodiumsId: 'teamed-stats-sub-podiums',
+    getClubId: () => '39230', getChampId: () => _teamedChampId,
+  },
+};
+// Default = 'overall' ("Events Overall") — bewusst dieselbe Default-Ansicht
+// wie vor dem 3fach-Umschalter, geringste Überraschung für Wiederkehrer.
+const _statsScope = { clubDetail: 'overall', themed: 'overall', teamed: 'overall' };
+
+// Box-Beschriftungen je nach gewählter Gruppe — "Wins"/"Podiums" bedeuten
+// je nach Scope etwas anderes (Stage-Sieg vs. Championship-Sieg), daher
+// müssen die Überschriften mitwechseln, nicht nur die Zahlen darunter.
+const STATS_SCOPE_LABELS = {
+  current: {
+    winsHdr: 'MOST STAGE WINS',       winsSub: 'STAGE POSITION 1 · CURRENT CHAMPIONSHIP',
+    podiumsHdr: 'MOST PODIUMS',       podiumsSub: 'TOP 1-3 · CURRENT CHAMPIONSHIP',
+  },
+  championships: {
+    winsHdr: 'MOST CHAMPIONSHIP WINS',    winsSub: 'FINISHED 1ST OVERALL',
+    podiumsHdr: 'MOST CHAMPIONSHIP PODIUMS', podiumsSub: 'TOP 1-3 OVERALL',
+  },
+  overall: {
+    winsHdr: 'MOST STAGE WINS',       winsSub: 'STAGE POSITION 1',
+    podiumsHdr: 'MOST PODIUMS',       podiumsSub: 'TOP 1-3 FINISHES',
+  },
+};
+
+/** Wechselt zwischen den 3 Stats-Gruppen: "current" (nur die aktuell
+ * laufende/geöffnete Championship), "championships" (Championship-Siege/
+ * -Podiumsplätze über die gesamte Club-Historie) und "overall" (Event-
+ * Podiums/Stage-Wins über alle Events, wie ursprünglich). */
+function setStatsScope(context, scope, el) {
+  if (_statsScope[context] === scope) return; // schon aktiv, nichts zu tun
+  _statsScope[context] = scope;
+
+  const box = $('stats-scope-' + context);
+  if (box) {
+    box.querySelectorAll('.ev-btn').forEach(b => b.classList.remove('active'));
+    if (el) el.classList.add('active');
+  }
+
+  const cfg    = STATS_CONTEXTS[context];
+  const labels = STATS_SCOPE_LABELS[scope];
+  setText(cfg.hdrWinsId,     labels.winsHdr);
+  setText(cfg.subWinsId,     labels.winsSub);
+  setText(cfg.hdrPodiumsId,  labels.podiumsHdr);
+  setText(cfg.subPodiumsId,  labels.podiumsSub);
+
+  if (scope === 'championships') {
+    loadClubChampionshipStats(cfg.getClubId(), cfg.stageWinsId, cfg.podiumsId);
+  } else {
+    const championshipId = scope === 'current' ? cfg.getChampId() : null;
+    loadClubStats(cfg.getClubId(), cfg.podiumsId, cfg.stageWinsId, championshipId);
+  }
+}
+
+/**
+ * "Championships Overall" — wer hat die meisten Championships gewonnen
+ * (Rang 1) bzw. auf dem Podium (Rang 1-3) abgeschlossen. Anders als die
+ * Event-Stats: Clubs MIT eigenem Punktesystem (CLUB_SCORING_INFO) können
+ * hier NICHT einfach RaceNets championship_standings.rank verwenden — der
+ * spiegelt RaceNets eigene Punkte wider, nicht die club-eigenen (könnten
+ * einen anderen Sieger ergeben!). Für diese Clubs wird der Rang daher
+ * selbst aus event_results.total_points pro Championship neu berechnet.
+ * Generische Clubs nutzen die fertige DB-Zählung (club_championship_wins/
+ * -podiums, basiert auf championship_standings).
+ */
+async function loadClubChampionshipStats(clubId, winsId, podiumsId) {
+  const loadingHtml = '<div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>';
+  setHTML(winsId, loadingHtml);
+  setHTML(podiumsId, loadingHtml);
+
+  const scoring = CLUB_SCORING_INFO[String(clubId)];
+
+  if (scoring) {
+    try {
+      const champs = await sbAll('championships', `select=id&club_id=eq.${encodeURIComponent(clubId)}`);
+      const winsCount    = {};
+      const podiumsCount = {};
+
+      for (const champ of champs) {
+        const results = await sbAll('event_results',
+          `select=driver_name,total_points&championship_id=eq.${encodeURIComponent(champ.id)}`
+        );
+        const totals = {};
+        results.forEach(r => {
+          if (!r.driver_name) return;
+          totals[r.driver_name] = (totals[r.driver_name] || 0) + (r.total_points ?? 0);
+        });
+        const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+        ranked.forEach(([name], i) => {
+          if (i === 0) winsCount[name]    = (winsCount[name]    || 0) + 1;
+          if (i < 3)   podiumsCount[name] = (podiumsCount[name] || 0) + 1;
+        });
+      }
+
+      renderRankedList(winsId,    Object.entries(winsCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count));
+      renderRankedList(podiumsId, Object.entries(podiumsCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count));
+    } catch (err) {
+      console.error('[loadClubChampionshipStats]', err);
+      renderRankedList(winsId, []);
+      renderRankedList(podiumsId, []);
+    }
+    return;
+  }
+
+  try {
+    const [winsRes, podiumsRes] = await Promise.all([
+      sbRpc('club_championship_wins',    { p_club_id: String(clubId) }),
+      sbRpc('club_championship_podiums', { p_club_id: String(clubId) }),
+    ]);
+    renderRankedList(winsId,    winsRes.map(r => ({ name: r.driver_name, count: Number(r.wins) })));
+    renderRankedList(podiumsId, podiumsRes.map(r => ({ name: r.driver_name, count: Number(r.podiums) })));
+  } catch (err) {
+    console.error('[loadClubChampionshipStats]', err);
+    renderRankedList(winsId, []);
+    renderRankedList(podiumsId, []);
   }
 }
 
@@ -3234,33 +3417,62 @@ async function loadClubStandings(clubId) {
   setHTML('cd-standings-list', '<div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>');
 
   const scoring = CLUB_SCORING_INFO[String(clubId)];
-  const championshipId = scoring?.championshipId;
-  if (!championshipId) {
-    renderRankedList('cd-standings-list', [], 'NO CHAMPIONSHIP CONFIGURED');
+
+  // Fall A: Club mit eigenem, dokumentiertem Punktesystem (aktuell nur
+  // 14317) — eigene Aggregation aus event_results.total_points (dort
+  // stehen bereits die club-eigenen Punkte drin, s. grf_sync.py).
+  if (scoring) {
+    const championshipId = scoring.championshipId;
+    try {
+      const results = await sbAll('event_results',
+        `select=driver_name,total_points&championship_id=eq.${encodeURIComponent(championshipId)}`
+      );
+      if (!results.length) {
+        renderRankedList('cd-standings-list', [], 'NO RESULTS YET');
+        return;
+      }
+      const totals = {};
+      results.forEach(r => {
+        if (!r.driver_name) return;
+        totals[r.driver_name] = (totals[r.driver_name] || 0) + (r.total_points ?? 0);
+      });
+      const rows = Object.entries(totals)
+        .map(([name, count]) => ({ name, count: Math.round(count) }))
+        .sort((a, b) => b.count - a.count);
+      renderRankedList('cd-standings-list', rows);
+    } catch (err) {
+      console.error('[loadClubStandings]', err);
+      renderRankedList('cd-standings-list', []);
+    }
+    return;
+  }
+
+  // Fall B: generischer Club — RaceNets EIGENER (dynamischer, fahreranzahl-
+  // abhängiger) Punktestand aus championship_standings, befüllt von
+  // grf_sync.py über den bisher ungenutzten /championship/points/-
+  // Endpoint. Wir berechnen hier NICHTS selbst, nur Anzeige der fertigen
+  // RaceNet-Zahlen.
+  if (!_clubDetailChampId) {
+    // Championship (und damit die Live-Results-Selektion) evtl. noch nicht
+    // geladen, z.B. bei einem Deep-Link direkt auf #clubs/<id>/standings —
+    // gleiche Nachlade-Strategie wie loadStandings() bei Themed.
+    await loadClubResults(clubId);
+  }
+  if (!_clubDetailChampId) {
+    renderRankedList('cd-standings-list', [], 'NO CHAMPIONSHIP FOUND FOR THIS CLUB YET');
     return;
   }
 
   try {
-    const results = await sbAll('event_results',
-      `select=driver_name,total_points&championship_id=eq.${encodeURIComponent(championshipId)}`
+    const rows = await sbAll('championship_standings',
+      `select=driver_name,points_accumulated&championship_id=eq.${encodeURIComponent(_clubDetailChampId)}&order=points_accumulated.desc`
     );
-
-    if (!results.length) {
+    if (!rows.length) {
       renderRankedList('cd-standings-list', [], 'NO RESULTS YET');
       return;
     }
-
-    const totals = {};
-    results.forEach(r => {
-      if (!r.driver_name) return;
-      totals[r.driver_name] = (totals[r.driver_name] || 0) + (r.total_points ?? 0);
-    });
-
-    const rows = Object.entries(totals)
-      .map(([name, count]) => ({ name, count: Math.round(count) }))
-      .sort((a, b) => b.count - a.count);
-
-    renderRankedList('cd-standings-list', rows);
+    const mapped = rows.map(r => ({ name: r.driver_name, count: Math.round(r.points_accumulated ?? 0) }));
+    renderRankedList('cd-standings-list', mapped);
   } catch (err) {
     console.error('[loadClubStandings]', err);
     renderRankedList('cd-standings-list', []);
