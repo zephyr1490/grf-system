@@ -151,6 +151,50 @@ def get_base_points(position: int, is_dnf: bool) -> int:
     return POINTS_TABLE[-1]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  CUSTOM SCORING — pro-Championship-Overrides für Clubs mit eigenem
+#  Punktesystem (abweichend vom GRF-Standard oben). Bewusst nach
+#  championship_id geschlüsselt, nicht nach club_id — gilt NUR für die
+#  explizit eingetragene Championship, nicht automatisch auch für eine
+#  spätere Saison desselben Clubs (die müsste bei Bedarf separat
+#  eingetragen werden). Kein Admin-UI dafür (Owner-Entscheidung,
+#  Session 10) — wird direkt hier im Code gepflegt.
+#
+#  Frontend hat dieselben Zahlen zur Anzeige (index.html, CLUB_SCORING_INFO)
+#  — beide Stellen müssen bei Änderungen synchron gehalten werden.
+# ─────────────────────────────────────────────────────────────────────────────
+
+CUSTOM_SCORING = {
+    # Club 14317, upcoming championship (Session 10)
+    "2pBfWYxRdRTDb1tCP": {
+        "position_points":    [20, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2, 1, 0],
+        "dnf_points":         0,
+        "stage_bonus_points": 1,  # pro gewonnener Stage, AUCH bei DNF (falls vor dem Ausfall gewonnen)
+    },
+}
+
+
+def get_base_points_for(position: int, is_dnf: bool, championship_id: str) -> int:
+    """Wie get_base_points(), respektiert aber einen CUSTOM_SCORING-Override
+    für die übergebene championship_id, falls vorhanden."""
+    cfg = CUSTOM_SCORING.get(championship_id)
+    if not cfg:
+        return get_base_points(position, is_dnf)
+    if is_dnf or position <= 0:
+        return cfg["dnf_points"]
+    table = cfg["position_points"]
+    if position <= len(table):
+        return table[position - 1]
+    return table[-1]
+
+
+def get_stage_bonus_points_for(championship_id: str) -> int:
+    """Punkte pro Stage-Sieg für die übergebene championship_id — 0 für alle
+    Clubs ohne CUSTOM_SCORING-Eintrag (GRF-Standard kennt keinen Stage-Bonus)."""
+    cfg = CUSTOM_SCORING.get(championship_id)
+    return cfg["stage_bonus_points"] if cfg else 0
+
+
 def parse_date(s: str | None) -> str | None:
     if not s:
         return None
@@ -596,13 +640,35 @@ def sync_event(db: SupabaseClient, client,
     )
     dnfs = [n for n in driver_info if driver_is_dnf[n]]
 
+    # Stage-Siege pro Fahrer zählen (für CUSTOM_SCORING-Stage-Bonus, s.o.).
+    # entries ist bereits nach Zeit sortiert (Index 0 = schnellste Zeit,
+    # s. stage_rows-Aufbau weiter oben, das denselben Index direkt als
+    # 1-basierten Rang verwendet) — Sieger einer Stage ist also entries[0],
+    # sofern die Zeit nicht als DNF zählt. Für Clubs OHNE CUSTOM_SCORING-
+    # Eintrag ist stage_bonus_pts weiter unten ohnehin 0, diese Zählung
+    # kostet dort also nur ein paar überflüssige Dict-Updates, kein
+    # zusätzlicher Netzwerk-/DB-Aufwand.
+    stage_wins_by_driver: dict[str, int] = {}
+    for _stage, entries in stage_data:
+        if not entries:
+            continue
+        first = entries[0]
+        t_ms  = time_str_to_ms(first.get("time", ""))
+        if t_ms is not None and not is_dnf_ms(t_ms):
+            name = first.get("displayName", "")
+            if name:
+                stage_wins_by_driver[name] = stage_wins_by_driver.get(name, 0) + 1
+
+    stage_bonus_pts = get_stage_bonus_points_for(championship_id)
+
     event_rows = []
 
     for pos, name in enumerate(finishers, start=1):
         info  = driver_info[name]
-        base  = get_base_points(pos, False)
+        base  = get_base_points_for(pos, False, championship_id)
         cr    = car_ratings.get(info["vehicle"], 1.0)
         crpts = round(base * cr, 2)
+        bonus = stage_wins_by_driver.get(name, 0) * stage_bonus_pts
         event_rows.append({
             "event_id":         ev_id,
             "championship_id":  championship_id,
@@ -618,15 +684,20 @@ def sync_event(db: SupabaseClient, client,
             "base_points":      base,
             "cr_multiplier":    cr,
             "cr_points":        crpts,
-            "bonus_points":     0,
-            "total_points":     crpts,
+            "bonus_points":     bonus,
+            "total_points":     round(crpts + bonus, 2),
         })
 
     for name in dnfs:
         info  = driver_info[name]
-        base  = DNF_POINTS
+        base  = get_base_points_for(0, True, championship_id)
         cr    = car_ratings.get(info["vehicle"], 1.0)
         crpts = round(base * cr, 2)
+        # Stage-Bonus bleibt bei DNF erhalten (für Stages VOR dem Ausfall
+        # gewonnen) — nur die Positions-Punkte fallen weg. Spec-Entscheidung
+        # Session 10, gilt nur für Clubs mit CUSTOM_SCORING (stage_bonus_pts
+        # ist sonst 0, hat also für den GRF-Standard keine Auswirkung).
+        bonus = stage_wins_by_driver.get(name, 0) * stage_bonus_pts
         event_rows.append({
             "event_id":         ev_id,
             "championship_id":  championship_id,
@@ -642,8 +713,8 @@ def sync_event(db: SupabaseClient, client,
             "base_points":      base,
             "cr_multiplier":    cr,
             "cr_points":        crpts,
-            "bonus_points":     0,
-            "total_points":     crpts,
+            "bonus_points":     bonus,
+            "total_points":     round(crpts + bonus, 2),
         })
 
     n_fin = len(finishers)

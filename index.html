@@ -961,7 +961,11 @@ textarea.inp-std { resize:vertical; }
         <span class="col-hdr-right" id="club-detail-name">—</span>
       </div>
 
-      <div class="themed-subnav" style="display:flex;">
+      <!-- Wird von showClubDetail() bei jedem Öffnen neu aufgebaut — nur
+           Clubs mit einem Eintrag in CLUB_SCORING_INFO (s. JS) bekommen
+           zusätzlich "Standings" + "Rules". Andere Clubs bleiben bei nur
+           Live Results + Stats. -->
+      <div class="themed-subnav" id="cd-subnav" style="display:flex;">
         <div class="sub-tab active" data-tab="results" onclick="showClubDetailTab('results',this)">Live Results</div>
         <div class="sub-tab" data-tab="stats" onclick="showClubDetailTab('stats',this)">Stats</div>
       </div>
@@ -1044,6 +1048,31 @@ textarea.inp-std { resize:vertical; }
           <div id="club-detail-stagewins">
             <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
           </div>
+        </div>
+      </div>
+
+      <!-- SUB-TAB: STANDINGS — nur für Clubs mit Eintrag in CLUB_SCORING_INFO.
+           Summe von event_results.total_points je Fahrer über alle Events
+           der aktuellen Championship, absteigend sortiert. Bewusst einfache
+           Variante (keine Streichresultate/Team-Wertung wie bei Themed) —
+           kann bei Bedarf später erweitert werden. -->
+      <div class="themed-tab" id="cd-tab-standings">
+        <div class="club-directory-wrap">
+          <div class="col-hdr" style="border-bottom:none;">CHAMPIONSHIP STANDINGS
+            <span class="col-hdr-right">TOTAL POINTS</span>
+          </div>
+          <div id="cd-standings-list">
+            <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUB-TAB: RULES — erklärt das Punktesystem in Klartext, generiert
+           aus CLUB_SCORING_INFO (s. JS), damit Zahlen hier nie von dem
+           abweichen können, was grf_sync.py tatsächlich berechnet. -->
+      <div class="themed-tab" id="cd-tab-rules">
+        <div class="club-directory-wrap" style="padding:14px;">
+          <div id="cd-rules-content" style="font-size:13px;color:var(--gray-light);line-height:1.7;"></div>
         </div>
       </div>
     </div>
@@ -2898,6 +2927,23 @@ const CLUB_STATUS_DOT   = { active: 'ss-green', upcoming: 'ss-yellow', idle: '' 
 // Einträge mehr haben.
 const CLUB_PAGE_ROUTE = { '23799': 'themed', '39230': 'teamed' };
 
+// Clubs mit eigenem, dokumentiertem Punktesystem (abweichend vom GRF-
+// Standard, den grf_sync.py für alle anderen Clubs verwendet). Schaltet
+// pro Club die zusätzlichen "Standings"/"Rules"-Sub-Tabs frei (s.
+// showClubDetail()) und speist deren Inhalt — bewusst hier im Frontend
+// dieselben Zahlen hartkodiert wie in grf_sync.py's CUSTOM_SCORING (kein
+// Admin-UI, s. Owner-Entscheidung), damit die "Rules"-Erklärung nie von
+// der tatsächlichen Berechnung abweichen kann, so lange beide Stellen
+// synchron gehalten werden.
+const CLUB_SCORING_INFO = {
+  '14317': {
+    championshipId:   '2pBfWYxRdRTDb1tCP', // gilt NUR für diese eine Championship, nicht pauschal für den Club
+    positionPoints:   [20, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2, 1, 0],
+    dnfPoints:        0,
+    stageBonusPoints: 1,
+  },
+};
+
 // Directory wird an mehreren Stellen gerendert (voller "Clubs"-Tab +
 // Kurzfassung auf Home) — beide IDs hier eintragen, damit ein Loader
 // beide befüllt statt zwei getrennte Fetches zu brauchen.
@@ -3024,7 +3070,8 @@ let _clubDetailId          = null;
 let _clubDetailChampId     = null;
 let _clubDetailEvents      = [];
 let _clubDetailActiveEvent = null;
-let _clubDetailStatsLoaded = false; // Egress-schonend: Stats erst bei Bedarf laden, s.u.
+let _clubDetailStatsLoaded     = false; // Egress-schonend: Stats erst bei Bedarf laden, s.u.
+let _clubDetailStandingsLoaded = false; // Egress-schonend: Standings erst bei Bedarf laden, s.u.
 
 async function showClubDetail(clubId, initialTab = 'results') {
   if (!clubId) return;
@@ -3051,15 +3098,33 @@ async function showClubDetail(clubId, initialTab = 'results') {
   const cached = _clubDirectory.find(c => c.club_id === String(clubId));
   setText('club-detail-name', cached ? cached.name : `Club ${clubId}`);
 
-  // Neuer Club -> Stats-Cache UND aktives Event zurücksetzen (sonst würde
-  // ein zuvor bei einem ANDEREN Club angeklicktes Event fälschlich hier
-  // weiterverwendet). Live Results ist die Default-Ansicht beim Öffnen
-  // (Owner-Entscheidung, Session 10).
-  _clubDetailId          = String(clubId);
-  _clubDetailStatsLoaded = false;
-  _clubDetailActiveEvent = null;
+  // Neuer Club -> alle Tab-Caches UND aktives Event zurücksetzen (sonst
+  // würde z.B. ein zuvor bei einem ANDEREN Club angeklicktes Event
+  // fälschlich hier weiterverwendet). Live Results ist die Default-Ansicht
+  // beim Öffnen (Owner-Entscheidung, Session 10).
+  _clubDetailId               = String(clubId);
+  _clubDetailStatsLoaded      = false;
+  _clubDetailStandingsLoaded  = false;
+  _clubDetailActiveEvent      = null;
 
-  const tab = (initialTab === 'stats') ? 'stats' : 'results';
+  // Sub-Tab-Leiste neu aufbauen: Standings + Rules nur für Clubs mit
+  // eigenem, dokumentiertem Punktesystem (CLUB_SCORING_INFO) — alle
+  // anderen generischen Clubs bleiben bei nur Live Results + Stats.
+  const scoring = CLUB_SCORING_INFO[String(clubId)];
+  const subnav = $('cd-subnav');
+  if (subnav) {
+    subnav.innerHTML = `
+      <div class="sub-tab" data-tab="results" onclick="showClubDetailTab('results',this)">Live Results</div>
+      ${scoring ? `<div class="sub-tab" data-tab="standings" onclick="showClubDetailTab('standings',this)">Standings</div>` : ''}
+      ${scoring ? `<div class="sub-tab" data-tab="rules" onclick="showClubDetailTab('rules',this)">Rules</div>` : ''}
+      <div class="sub-tab" data-tab="stats" onclick="showClubDetailTab('stats',this)">Stats</div>
+    `;
+  }
+
+  const tab = (initialTab === 'stats') ? 'stats'
+            : (initialTab === 'standings' && scoring) ? 'standings'
+            : (initialTab === 'rules' && scoring) ? 'rules'
+            : 'results';
   showClubDetailTab(tab, _findSubTabEl('#club-detail-view', tab));
 
   await loadClubResults(clubId);
@@ -3095,6 +3160,16 @@ function showClubDetailTab(tab, el) {
   if (tab === 'stats' && !_clubDetailStatsLoaded) {
     _clubDetailStatsLoaded = true;
     loadClubStats(_clubDetailId);
+  }
+  if (tab === 'standings' && !_clubDetailStandingsLoaded) {
+    _clubDetailStandingsLoaded = true;
+    loadClubStandings(_clubDetailId);
+  }
+  if (tab === 'rules') {
+    // Kein Netzwerk-Aufruf nötig (reine Client-seitige Textgenerierung aus
+    // CLUB_SCORING_INFO) — daher kein Lazy-Load-Cache-Flag nötig, einfach
+    // bei jedem Anzeigen neu rendern, ist quasi kostenlos.
+    renderClubRules(_clubDetailId);
   }
 }
 
@@ -3143,6 +3218,90 @@ async function loadClubStats(clubId, podiumsId = 'club-detail-podiums', stageWin
     renderRankedList(podiumsId, []);
     renderRankedList(stageWinsId, []);
   }
+}
+
+
+// ── 4d2. CLUB DETAIL — STANDINGS + RULES (nur für Clubs mit Eintrag in
+//         CLUB_SCORING_INFO, s. dort) ──────────────────────────────────
+
+/**
+ * Summiert event_results.total_points je Fahrer über alle Events der
+ * aktuellen Championship des Clubs, absteigend sortiert. Bewusst einfache
+ * Variante ohne Streichresultate/Team-Wertung (anders als Themed) — total_
+ * points enthält bereits Positions- + Stage-Bonus-Punkte, s. grf_sync.py.
+ */
+async function loadClubStandings(clubId) {
+  setHTML('cd-standings-list', '<div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>');
+
+  const scoring = CLUB_SCORING_INFO[String(clubId)];
+  const championshipId = scoring?.championshipId;
+  if (!championshipId) {
+    renderRankedList('cd-standings-list', [], 'NO CHAMPIONSHIP CONFIGURED');
+    return;
+  }
+
+  try {
+    const results = await sbAll('event_results',
+      `select=driver_name,total_points&championship_id=eq.${encodeURIComponent(championshipId)}`
+    );
+
+    if (!results.length) {
+      renderRankedList('cd-standings-list', [], 'NO RESULTS YET');
+      return;
+    }
+
+    const totals = {};
+    results.forEach(r => {
+      if (!r.driver_name) return;
+      totals[r.driver_name] = (totals[r.driver_name] || 0) + (r.total_points ?? 0);
+    });
+
+    const rows = Object.entries(totals)
+      .map(([name, count]) => ({ name, count: Math.round(count) }))
+      .sort((a, b) => b.count - a.count);
+
+    renderRankedList('cd-standings-list', rows);
+  } catch (err) {
+    console.error('[loadClubStandings]', err);
+    renderRankedList('cd-standings-list', []);
+  }
+}
+
+/**
+ * Rendert eine Klartext-Erklärung des Punktesystems, direkt aus
+ * CLUB_SCORING_INFO generiert (kein Netzwerk-Aufruf, kein separat
+ * gepflegter Text, der von den echten Zahlen abweichen könnte).
+ */
+function renderClubRules(clubId) {
+  const container = $('cd-rules-content');
+  if (!container) return;
+
+  const scoring = CLUB_SCORING_INFO[String(clubId)];
+  if (!scoring) {
+    container.innerHTML = '<div class="empty"><div class="empty-title">NO CUSTOM RULES FOR THIS CLUB</div></div>';
+    return;
+  }
+
+  const posRows = scoring.positionPoints.map((pts, i) => {
+    const isLast = i + 1 === scoring.positionPoints.length;
+    const label  = isLast ? `P${i + 1}+` : `P${i + 1}`;
+    return `
+    <div class="improved-row">
+      <div class="improved-rank" style="width:auto;font-size:16px;">${label}</div>
+      <div class="improved-name"></div>
+      <div class="improved-delta">${pts}</div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <p style="margin:0 0 14px;">This club uses its own scoring system for this championship — different from the GRF standard points table.</p>
+
+    <div class="col-hdr" style="margin:0 0 4px;">POSITION POINTS</div>
+    <div style="margin-bottom:14px;">${posRows}</div>
+
+    <p style="margin:0 0 6px;"><strong style="color:var(--white);">Stage bonus:</strong> +${scoring.stageBonusPoints} point${scoring.stageBonusPoints === 1 ? '' : 's'} for every stage win (fastest time on that stage), on top of the position points above.</p>
+    <p style="margin:0;"><strong style="color:var(--white);">DNF:</strong> ${scoring.dnfPoints} position points if you don't finish the event — but any stage bonus points earned on stages completed before retiring are kept.</p>
+  `;
 }
 
 
