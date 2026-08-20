@@ -2374,6 +2374,26 @@ textarea.inp-std { resize:vertical; }
         <div id="admin-comments-list" style="background:var(--black); padding:8px;">
           <div style="color:#666;font-size:13px;padding:12px;">Loading…</div>
         </div>
+
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark); margin-top:16px;">
+          <div class="col-hdr" style="margin-bottom:0;">DISCORD WEBHOOKS PER CLUB
+            <span class="col-hdr-right" style="cursor:pointer;" onclick="adminLoadWebhooks()">↻ Refresh</span>
+          </div>
+        </div>
+        <div style="background:var(--black); padding:16px;">
+          <p style="font-size:12px;color:#888;margin:0 0 10px;">
+            Jeder Club kann seinen eigenen Discord-Kanal fürs Interview-Posten bekommen. Clubs ohne eigenen Eintrag hier fallen auf die globale <code>DISCORD_WEBHOOK_URL</code> (Railway) zurück, falls gesetzt.
+          </p>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <input type="text" id="webhook-club-input" placeholder="Club-ID"
+              style="width:120px;padding:8px 10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;">
+            <input type="text" id="webhook-url-input" placeholder="https://discord.com/api/webhooks/…"
+              style="flex:1;min-width:220px;padding:8px 10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;">
+            <button class="ev-btn active" onclick="adminSetWebhook()">Save</button>
+          </div>
+          <div id="webhook-result" style="font-size:13px;min-height:18px;margin-bottom:10px;"></div>
+          <div id="admin-webhooks-list"></div>
+        </div>
       </div>
 
     </div><!-- end admin-panel -->
@@ -2920,7 +2940,7 @@ function showAdminTab(name, el) {
   // Tab-specific init
   if (name === 'cr-manual')   crManualLoad();
   if (name === 'champ-setup') csInit();
-  if (name === 'interviews')  adminLoadComments();
+  if (name === 'interviews') { adminLoadComments(); adminLoadWebhooks(); }
 
   _syncHash('admin', name);
 }
@@ -4699,6 +4719,83 @@ async function adminDeleteComment(commentId) {
       return;
     }
     adminLoadComments();
+  } catch (err) {
+    alert('Network error, try again.');
+  }
+}
+
+// ── ADMIN: Discord-Webhooks pro Club ────────────────────────────
+
+async function adminSetWebhook() {
+  const clubInput = $('webhook-club-input');
+  const urlInput  = $('webhook-url-input');
+  const clubId    = clubInput ? clubInput.value.trim() : '';
+  const webhookUrl = urlInput ? urlInput.value.trim() : '';
+
+  if (!clubId || !webhookUrl) {
+    setText('webhook-result', 'Please enter both a club ID and a webhook URL.');
+    return;
+  }
+  setText('webhook-result', 'Saving…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/webhooks/set`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body:    JSON.stringify({ club_id: clubId, webhook_url: webhookUrl }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setText('webhook-result', '⚠ ' + (data.error || 'Could not save webhook.'));
+      return;
+    }
+    setText('webhook-result', '✓ Saved.');
+    if (clubInput) clubInput.value = '';
+    if (urlInput)  urlInput.value  = '';
+    adminLoadWebhooks();
+  } catch (err) {
+    setText('webhook-result', '⚠ Network error, try again.');
+  }
+}
+
+async function adminLoadWebhooks() {
+  setHTML('admin-webhooks-list', '<div style="color:#666;font-size:13px;padding:8px 0;">Loading…</div>');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/webhooks`, {
+      headers: { 'X-Admin-Password': _adminPassword },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setHTML('admin-webhooks-list', `<div style="color:var(--red);font-size:13px;">⚠ ${escapeHtml(data.error || 'Could not load webhooks.')}</div>`);
+      return;
+    }
+    if (!data.length) {
+      setHTML('admin-webhooks-list', '<div style="color:#666;font-size:13px;">No club-specific webhooks configured yet — everything falls back to the global DISCORD_WEBHOOK_URL.</div>');
+      return;
+    }
+    setHTML('admin-webhooks-list', data.map(w => `
+      <div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #1a1a1a;">
+        <div style="font-size:13px;color:var(--white);min-width:70px;">${escapeHtml(w.club_id)}</div>
+        <div style="flex:1;font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(w.webhook_url)}</div>
+        <button class="ev-btn" style="font-size:11px;padding:4px 8px;flex-shrink:0;" onclick="adminDeleteWebhook('${escapeHtml(w.club_id)}')">🗑 Remove</button>
+      </div>
+    `).join(''));
+  } catch (err) {
+    setHTML('admin-webhooks-list', '<div style="color:var(--red);font-size:13px;">⚠ Network error, try again.</div>');
+  }
+}
+
+async function adminDeleteWebhook(clubId) {
+  if (!confirm(`Remove the Discord webhook for club ${clubId}? Interviews for this club will fall back to the global webhook.`)) return;
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/webhooks/${encodeURIComponent(clubId)}`, {
+      method:  'DELETE',
+      headers: { 'X-Admin-Password': _adminPassword },
+    });
+    if (!res.ok) {
+      alert('Could not remove webhook.');
+      return;
+    }
+    adminLoadWebhooks();
   } catch (err) {
     alert('Network error, try again.');
   }

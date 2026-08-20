@@ -261,6 +261,34 @@ def stats_pageview():
 #  Tabelle serverseitig abgeschottet ist, nicht die Verschlüsselung des PINs.
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _resolve_club_id_for_event(event_id: str):
+    """event_id → events.championship_id → championships.club_id. Gibt None
+    zurück, falls irgendwo in der Kette nichts gefunden wird."""
+    ev_rows = sb_get("events", f"id=eq.{requests.utils.quote(event_id)}&select=championship_id&limit=1")
+    if not ev_rows or not ev_rows[0].get("championship_id"):
+        return None
+    champ_id = ev_rows[0]["championship_id"]
+    champ_rows = sb_get("championships", f"id=eq.{requests.utils.quote(champ_id)}&select=club_id&limit=1")
+    if not champ_rows:
+        return None
+    return champ_rows[0].get("club_id")
+
+
+def _get_webhook_for_club(club_id) -> str:
+    """
+    Club-spezifischer Discord-Webhook aus club_discord_webhooks — fällt,
+    falls für diesen Club (noch) keiner konfiguriert ist, auf die globale
+    DISCORD_WEBHOOK_URL-Umgebungsvariable zurück (falls gesetzt). So
+    funktioniert Discord-Posten für neue Clubs schon "irgendwie" (in den
+    Standard-Kanal), bis jemand explizit einen eigenen Kanal einträgt.
+    """
+    if club_id:
+        rows = sb_get("club_discord_webhooks", f"club_id=eq.{requests.utils.quote(str(club_id))}&select=webhook_url&limit=1")
+        if rows and rows[0].get("webhook_url"):
+            return rows[0]["webhook_url"]
+    return os.environ.get("DISCORD_WEBHOOK_URL", "")
+
+
 def _check_pin(driver_name: str, pin: str) -> bool:
     """
     True nur wenn für driver_name ein PIN hinterlegt ist UND er exakt passt.
@@ -335,9 +363,10 @@ def comments_discord_post():
         if not _check_pin(driver_name, pin):
             return jsonify({"error": "Invalid PIN"}), 401
 
-        webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "")
+        club_id     = _resolve_club_id_for_event(event_id)
+        webhook_url = _get_webhook_for_club(club_id)
         if not webhook_url:
-            return jsonify({"error": "Discord webhook not configured"}), 500
+            return jsonify({"error": "No Discord webhook configured for this club yet — ask an admin to set one up."}), 500
 
         event_rows = sb_get("events", f"id=eq.{requests.utils.quote(event_id)}&select=location,name&limit=1")
         event_name = "Event"
@@ -418,6 +447,57 @@ def admin_pins_get(driver_name):
         if not rows:
             return jsonify({"error": "No PIN set for this driver"}), 404
         return jsonify(rows[0])
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/admin/webhooks", methods=["GET"])
+@auth
+def admin_webhooks_list():
+    """Listet alle aktuell konfigurierten Club-Webhooks — fürs Admin-Panel."""
+    try:
+        rows = sb_get_all("club_discord_webhooks", "select=*&order=club_id.asc")
+        return jsonify(rows)
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/admin/webhooks/set", methods=["POST"])
+@auth
+def admin_webhooks_set():
+    """Setzt (oder ersetzt) den Discord-Webhook für einen bestimmten Club."""
+    try:
+        body        = request.json or {}
+        club_id     = (body.get("club_id") or "").strip()
+        webhook_url = (body.get("webhook_url") or "").strip()
+        if not club_id or not webhook_url:
+            return jsonify({"error": "club_id and webhook_url required"}), 400
+        if not (webhook_url.startswith("https://discord.com/api/webhooks/")
+                or webhook_url.startswith("https://discordapp.com/api/webhooks/")):
+            return jsonify({"error": "That doesn't look like a Discord webhook URL"}), 400
+
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/club_discord_webhooks?on_conflict=club_id",
+            headers={**SB, "Prefer": "resolution=merge-duplicates,return=minimal"},
+            json={"club_id": club_id, "webhook_url": webhook_url},
+            timeout=10,
+        )
+        if not r.ok:
+            print(f"[admin_webhooks_set ERROR] HTTP {r.status_code}: {r.text}")
+        r.raise_for_status()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/admin/webhooks/<club_id>", methods=["DELETE"])
+@auth
+def admin_webhooks_delete(club_id):
+    """Entfernt die Club-spezifische Webhook-Konfiguration — fällt danach
+    wieder auf die globale DISCORD_WEBHOOK_URL zurück (falls gesetzt)."""
+    try:
+        sb_delete("club_discord_webhooks", f"club_id=eq.{requests.utils.quote(club_id)}")
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": _err_detail(e)}), 500
 
