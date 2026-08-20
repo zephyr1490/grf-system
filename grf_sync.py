@@ -35,6 +35,16 @@ Usage:
                                          — same as --full, but ALSO re-fetches stage
                                            data for events that already have it
                                            (slow — use only if stage data is suspect)
+  python grf_sync.py --standings-only   — NUR championship_standings für JEDE
+                                           Championship jedes Clubs nachladen (RaceNets
+                                           fertigen Punktestand über den
+                                           /championship/points/-Endpoint). Kein Event-/
+                                           Stage-/Result-Sync, deutlich leichtgewichtiger
+                                           als --full. Gedacht für den Fall, dass
+                                           historische Championships nie ihre Standings
+                                           bekommen haben (z.B. weil
+                                           sync_championship_standings() erst nachträglich
+                                           eingebaut wurde, s. Session 10).
   python grf_sync.py --test             — test connections, no writes
 ════════════════════════════════════════════════════════════════════════════════
 """
@@ -974,14 +984,17 @@ def sync_championship(db: SupabaseClient, client,
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    test_mode    = "--test" in sys.argv
-    force_full   = "--full" in sys.argv           # visit ALL championships (not just current)
-    force_stages = "--force-stages" in sys.argv    # ALSO re-fetch stage data for already-synced events
+    test_mode      = "--test" in sys.argv
+    force_full     = "--full" in sys.argv           # visit ALL championships (not just current)
+    force_stages   = "--force-stages" in sys.argv    # ALSO re-fetch stage data for already-synced events
+    standings_only = "--standings-only" in sys.argv  # NUR championship_standings nachladen (kein Event-/Stage-Sync)
 
     print("=" * 60)
     print("  GRF Sync Script v3")
     if test_mode:
         print("  Mode: TEST — no writes to Supabase")
+    elif standings_only:
+        print("  Mode: STANDINGS-ONLY — refresh championship_standings for every championship, no event/stage/result sync")
     elif force_full and force_stages:
         print("  Mode: FULL RE-SYNC — all championships, all stages re-fetched")
     elif force_full:
@@ -1041,6 +1054,37 @@ def main():
     except Exception as ex:
         log(f"  ⚠ Could not load club list ({ex}), falling back to GRF_CLUBS")
         club_ids = GRF_CLUBS
+
+    if standings_only:
+        # Leichtgewichtiger Modus (Session 10): NUR championship_standings
+        # für JEDE Championship jedes Clubs nachladen — kein
+        # get_championship()-Call (der lädt teuer die komplette
+        # Championship inkl. aller Events/Stages mit, den brauchen wir
+        # hier gar nicht), kein Event-/Stage-/Result-Sync. Spart gegenüber
+        # einem vollen --full-Lauf den kompletten, schweren Teil — für den
+        # Fall, dass historische Championships nie ihre Standings bekommen
+        # haben (z.B. weil sync_championship_standings() erst nachträglich
+        # eingebaut wurde).
+        for club_id in club_ids:
+            log(f"\n🏆 Club {club_id} (standings only)...")
+            try:
+                champ_ids = client.get_all_championship_ids(club_id)
+            except Exception as ex:
+                log(f"  ❌ Could not load championship list: {ex}")
+                continue
+
+            if not champ_ids:
+                log("  ℹ No championships found for this club.")
+                continue
+
+            log(f"  Found {len(champ_ids)} championship(s) — refreshing standings for each.")
+            for champ_id in champ_ids:
+                sync_championship_standings(db, client, club_id, champ_id, test=test_mode)
+                time.sleep(0.3)
+
+        elapsed = time.time() - t0
+        log(f"\n✅ Standings-only sync complete in {elapsed:.1f}s")
+        return
 
     for club_id in club_ids:
         log(f"\n🏁 Club {club_id}...")
