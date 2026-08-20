@@ -4437,9 +4437,16 @@ async function openInterviewModal(eventId, driverName) {
   existing.forEach(c => { comments[c.stage_id] = c.comment_text; });
 
   _interview = { eventId, driverName, pin: '', stages, comments, stepIndex: -1 }; // -1 = PIN-Schritt zuerst
-  _renderInterviewStep();
+
+  // Bug-Fix: Overlay MUSS zuerst sichtbar gemacht werden — .focus() auf ein
+  // Element innerhalb eines noch display:none-Elternelements ist in jedem
+  // Browser ein stiller No-Op. Reihenfolge hier bewusst: erst sichtbar
+  // machen, DANN rendern (das Rendern ruft .focus() auf, s.
+  // _renderInterviewStep()) — sonst geht der Autofokus (und damit die
+  // automatisch aufklappende Tastatur) verloren.
   const overlay = $('interview-modal-overlay');
   if (overlay) overlay.style.display = 'flex';
+  _renderInterviewStep();
 
   // Sofort einmal ausrichten (falls die Tastatur von einem vorherigen Feld
   // noch offen ist) + auf künftiges Auf-/Zuklappen der Tastatur reagieren,
@@ -4535,6 +4542,13 @@ function _renderInterviewStep() {
       <button class="ev-btn active" style="flex:1;" onclick="_interviewStep(1)">${isLast ? 'Finish →' : 'Next →'}</button>
     </div>
   `;
+  const commentInput = $('interview-comment-input');
+  if (commentInput) {
+    // Cursor ans Textende setzen statt alles zu markieren, falls schon ein
+    // Kommentar (z.B. beim Zurückgehen) vorbefüllt ist.
+    commentInput.focus();
+    commentInput.setSelectionRange(commentInput.value.length, commentInput.value.length);
+  }
 }
 
 function _interviewSubmitPin() {
