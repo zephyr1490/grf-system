@@ -837,7 +837,16 @@ def sync_championship_standings(db: SupabaseClient, client, club_id: str, champ_
     entfernt wurden, sollen dadurch auch bei uns verschwinden.
     """
     try:
-        entries = client.get_championship_standings(club_id, champ_id)
+        # max_results=100 ist der DEFAULT in racenet_client.py — bricht die
+        # cursor-Pagination künstlich nach der ersten Seite ab, obwohl die
+        # Funktion selbst problemlos beliebig viele Seiten laden kann.
+        # Championships mit mehr als 100 Fahrern wurden dadurch stumm
+        # abgeschnitten (sichtbar z.B. als exakt "100 driver(s)" in vielen
+        # aufeinanderfolgenden Log-Zeilen — kein Zufall, sondern genau die
+        # Kappung). 10.000 ist komfortabel über jeder realistischen
+        # Championship-Größe; die Schleife bricht ohnehin von selbst ab,
+        # sobald RaceNet kein cursorNext mehr liefert.
+        entries = client.get_championship_standings(club_id, champ_id, max_results=10000)
     except Exception as ex:
         log(f"    ⚠ Could not load championship standings: {ex}")
         return
