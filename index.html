@@ -2355,23 +2355,24 @@ textarea.inp-std { resize:vertical; }
         </div>
         <div style="background:var(--black); padding:16px;">
           <p style="font-size:12px;color:#888;margin:0 0 10px;">
-            Kein Self-Signup — PINs werden ausschließlich hier vergeben. Zum Weitergeben an einen Fahrer einfach den generierten Code kopieren.
+            Kein Self-Signup — PINs werden ausschließlich hier vergeben. Zum Weitergeben an einen Fahrer einfach den generierten Code kopieren. Groß-/Kleinschreibung ist egal, wird automatisch auf den echten RaceNet-Namen abgeglichen.
           </p>
           <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-            <input type="text" id="pin-driver-input" placeholder="Fahrername (exakt wie im System)"
+            <input type="text" id="pin-driver-input" placeholder="Fahrername (Tippen für Vorschläge)"
+              list="pin-driver-suggestions" oninput="adminSearchDriverNames(this.value)" autocomplete="off"
               style="flex:1;min-width:200px;padding:8px 10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;">
+            <datalist id="pin-driver-suggestions"></datalist>
             <button class="ev-btn active" onclick="adminGeneratePin()">Generate / Reset PIN</button>
-            <button class="ev-btn" onclick="adminLookupPin()">Look up existing PIN</button>
           </div>
           <div id="pin-result" style="font-size:14px;color:var(--green);min-height:20px;"></div>
         </div>
 
         <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark); margin-top:16px;">
-          <div class="col-hdr" style="margin-bottom:0;">COMMENT MODERATION
-            <span class="col-hdr-right" style="cursor:pointer;" onclick="adminLoadComments()">↻ Refresh</span>
+          <div class="col-hdr" style="margin-bottom:0;">REGISTERED PINS
+            <span class="col-hdr-right" style="cursor:pointer;" onclick="adminLoadPinsList()">↻ Refresh</span>
           </div>
         </div>
-        <div id="admin-comments-list" style="background:var(--black); padding:8px;">
+        <div id="admin-pins-list" style="background:var(--black); padding:8px;">
           <div style="color:#666;font-size:13px;padding:12px;">Loading…</div>
         </div>
 
@@ -2940,7 +2941,7 @@ function showAdminTab(name, el) {
   // Tab-specific init
   if (name === 'cr-manual')   crManualLoad();
   if (name === 'champ-setup') csInit();
-  if (name === 'interviews') { adminLoadComments(); adminLoadWebhooks(); }
+  if (name === 'interviews') { adminLoadPinsList(); adminLoadWebhooks(); }
 
   _syncHash('admin', name);
 }
@@ -4643,6 +4644,29 @@ async function _interviewPostDiscord() {
 
 // ── ADMIN: PIN-Verwaltung + Kommentar-Moderation (Session 10) ──
 
+let _pinSearchTimer = null;
+
+/** Debounced Autocomplete gegen /drivers/search — befüllt die <datalist>
+ * mit Vorschlägen, sobald mind. 2 Zeichen getippt wurden. */
+function adminSearchDriverNames(query) {
+  clearTimeout(_pinSearchTimer);
+  const q = (query || '').trim();
+  if (q.length < 2) return;
+  _pinSearchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/drivers/search?q=${encodeURIComponent(q)}`, {
+        headers: { 'X-Admin-Password': _adminPassword },
+      });
+      if (!res.ok) return;
+      const names = await res.json();
+      const datalist = $('pin-driver-suggestions');
+      if (datalist && Array.isArray(names)) {
+        datalist.innerHTML = names.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+      }
+    } catch (err) { /* Autocomplete ist nice-to-have, Fehler hier bewusst ignoriert */ }
+  }, 250);
+}
+
 async function adminGeneratePin() {
   const input       = $('pin-driver-input');
   const driverName  = input ? input.value.trim() : '';
@@ -4663,80 +4687,51 @@ async function adminGeneratePin() {
       return;
     }
     setHTML('pin-result', `PIN for <strong style="color:var(--white);">${escapeHtml(data.driver_name)}</strong>: <span style="font-size:20px;letter-spacing:4px;color:var(--white);">${escapeHtml(data.pin)}</span>`);
+    adminLoadPinsList(); // Liste sofort aktualisieren, neuer/geänderter Eintrag ist sonst nicht sichtbar
   } catch (err) {
     setText('pin-result', '⚠ Network error, try again.');
   }
 }
 
-async function adminLookupPin() {
-  const input      = $('pin-driver-input');
-  const driverName = input ? input.value.trim() : '';
-  if (!driverName) {
-    setText('pin-result', 'Please enter a driver name first.');
-    return;
-  }
-  setText('pin-result', 'Looking up…');
+/** Liste ALLER Fahrer mit bereits vergebenem PIN (Klartext) — schneller
+ * Überblick, wer schon registriert ist. Ersetzt die frühere, bei vielen
+ * Kommentaren schnell unübersichtliche Einzel-Kommentar-Moderationsliste;
+ * die Löschfunktion dort ergab ohnehin wenig Sinn (löscht nicht aus
+ * Discord, und Fahrer können dort sowieso frei posten). */
+async function adminLoadPinsList() {
+  setHTML('admin-pins-list', '<div style="color:#666;font-size:13px;padding:12px;">Loading…</div>');
   try {
-    const res = await fetch(`${ADMIN_API_URL}/admin/pins/${encodeURIComponent(driverName)}`, {
+    const res = await fetch(`${ADMIN_API_URL}/admin/pins`, {
       headers: { 'X-Admin-Password': _adminPassword },
     });
     const data = await res.json();
     if (!res.ok) {
-      setText('pin-result', '⚠ ' + (data.error || 'No PIN found for this driver.'));
-      return;
-    }
-    setHTML('pin-result', `PIN for <strong style="color:var(--white);">${escapeHtml(data.driver_name)}</strong>: <span style="font-size:20px;letter-spacing:4px;color:var(--white);">${escapeHtml(data.pin)}</span>`);
-  } catch (err) {
-    setText('pin-result', '⚠ Network error, try again.');
-  }
-}
-
-async function adminLoadComments() {
-  setHTML('admin-comments-list', '<div style="color:#666;font-size:13px;padding:12px;">Loading…</div>');
-  try {
-    const res = await fetch(`${ADMIN_API_URL}/admin/comments`, {
-      headers: { 'X-Admin-Password': _adminPassword },
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setHTML('admin-comments-list', `<div style="color:var(--red);font-size:13px;padding:12px;">⚠ ${escapeHtml(data.error || 'Could not load comments.')}</div>`);
+      setHTML('admin-pins-list', `<div style="color:var(--red);font-size:13px;padding:12px;">⚠ ${escapeHtml(data.error || 'Could not load PINs.')}</div>`);
       return;
     }
     if (!data.length) {
-      setHTML('admin-comments-list', '<div style="color:#666;font-size:13px;padding:12px;">No comments yet.</div>');
+      setHTML('admin-pins-list', '<div style="color:#666;font-size:13px;padding:12px;">No PINs issued yet.</div>');
       return;
     }
-    setHTML('admin-comments-list', data.map(c => `
-      <div style="display:flex;gap:10px;align-items:flex-start;padding:8px;border-bottom:1px solid #1a1a1a;">
-        <div style="flex:1;">
-          <div style="font-size:13px;color:var(--white);">${escapeHtml(c.driver_name)}</div>
-          <div style="font-size:12px;color:var(--gray-light);margin:2px 0;">${escapeHtml(c.comment_text)}</div>
-          <div style="font-size:10px;color:#666;">${escapeHtml(c.created_at || '')}</div>
-        </div>
-        <button class="ev-btn" style="font-size:11px;padding:4px 8px;flex-shrink:0;" onclick="adminDeleteComment('${escapeHtml(c.id)}')">🗑 Delete</button>
+    setHTML('admin-pins-list', data.map(p => `
+      <div style="display:flex;gap:10px;align-items:center;padding:6px 8px;border-bottom:1px solid #1a1a1a;">
+        <div style="flex:1;font-size:13px;color:var(--white);">${escapeHtml(p.driver_name)}</div>
+        <div style="font-size:16px;letter-spacing:3px;color:var(--green);">${escapeHtml(p.pin)}</div>
       </div>
     `).join(''));
   } catch (err) {
-    setHTML('admin-comments-list', '<div style="color:var(--red);font-size:13px;padding:12px;">⚠ Network error, try again.</div>');
+    setHTML('admin-pins-list', '<div style="color:var(--red);font-size:13px;padding:12px;">⚠ Network error, try again.</div>');
   }
 }
 
-async function adminDeleteComment(commentId) {
-  if (!confirm('Delete this comment permanently?')) return;
-  try {
-    const res = await fetch(`${ADMIN_API_URL}/admin/comments/${encodeURIComponent(commentId)}`, {
-      method:  'DELETE',
-      headers: { 'X-Admin-Password': _adminPassword },
-    });
-    if (!res.ok) {
-      alert('Could not delete comment.');
-      return;
-    }
-    adminLoadComments();
-  } catch (err) {
-    alert('Network error, try again.');
-  }
-}
+// adminLookupPin(), adminLoadComments(), adminDeleteComment() entfernt
+// (Session 10, nach Rückmeldung) — durch adminLoadPinsList() ersetzt, die
+// alle vergebenen PINs auf einen Blick zeigt statt einzeln nachschlagen zu
+// müssen. Die zugehörigen Backend-Endpunkte (/admin/comments,
+// /admin/comments/<id>) bleiben unangetastet bestehen, falls sie
+// später doch nochmal gebraucht werden — Löschen eines Kommentars hier
+// entfernt ihn ohnehin nicht aus Discord, daher wenig praktischer Nutzen
+// für eine Moderations-Funktion.
 
 // ── ADMIN: Discord-Webhooks pro Club ────────────────────────────
 

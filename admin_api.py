@@ -406,6 +406,26 @@ def comments_discord_post():
         return jsonify({"error": _err_detail(e)}), 500
 
 
+def _resolve_canonical_driver_name(name: str) -> str:
+    """
+    Findet die korrekte Groß-/Kleinschreibung eines Fahrernamens aus der
+    kanonischen `drivers`-Tabelle (dieselbe Namensbasis wie ELO/Standings/
+    event_results) — case-insensites Exakt-Match. Wichtig, damit ein PIN
+    z.B. für "alice" tatsächlich unter "Alice" gespeichert wird (dem
+    RaceNet-echten Namen), sonst würde die spätere Kommentar-Prüfung
+    (_check_pin, case-sensitiver Vergleich) den PIN nie finden. Falls kein
+    Treffer existiert (z.B. Fahrer hat noch keine Events gefahren), wird
+    der eingegebene Name unverändert zurückgegeben.
+    """
+    try:
+        rows = sb_get("drivers", f"name=ilike.{requests.utils.quote(name)}&select=name&limit=1")
+        if rows:
+            return rows[0]["name"]
+    except Exception:
+        pass
+    return name
+
+
 @app.route("/admin/pins/generate", methods=["POST"])
 @auth
 def admin_pins_generate():
@@ -420,6 +440,8 @@ def admin_pins_generate():
         driver_name = (body.get("driver_name") or "").strip()
         if not driver_name:
             return jsonify({"error": "driver_name required"}), 400
+
+        driver_name = _resolve_canonical_driver_name(driver_name)
 
         pin = f"{secrets.randbelow(10000):04d}"
         r = requests.post(
@@ -441,12 +463,26 @@ def admin_pins_generate():
 def admin_pins_get(driver_name):
     """Zeigt den aktuell hinterlegten PIN eines Fahrers — fürs erneute
     Weitergeben, ohne extra einen neuen generieren (und damit den alten
-    ungültig machen) zu müssen."""
+    ungültig machen) zu müssen. ilike statt eq: verzeiht abweichende
+    Groß-/Kleinschreibung beim Nachschlagen."""
     try:
-        rows = sb_get("driver_pins", f"driver_name=eq.{requests.utils.quote(driver_name)}&select=driver_name,pin&limit=1")
+        rows = sb_get("driver_pins", f"driver_name=ilike.{requests.utils.quote(driver_name)}&select=driver_name,pin&limit=1")
         if not rows:
             return jsonify({"error": "No PIN set for this driver"}), 404
         return jsonify(rows[0])
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/admin/pins", methods=["GET"])
+@auth
+def admin_pins_list():
+    """Listet ALLE Fahrer mit bereits vergebenem PIN (Klartext) — schneller
+    Überblick, wer schon registriert ist, ohne einzeln nachschlagen zu
+    müssen."""
+    try:
+        rows = sb_get_all("driver_pins", "select=driver_name,pin&order=driver_name.asc")
+        return jsonify(rows)
     except Exception as e:
         return jsonify({"error": _err_detail(e)}), 500
 
