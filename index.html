@@ -3806,15 +3806,18 @@ async function _fetchAndRenderClubResults(eventId) {
       stageIdx[r.stage_id][r.driver_name] = r;
     });
 
-    // Beide Tabellen (voll + schlank) sind hier inhaltlich identisch (nur
-    // 4 Spalten, kein CR/Punkte zum Verstecken) — trotzdem als full-wrap/
-    // slim-wrap-Paar gebaut, konsistent mit dem Rest der Seite (s.
-    // "SCHLANK + TAP"-CSS-Kommentar), damit der 768px-Breakpoint
-    // einheitlich funktioniert.
-    const buildRows = (idPrefix) => results.map((r, i) => {
+    // Bug-Fix (Session 10, nach Rückmeldung): Voll- und Slim-Ansicht nutzten
+    // bisher DIESELBE <table>-Struktur für Stage-Zeiten (eine Spalte pro
+    // Stage) — auf schmalen Bildschirmen lief das seitlich aus dem Bild,
+    // weil Tabellenspalten nicht umbrechen. Jetzt zwei echte, getrennte
+    // Renderer: Desktop bleibt bei der Tabelle (genug Platz), Mobile nutzt
+    // dasselbe umbrechende Badge-Grid (.slim-badge/.slim-detail-inner) wie
+    // Themed/Teamed — exakt dieselbe Regel jetzt für alle drei Club-Typen.
+
+    const buildFullRows = () => results.map((r, i) => {
       const dnf    = r.is_dnf;
       const posStr = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
-      const rowId  = `${idPrefix}-${r.driver_id || i}`;
+      const rowId  = `cd-stages-row-${r.driver_id || i}`;
 
       let stageRow = '';
       if (stages.length) {
@@ -3853,8 +3856,38 @@ async function _fetchAndRenderClubResults(eventId) {
         </tr>${stageRow}`;
     }).join('');
 
-    tbody.innerHTML = buildRows('cd-stages-row');
-    setHTML('cd-results-slim-tbody', buildRows('cd-stages-row-slim'));
+    const buildSlimRows = () => results.map((r, i) => {
+      const dnf    = r.is_dnf;
+      const posStr = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
+      const rowId  = `cd-stages-row-slim-${r.driver_id || i}`;
+
+      const stageBadges = stages.map(st => {
+        const sr   = stageIdx[st.id]?.[r.driver_name];
+        const best = sr?.stage_position === 1;
+        return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || '—'}</div></div>`;
+      }).join('');
+
+      return `
+        <tr${dnf ? ' style="opacity:.55"' : ''} onclick="toggleSlimDetail('${rowId}')">
+          <td class="${rankClass(i)}">${posStr}</td>
+          <td>${escapeHtml(r.driver_name) || '—'}</td>
+          <td style="font-size:12px;color:#aaa;">${escapeHtml(r.vehicle) || '—'}</td>
+          <td>${fmtStageTime(r.time) || '—'}</td>
+        </tr>
+        <tr class="slim-detail-row" id="${rowId}">
+          <td colspan="4">
+            ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
+            <div class="slim-detail-extra" style="text-align:right !important;">
+              <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
+                data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
+                onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    tbody.innerHTML = buildFullRows();
+    setHTML('cd-results-slim-tbody', buildSlimRows());
 
   } catch (err) {
     console.error('[_fetchAndRenderClubResults]', err);
