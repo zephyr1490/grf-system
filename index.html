@@ -4717,10 +4717,32 @@ async function adminLoadPinsList() {
       <div style="display:flex;gap:10px;align-items:center;padding:6px 8px;border-bottom:1px solid #1a1a1a;">
         <div style="flex:1;font-size:13px;color:var(--white);">${escapeHtml(p.driver_name)}</div>
         <div style="font-size:16px;letter-spacing:3px;color:var(--green);">${escapeHtml(p.pin)}</div>
+        <button class="ev-btn" style="font-size:11px;padding:4px 8px;flex-shrink:0;" onclick="adminDeletePin('${escapeHtml(p.driver_name)}')">🗑 Delete</button>
       </div>
     `).join(''));
   } catch (err) {
     setHTML('admin-pins-list', '<div style="color:var(--red);font-size:13px;padding:12px;">⚠ Network error, try again.</div>');
+  }
+}
+
+/** Entfernt den PIN eines Fahrers (z.B. falscher Name aus Versehen
+ * angelegt). Betrifft NUR den PIN — bereits geschriebene Interviews dieses
+ * Fahrers bleiben davon unberührt (PIN wird nirgends mit einem Kommentar
+ * verknüpft gespeichert). */
+async function adminDeletePin(driverName) {
+  if (!confirm(`Delete the PIN for ${driverName}? They won't be able to comment until a new one is generated.`)) return;
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/pins/${encodeURIComponent(driverName)}`, {
+      method:  'DELETE',
+      headers: { 'X-Admin-Password': _adminPassword },
+    });
+    if (!res.ok) {
+      alert('Could not delete PIN.');
+      return;
+    }
+    adminLoadPinsList();
+  } catch (err) {
+    alert('Network error, try again.');
   }
 }
 

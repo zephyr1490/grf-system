@@ -487,6 +487,22 @@ def admin_pins_list():
         return jsonify({"error": _err_detail(e)}), 500
 
 
+@app.route("/admin/pins/<driver_name>", methods=["DELETE"])
+@auth
+def admin_pins_delete(driver_name):
+    """Entfernt den PIN eines Fahrers vollständig (z.B. bei versehentlich
+    falsch angelegtem Eintrag). Betrifft NUR den PIN selbst — bereits
+    gespeicherte stage_comments dieses Fahrers bleiben davon komplett
+    unberührt (s. driver_pins vs. stage_comments: völlig getrennte
+    Tabellen, der PIN wird nirgends mit einem Kommentar verknüpft
+    gespeichert)."""
+    try:
+        sb_delete("driver_pins", f"driver_name=eq.{requests.utils.quote(driver_name)}")
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
 @app.route("/admin/webhooks", methods=["GET"])
 @auth
 def admin_webhooks_list():
