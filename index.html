@@ -1762,6 +1762,7 @@ textarea.inp-std { resize:vertical; }
         <div class="sub-tab" data-tab="narratives" onclick="showAdminTab('narratives',this)">Narratives</div>
         <div class="sub-tab" data-tab="elo-update" onclick="showAdminTab('elo-update',this)">ELO Update</div>
         <div class="sub-tab" data-tab="font-switcher" onclick="showAdminTab('font-switcher',this)">Font Switcher</div>
+        <div class="sub-tab" data-tab="interviews" onclick="showAdminTab('interviews',this)">Interviews</div>
       </div>
 
       <!-- ── TAB: CAR RATING CALCULATOR ── -->
@@ -2346,6 +2347,35 @@ textarea.inp-std { resize:vertical; }
         </div>
       </div>
 
+      <!-- ADMIN-TAB: INTERVIEWS (Session 10) — PIN-Verwaltung + Kommentar-
+           Moderation für die Stage-Interview-Funktion. -->
+      <div class="admin-tab" id="atab-interviews" style="display:none;">
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark);">
+          <div class="col-hdr" style="margin-bottom:0;">DRIVER PINS</div>
+        </div>
+        <div style="background:var(--black); padding:16px;">
+          <p style="font-size:12px;color:#888;margin:0 0 10px;">
+            Kein Self-Signup — PINs werden ausschließlich hier vergeben. Zum Weitergeben an einen Fahrer einfach den generierten Code kopieren.
+          </p>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <input type="text" id="pin-driver-input" placeholder="Fahrername (exakt wie im System)"
+              style="flex:1;min-width:200px;padding:8px 10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;">
+            <button class="ev-btn active" onclick="adminGeneratePin()">Generate / Reset PIN</button>
+            <button class="ev-btn" onclick="adminLookupPin()">Look up existing PIN</button>
+          </div>
+          <div id="pin-result" style="font-size:14px;color:var(--green);min-height:20px;"></div>
+        </div>
+
+        <div style="padding:10px 12px; background:var(--gray); border-bottom:2px solid var(--gray-dark); margin-top:16px;">
+          <div class="col-hdr" style="margin-bottom:0;">COMMENT MODERATION
+            <span class="col-hdr-right" style="cursor:pointer;" onclick="adminLoadComments()">↻ Refresh</span>
+          </div>
+        </div>
+        <div id="admin-comments-list" style="background:var(--black); padding:8px;">
+          <div style="color:#666;font-size:13px;padding:12px;">Loading…</div>
+        </div>
+      </div>
+
     </div><!-- end admin-panel -->
   </div>
 
@@ -2890,6 +2920,7 @@ function showAdminTab(name, el) {
   // Tab-specific init
   if (name === 'cr-manual')   crManualLoad();
   if (name === 'champ-setup') csInit();
+  if (name === 'interviews')  adminLoadComments();
 
   _syncHash('admin', name);
 }
@@ -3767,6 +3798,7 @@ async function _fetchAndRenderClubResults(eventId) {
     }
 
     setText('cd-results-hdr', `${rdLabel} ${evLabel}`.trim());
+    _cacheEventStages(eventId, stages);
 
     const stageIdx = {};
     stageResults.forEach(r => {
@@ -3803,6 +3835,11 @@ async function _fetchAndRenderClubResults(eventId) {
                 <tr>${hdrs}</tr>
                 <tr>${cells}</tr>
               </table>
+              <div style="text-align:right;margin-top:6px;">
+                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
+                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
+                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
+              </div>
             </td>
           </tr>`;
       }
@@ -4151,6 +4188,7 @@ async function _fetchAndRenderResults(eventId) {
       if (!stageIdx[r.stage_id]) stageIdx[r.stage_id] = {};
       stageIdx[r.stage_id][r.driver_name] = r;
     });
+    _cacheEventStages(eventId, stages);
 
     tbody.innerHTML = results.map((r, i) => {
       const dnf       = r.is_dnf;
@@ -4178,6 +4216,11 @@ async function _fetchAndRenderResults(eventId) {
                 <tr>${hdrs}</tr>
                 <tr>${cells}</tr>
               </table>
+              <div style="text-align:right;margin-top:6px;">
+                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
+                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
+                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
+              </div>
             </td>
           </tr>`;
       }
@@ -4225,6 +4268,11 @@ async function _fetchAndRenderResults(eventId) {
                 <div class="slim-badge"><div class="slim-badge-lbl">×CR</div><div class="slim-badge-val">${crStr}</div></div>
               </div>
               ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
+              <div style="text-align:right;margin-top:6px;">
+                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
+                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
+                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
+              </div>
             </td>
           </tr>`;
       }).join('');
@@ -4262,6 +4310,321 @@ function toggleStageRow(rowId) {
 function toggleSlimDetail(rowId) {
   const row = document.getElementById(rowId);
   if (row) row.classList.toggle('open');
+}
+
+// ── STAGE INTERVIEW (Session 10) — "Stage-End Interview" wie im echten
+//    Motorsport: Fahrer klickt sich nach der ersten Stage einmal durch alle
+//    Stages, hinterlässt optional pro Stage einen Kommentar, sieht am Ende
+//    eine Zusammenfassung, kann kopieren oder direkt an Discord posten.
+//    Identitätsschutz über einen einmalig vom Admin vergebenen PIN (kein
+//    Login) — s. admin_api.py /comments/submit, /comments/discord-post.
+//    Ein einziges, wiederverwendbares Modal für Themed/Teamed/generische
+//    Clubs, angesteuert über openInterviewModal(eventId, driverName).
+
+let _eventStagesCache = {}; // eventId -> [{id, name, stage_number}], vermeidet wiederholte Fetches
+
+/** Von jeder Ergebnistabelle aufgerufen, sobald Stage-Daten geladen wurden —
+ * füllt den Cache, den openInterviewModal() sonst selbst nachladen müsste. */
+function _cacheEventStages(eventId, stages) {
+  if (eventId && Array.isArray(stages)) _eventStagesCache[eventId] = stages;
+}
+
+let _interview = null; // { eventId, driverName, pin, stages, comments:{stageId:text}, stepIndex }
+
+async function openInterviewModal(eventId, driverName) {
+  let stages = _eventStagesCache[eventId];
+  if (!stages) {
+    try {
+      stages = await sb('stages', `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`);
+      _cacheEventStages(eventId, stages);
+    } catch (err) {
+      stages = [];
+    }
+  }
+  if (!stages.length) {
+    alert('No stages found for this event yet.');
+    return;
+  }
+
+  // Bestehende eigene Kommentare vorab laden — stage_comments ist öffentlich
+  // lesbar (anon SELECT), dafür ist kein PIN nötig, nur fürs spätere
+  // Speichern/Ändern.
+  let existing = [];
+  try {
+    existing = await sbAll('stage_comments',
+      `select=stage_id,comment_text&event_id=eq.${eventId}&driver_name=eq.${encodeURIComponent(driverName)}`);
+  } catch (err) { /* startet einfach leer, kein Blocker */ }
+
+  const comments = {};
+  existing.forEach(c => { comments[c.stage_id] = c.comment_text; });
+
+  _interview = { eventId, driverName, pin: '', stages, comments, stepIndex: -1 }; // -1 = PIN-Schritt zuerst
+  _renderInterviewStep();
+  const overlay = $('interview-modal-overlay');
+  if (overlay) overlay.style.display = 'flex';
+}
+
+function closeInterviewModal() {
+  const overlay = $('interview-modal-overlay');
+  if (overlay) overlay.style.display = 'none';
+  _interview = null;
+}
+
+function _renderInterviewStep() {
+  const content = $('interview-modal-content');
+  if (!content || !_interview) return;
+
+  // Schritt -1: PIN einmalig abfragen, gilt für die ganze Sitzung (alle
+  // Stages + finaler Discord-Post), damit man nicht pro Stage neu eintippen
+  // muss.
+  if (_interview.stepIndex === -1) {
+    content.innerHTML = `
+      <div class="col-hdr" style="margin:-16px -16px 12px -16px;">🎙️ STAGE INTERVIEW
+        <span class="col-hdr-right" style="cursor:pointer;" onclick="closeInterviewModal()">✕</span>
+      </div>
+      <p style="font-size:13px;color:var(--gray-light);margin-bottom:10px;">Interview as <strong style="color:var(--white);">${escapeHtml(_interview.driverName)}</strong></p>
+      <p style="font-size:12px;color:#888;margin-bottom:6px;">Enter your PIN to continue (ask an admin if you don't have one yet).</p>
+      <input type="text" inputmode="numeric" maxlength="4" id="interview-pin-input" placeholder="PIN"
+        style="width:100%;padding:10px;background:#111;border:1px solid #333;color:var(--white);font-size:16px;letter-spacing:4px;text-align:center;margin-bottom:10px;box-sizing:border-box;">
+      <div id="interview-status" style="margin-bottom:8px;font-size:12px;color:var(--red);"></div>
+      <button class="ev-btn active" style="width:100%;" onclick="_interviewSubmitPin()">Continue →</button>
+    `;
+    const pinInput = $('interview-pin-input');
+    if (pinInput) pinInput.focus();
+    return;
+  }
+
+  // Letzter Schritt: Zusammenfassung
+  if (_interview.stepIndex >= _interview.stages.length) {
+    const lines = _interview.stages
+      .filter(st => _interview.comments[st.id])
+      .map(st => `
+        <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #222;">
+          <strong style="color:var(--red);">SS${st.stage_number}${st.name ? ' — ' + escapeHtml(st.name) : ''}</strong><br>
+          <span style="color:var(--gray-light);font-size:13px;">${escapeHtml(_interview.comments[st.id])}</span>
+        </div>`)
+      .join('') || '<p style="color:#666;font-size:13px;">No comments yet — go back to add some, or just close.</p>';
+
+    content.innerHTML = `
+      <div class="col-hdr" style="margin:-16px -16px 12px -16px;">🎙️ INTERVIEW SUMMARY
+        <span class="col-hdr-right" style="cursor:pointer;" onclick="closeInterviewModal()">✕</span>
+      </div>
+      <div style="max-height:38vh;overflow-y:auto;margin-bottom:12px;">${lines}</div>
+      <div id="interview-status" style="margin-bottom:8px;font-size:12px;"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="ev-btn" onclick="_interview.stepIndex=0;_renderInterviewStep();">✎ Edit</button>
+        <button class="ev-btn" onclick="_interviewCopy()">📋 Copy</button>
+        <button class="ev-btn active" onclick="_interviewPostDiscord()">📨 Post to Discord</button>
+        <button class="ev-btn" onclick="closeInterviewModal()">✓ Done</button>
+      </div>
+    `;
+    return;
+  }
+
+  // Normale Schritte: ein Textfeld pro Stage
+  const stage = _interview.stages[_interview.stepIndex];
+  const existingText = _interview.comments[stage.id] || '';
+  const isLast = _interview.stepIndex === _interview.stages.length - 1;
+  content.innerHTML = `
+    <div class="col-hdr" style="margin:-16px -16px 12px -16px;">🎙️ SS${stage.stage_number}${stage.name ? ' — ' + escapeHtml(stage.name) : ''}
+      <span class="col-hdr-right" style="cursor:pointer;" onclick="closeInterviewModal()">✕</span>
+    </div>
+    <p style="font-size:11px;color:#888;margin-bottom:6px;">Step ${_interview.stepIndex + 1} of ${_interview.stages.length} — leave blank to skip this stage.</p>
+    <textarea id="interview-comment-input" rows="4" placeholder="How did that stage go?"
+      style="width:100%;padding:10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;margin-bottom:10px;resize:vertical;box-sizing:border-box;">${escapeHtml(existingText)}</textarea>
+    <div id="interview-status" style="margin-bottom:8px;font-size:12px;color:var(--red);"></div>
+    <div style="display:flex;gap:8px;">
+      ${_interview.stepIndex > 0 ? `<button class="ev-btn" onclick="_interviewStep(-1)">← Back</button>` : ''}
+      <button class="ev-btn active" style="flex:1;" onclick="_interviewStep(1)">${isLast ? 'Finish →' : 'Next →'}</button>
+    </div>
+  `;
+}
+
+function _interviewSubmitPin() {
+  const input = $('interview-pin-input');
+  const pin = input ? input.value.trim() : '';
+  if (!pin) {
+    setText('interview-status', 'Please enter your PIN.');
+    return;
+  }
+  _interview.pin = pin;
+  _interview.stepIndex = 0;
+  _renderInterviewStep();
+}
+
+async function _interviewStep(direction) {
+  const input = $('interview-comment-input');
+  const text  = input ? input.value.trim() : '';
+  const stage = _interview.stages[_interview.stepIndex];
+
+  if (direction > 0 && text) {
+    setText('interview-status', 'Saving…');
+    try {
+      const res = await fetch(`${ADMIN_API_URL}/comments/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driver_name:  _interview.driverName,
+          pin:          _interview.pin,
+          event_id:     _interview.eventId,
+          stage_id:     stage.id,
+          comment_text: text,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setText('interview-status', '⚠ ' + (data.error || 'Could not save — check your PIN.'));
+        return; // bei Fehler NICHT weiterspringen, PIN evtl. falsch
+      }
+      _interview.comments[stage.id] = text;
+    } catch (err) {
+      setText('interview-status', '⚠ Network error, try again.');
+      return;
+    }
+  }
+  // Leer gelassen (direction>0 && !text): einfach überspringen, ohne zu
+  // speichern — ein evtl. vorher schon gespeicherter Kommentar bleibt dabei
+  // unangetastet auf dem Server (kein versehentliches Löschen durch simples
+  // Weiterklicken).
+
+  _interview.stepIndex += direction;
+  _renderInterviewStep();
+}
+
+function _interviewCopy() {
+  const lines = _interview.stages
+    .filter(st => _interview.comments[st.id])
+    .map(st => `SS${st.stage_number}${st.name ? ' - ' + st.name : ''}: ${_interview.comments[st.id]}`)
+    .join('\n');
+  const text = `Stage Interview — ${_interview.driverName}\n\n${lines}`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => setText('interview-status', '✓ Copied to clipboard.'))
+      .catch(() => setText('interview-status', '⚠ Could not copy — select and copy manually.'));
+  } else {
+    setText('interview-status', '⚠ Clipboard not available on this browser.');
+  }
+}
+
+async function _interviewPostDiscord() {
+  setText('interview-status', 'Posting…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/comments/discord-post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        driver_name: _interview.driverName,
+        pin:         _interview.pin,
+        event_id:    _interview.eventId,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setText('interview-status', '⚠ ' + (data.error || 'Could not post to Discord.'));
+      return;
+    }
+    setText('interview-status', '✓ Posted to Discord!');
+  } catch (err) {
+    setText('interview-status', '⚠ Network error, try again.');
+  }
+}
+
+// ── ADMIN: PIN-Verwaltung + Kommentar-Moderation (Session 10) ──
+
+async function adminGeneratePin() {
+  const input       = $('pin-driver-input');
+  const driverName  = input ? input.value.trim() : '';
+  if (!driverName) {
+    setText('pin-result', 'Please enter a driver name first.');
+    return;
+  }
+  setText('pin-result', 'Generating…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/pins/generate`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body:    JSON.stringify({ driver_name: driverName }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setText('pin-result', '⚠ ' + (data.error || 'Could not generate PIN.'));
+      return;
+    }
+    setHTML('pin-result', `PIN for <strong style="color:var(--white);">${escapeHtml(data.driver_name)}</strong>: <span style="font-size:20px;letter-spacing:4px;color:var(--white);">${escapeHtml(data.pin)}</span>`);
+  } catch (err) {
+    setText('pin-result', '⚠ Network error, try again.');
+  }
+}
+
+async function adminLookupPin() {
+  const input      = $('pin-driver-input');
+  const driverName = input ? input.value.trim() : '';
+  if (!driverName) {
+    setText('pin-result', 'Please enter a driver name first.');
+    return;
+  }
+  setText('pin-result', 'Looking up…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/pins/${encodeURIComponent(driverName)}`, {
+      headers: { 'X-Admin-Password': _adminPassword },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setText('pin-result', '⚠ ' + (data.error || 'No PIN found for this driver.'));
+      return;
+    }
+    setHTML('pin-result', `PIN for <strong style="color:var(--white);">${escapeHtml(data.driver_name)}</strong>: <span style="font-size:20px;letter-spacing:4px;color:var(--white);">${escapeHtml(data.pin)}</span>`);
+  } catch (err) {
+    setText('pin-result', '⚠ Network error, try again.');
+  }
+}
+
+async function adminLoadComments() {
+  setHTML('admin-comments-list', '<div style="color:#666;font-size:13px;padding:12px;">Loading…</div>');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/comments`, {
+      headers: { 'X-Admin-Password': _adminPassword },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setHTML('admin-comments-list', `<div style="color:var(--red);font-size:13px;padding:12px;">⚠ ${escapeHtml(data.error || 'Could not load comments.')}</div>`);
+      return;
+    }
+    if (!data.length) {
+      setHTML('admin-comments-list', '<div style="color:#666;font-size:13px;padding:12px;">No comments yet.</div>');
+      return;
+    }
+    setHTML('admin-comments-list', data.map(c => `
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:8px;border-bottom:1px solid #1a1a1a;">
+        <div style="flex:1;">
+          <div style="font-size:13px;color:var(--white);">${escapeHtml(c.driver_name)}</div>
+          <div style="font-size:12px;color:var(--gray-light);margin:2px 0;">${escapeHtml(c.comment_text)}</div>
+          <div style="font-size:10px;color:#666;">${escapeHtml(c.created_at || '')}</div>
+        </div>
+        <button class="ev-btn" style="font-size:11px;padding:4px 8px;flex-shrink:0;" onclick="adminDeleteComment('${escapeHtml(c.id)}')">🗑 Delete</button>
+      </div>
+    `).join(''));
+  } catch (err) {
+    setHTML('admin-comments-list', '<div style="color:var(--red);font-size:13px;padding:12px;">⚠ Network error, try again.</div>');
+  }
+}
+
+async function adminDeleteComment(commentId) {
+  if (!confirm('Delete this comment permanently?')) return;
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/comments/${encodeURIComponent(commentId)}`, {
+      method:  'DELETE',
+      headers: { 'X-Admin-Password': _adminPassword },
+    });
+    if (!res.ok) {
+      alert('Could not delete comment.');
+      return;
+    }
+    adminLoadComments();
+  } catch (err) {
+    alert('Network error, try again.');
+  }
 }
 
 /**
@@ -4920,6 +5283,7 @@ async function _fetchAndRenderTeamedResults(eventId) {
       if (!stageIdx[r.stage_id]) stageIdx[r.stage_id] = {};
       stageIdx[r.stage_id][r.driver_name] = r;
     });
+    _cacheEventStages(eventId, stages);
 
     tbody.innerHTML = results.map((r, i) => {
       const dnf       = r.is_dnf;
@@ -4946,6 +5310,11 @@ async function _fetchAndRenderTeamedResults(eventId) {
                 <tr>${hdrs}</tr>
                 <tr>${cells}</tr>
               </table>
+              <div style="text-align:right;margin-top:6px;">
+                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
+                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
+                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
+              </div>
             </td>
           </tr>`;
       }
@@ -4991,6 +5360,11 @@ async function _fetchAndRenderTeamedResults(eventId) {
                 <div class="slim-badge"><div class="slim-badge-lbl">×CR</div><div class="slim-badge-val">${crStr}</div></div>
               </div>
               ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
+              <div style="text-align:right;margin-top:6px;">
+                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
+                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
+                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
+              </div>
             </td>
           </tr>`;
       }).join('');
@@ -7036,6 +7410,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
+
+<!-- ══════════════════════════════════════════
+     STAGE INTERVIEW MODAL (Session 10) — einmalig im DOM, wird von
+     Themed/Teamed/generischen Club-Ergebnissen gleichermaßen über
+     openInterviewModal(eventId, driverName) angesteuert. Inhalt wird
+     komplett dynamisch von _renderInterviewStep() befüllt.
+══════════════════════════════════════════ -->
+<div id="interview-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+  <div id="interview-modal-box" style="background:var(--black); border:2px solid var(--red); max-width:440px; width:100%; max-height:85vh; overflow-y:auto; padding:16px;">
+    <div id="interview-modal-content"></div>
+  </div>
+</div>
 
 </body>
 </html>
