@@ -598,6 +598,11 @@ textarea.inp-std { resize:vertical; }
 }
 .faq-q:hover { color:var(--red); }
 .faq-arrow { font-size:11px; color:#555; transition:transform .15s; }
+.faq-badge-themed {
+  background:var(--red-dark); color:var(--white); font-size:9px; font-weight:700;
+  padding:3px 7px; border-radius:3px; letter-spacing:1.5px; margin-right:8px;
+  font-family:'Oswald',sans-serif; display:inline-block; vertical-align:middle;
+}
 .faq-card.open .faq-arrow { transform:rotate(90deg); }
 .faq-a {
   display:none; padding:0 12px 12px 12px; font-size:13px; color:#999; line-height:1.65;
@@ -821,7 +826,7 @@ textarea.inp-std { resize:vertical; }
 
   <!-- TITLE BAR -->
   <div class="titlebar">
-    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.5</span></span>
+    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.6</span></span>
   </div>
 
   <!-- MENU BAR — GRF Themed/Teamed haben seit Session 10 bewusst KEINEN
@@ -1631,63 +1636,40 @@ textarea.inp-std { resize:vertical; }
       <div style="color:#555;font-size:12px;">Loading…</div>
     </div>
 
-    <div class="col-hdr" style="margin:16px 6px 0 6px;">FAQ &amp; HANDBOOK</div>
+    <div class="col-hdr" style="margin:16px 6px 0 6px;">GENERAL <span class="col-hdr-right">Applies to all clubs</span></div>
     <div class="faq-box">
 
       <div class="faq-card open" onclick="faqToggle(this)">
-        <div class="faq-q">What's the idea behind GRF Themed? <span class="faq-arrow">▶</span></div>
+        <div class="faq-q">What is GRF? <span class="faq-arrow">▶</span></div>
         <div class="faq-a">
-          <p>GRF Themed combines historic and fictional themes with a car-balanced point system. A fast driver will always be fast — no matter the car. But a consistently well-driven underdog car might just bring a surprise to the podium. Anything can happen in GRF Themed!</p>
+          <p>GRF (Global Rally Fans) is a Discord community hosting around a dozen independent rally clubs — each with its own events, rules, and vibe. GRF Themed and GRF Teamed are two of them, but there are many more. Browse all of them via the <b>Clubs</b> tab.</p>
         </div>
       </div>
 
       <div class="faq-card" onclick="faqToggle(this)">
-        <div class="faq-q">How is a championship structured? <span class="faq-arrow">▶</span></div>
+        <div class="faq-q">What's on a club's page? <span class="faq-arrow">▶</span></div>
         <div class="faq-a">
-          <p>A championship generally lasts <b>3 to 6 weeks</b>, with occasional deviations. Each event lasts exactly one week, starting on GRF Tuesday at 12am (CET) and running until the following Tuesday at 12am.</p>
-          <p>GRF Themed is a closed, Discord-only club. Join the <a href="https://discord.gg/global-rally-fans-817110244547100762" target="_blank" style="color:var(--discord);">GlobalRallyFans Discord</a> and befriend <b>"zephyr1490"</b> on RaceNet to gain access. RaceNet isn't always user-friendly — if your friend request takes longer than expected, ping @zephyr in the #grf-themed channel.</p>
+          <p>Every club (reachable via the <b>Clubs</b> tab) has a <b>Live Results</b> tab showing the latest event — tap any row to see stage-by-stage times. Most clubs also have a <b>Standings</b> tab with the championship table.</p>
+          <p>Unless a club has explicitly set up its own scoring system, all points and standings shown are taken directly from RaceNet's own numbers.</p>
         </div>
       </div>
 
       <div class="faq-card" onclick="faqToggle(this)">
-        <div class="faq-q">How are points calculated? <span class="faq-arrow">▶</span></div>
+        <div class="faq-q">How do club Stats work? <span class="faq-arrow">▶</span></div>
         <div class="faq-a">
-          <p>All cars from the presented class are allowed. Points for rankings (1st–30th) are:</p>
-          <p style="color:var(--gray-light);font-size:12px;line-height:2;">50 – 44 – 40 – 38 – 36 – 34 – 32 – 30 – 28 – 26 – 25 – 24 – 23 – 22 – 21 – 20 – 19 – 18 – 17 – 16 – 15 – 14 – 13 – 12 – 11 – 10 – 9 – 8 – 7 – 6 (30th and following receive 6)</p>
-          <p><b>× the Car Rating (CR)</b> — a factor given to each car based on its power and handling. A CR of 1 signals the best car of a class; a higher CR (up to 2) is given to slower/weaker cars. The CR table for the class is published before each championship. Ranking points are rounded mathematically (x.50 → x+1, x.49 → x).</p>
-          <p><b>DNF:</b> if a driver can't finish the last stage of an event, for whatever reason, the event counts as DNF — worth 2 ranking points (× CR).</p>
-          <p><b>Driving the same car</b> throughout an entire championship earns an additional <b>+50 points</b> (Loyalty Bonus) at the end.</p>
-          <p>Some championships feature one or more <b>challenges</b>, named before the championship starts. Details on any active challenge are announced in the championship structure at the time.</p>
-          <p style="color:#666;font-style:italic;">Example: Colin drives a Subaru Impreza '95 with CR 1.2. He DNFs Monte Carlo (2 × 1.2 → 2 pts), finishes Portugal 3rd (40 × 1.2 = 48 pts), finishes France 5th despite a puncture (36 × 1.2 = 43.2 → 43 pts), and wins Britain (50 × 1.2 = 60 pts). Same car all season: +50. Total: 2 + 48 + 43 + 60 + 50 = 203 points.</p>
+          <p>Every club's Stats tab has three scopes you can switch between:</p>
+          <p><b>Current Championship</b> — four numbers for the club's currently running (or most recently finished) championship: Event Wins (finished 1st overall), Event Podiums (finished top 3 overall), Stage Wins (fastest time on a stage), and Stage Podiums (top 3 time on a stage).</p>
+          <p><b>Championships Overall</b> — who has won the most championships outright, and who has stood on the championship podium (top 3 in the final standings) most often, across the club's entire history.</p>
+          <p><b>Events Overall</b> — the same Event Wins / Event Podiums as above, but summed across every event the club has ever run, not just the current championship.</p>
         </div>
       </div>
 
       <div class="faq-card" onclick="faqToggle(this)">
-        <div class="faq-q">What if I can only join some events? <span class="faq-arrow">▶</span></div>
+        <div class="faq-q">What's the Stage Interview feature? <span class="faq-arrow">▶</span></div>
         <div class="faq-a">
-          <p>Partaking in only selected events is allowed — no penalties are given. The 50-point Loyalty Bonus can still be collected in full as long as at least one event was driven in the same car.</p>
-        </div>
-      </div>
-
-      <div class="faq-card" onclick="faqToggle(this)">
-        <div class="faq-q">How do Car Ratings actually work? <span class="faq-arrow">▶</span></div>
-        <div class="faq-a">
-          <p>Car Ratings may change depending on the specific events in a championship. They're always published before the championship starts and are valid for that specific championship only.</p>
-        </div>
-      </div>
-
-      <div class="faq-card" onclick="faqToggle(this)">
-        <div class="faq-q">What about multi-club and multiclass events? <span class="faq-arrow">▶</span></div>
-        <div class="faq-a">
-          <p>Some championships feature <b>double club</b> or <b>multiclass</b> events, where two clubs/classes run simultaneously. Drivers can choose freely which one to participate in, and are generally allowed to run in both — with points rewarded respectively.</p>
-          <p>How exactly the two results interact can differ from championship to championship — sometimes only the worse of the two counts, sometimes both count fully, sometimes something else entirely. This is announced for the specific championship it applies to, same as with challenges.</p>
-        </div>
-      </div>
-
-      <div class="faq-card" onclick="faqToggle(this)">
-        <div class="faq-q">What's the fair play policy? <span class="faq-arrow">▶</span></div>
-        <div class="faq-a">
-          <p>This club is run by the motto "by fans – for fans". Keep it clean, friendly and fair. Don't use exploits. Only use reasonable cuts (one tire should be on the road at all times).</p>
+          <p>After a stage result appears for you, tap your row in Live Results to expand it, then tap <b>🎙️ Interview</b>. You'll be guided through each stage of the event with an optional comment field — like a post-stage interview. Leave any stage blank to skip it.</p>
+          <p>At the end you'll see a summary of everything you entered, with the option to go back and edit, copy it to your clipboard, or — if your club has Discord posting set up — send it straight to the club's Discord channel.</p>
+          <p><b>You'll need a PIN the first time.</b> PINs aren't self-registered — ask <b>zephyr</b> for yours. This keeps anyone else from posting comments under your name. Forgot your PIN? Just ask zephyr to reset it.</p>
         </div>
       </div>
 
@@ -1705,6 +1687,68 @@ textarea.inp-std { resize:vertical; }
         <div class="faq-a">
           <p>Results sync automatically from RaceNet roughly every 10–15 minutes. If you've just finished a stage and don't see it reflected immediately, give it a few minutes — no need to refresh repeatedly.</p>
           <p><b>Seeing yourself marked as DNF even though you finished?</b> This can happen if the sync ran while you were still out on stage — it sees your times for the early stages but nothing yet for the last one, and (correctly, at that moment) reads that as a DNF. Once the next sync cycle picks up your final stage time, it corrects itself automatically. Just wait for the next cycle rather than worrying — no need to report it.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q">What's the fair play policy? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>GRF is run by the motto "by fans – for fans". Keep it clean, friendly and fair across every club. Don't use exploits. Only use reasonable cuts (one tire should be on the road at all times).</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="col-hdr" style="margin:16px 6px 0 6px;">GRF THEMED <span class="col-hdr-right">Only applies to this club</span></div>
+    <div class="faq-box">
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q"><span class="faq-badge-themed">THEMED</span>What's the idea behind GRF Themed? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>GRF Themed combines historic and fictional themes with a car-balanced point system. A fast driver will always be fast — no matter the car. But a consistently well-driven underdog car might just bring a surprise to the podium. Anything can happen in GRF Themed!</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q"><span class="faq-badge-themed">THEMED</span>How is a championship structured? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>A championship generally lasts <b>3 to 6 weeks</b>, with occasional deviations. Each event lasts exactly one week, starting on GRF Tuesday at 12am (CET) and running until the following Tuesday at 12am.</p>
+          <p>GRF Themed is a closed, Discord-only club. Join the <a href="https://discord.gg/global-rally-fans-817110244547100762" target="_blank" style="color:var(--discord);">GlobalRallyFans Discord</a> and befriend <b>"zephyr1490"</b> on RaceNet to gain access. RaceNet isn't always user-friendly — if your friend request takes longer than expected, ping @zephyr in the #grf-themed channel.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q"><span class="faq-badge-themed">THEMED</span>How are points calculated? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>All cars from the presented class are allowed. Points for rankings (1st–30th) are:</p>
+          <p style="color:var(--gray-light);font-size:12px;line-height:2;">50 – 44 – 40 – 38 – 36 – 34 – 32 – 30 – 28 – 26 – 25 – 24 – 23 – 22 – 21 – 20 – 19 – 18 – 17 – 16 – 15 – 14 – 13 – 12 – 11 – 10 – 9 – 8 – 7 – 6 (30th and following receive 6)</p>
+          <p><b>× the Car Rating (CR)</b> — a factor given to each car based on its power and handling. A CR of 1 signals the best car of a class; a higher CR (up to 2) is given to slower/weaker cars. The CR table for the class is published before each championship. Ranking points are rounded mathematically (x.50 → x+1, x.49 → x).</p>
+          <p><b>DNF:</b> if a driver can't finish the last stage of an event, for whatever reason, the event counts as DNF — worth 2 ranking points (× CR).</p>
+          <p><b>Driving the same car</b> throughout an entire championship earns an additional <b>+50 points</b> (Loyalty Bonus) at the end.</p>
+          <p>Some championships feature one or more <b>challenges</b>, named before the championship starts. Details on any active challenge are announced in the championship structure at the time.</p>
+          <p style="color:#666;font-style:italic;">Example: Colin drives a Subaru Impreza '95 with CR 1.2. He DNFs Monte Carlo (2 × 1.2 → 2 pts), finishes Portugal 3rd (40 × 1.2 = 48 pts), finishes France 5th despite a puncture (36 × 1.2 = 43.2 → 43 pts), and wins Britain (50 × 1.2 = 60 pts). Same car all season: +50. Total: 2 + 48 + 43 + 60 + 50 = 203 points.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q"><span class="faq-badge-themed">THEMED</span>What if I can only join some events? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>Partaking in only selected events is allowed — no penalties are given. The 50-point Loyalty Bonus can still be collected in full as long as at least one event was driven in the same car.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q"><span class="faq-badge-themed">THEMED</span>How do Car Ratings actually work? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>Car Ratings may change depending on the specific events in a championship. They're always published before the championship starts and are valid for that specific championship only.</p>
+        </div>
+      </div>
+
+      <div class="faq-card" onclick="faqToggle(this)">
+        <div class="faq-q"><span class="faq-badge-themed">THEMED</span>What about multi-club and multiclass events? <span class="faq-arrow">▶</span></div>
+        <div class="faq-a">
+          <p>Some championships feature <b>double club</b> or <b>multiclass</b> events, where two clubs/classes run simultaneously. Drivers can choose freely which one to participate in, and are generally allowed to run in both — with points rewarded respectively.</p>
+          <p>How exactly the two results interact can differ from championship to championship — sometimes only the worse of the two counts, sometimes both count fully, sometimes something else entirely. This is announced for the specific championship it applies to, same as with challenges.</p>
         </div>
       </div>
 
@@ -2439,6 +2483,18 @@ textarea.inp-std { resize:vertical; }
 // Admin-UI/DB-Tabelle nötig dafür — ändert sich selten genug, dass ein
 // Code-Eintrag reicht). Neueste ZUERST in der Liste.
 const CHANGELOG = [
+  {
+    version: '1.6',
+    date:    '2026-08-21',
+    label:   'Stats, Standings & Stage Interviews',
+    notes: [
+      'Every club\u2019s Stats tab now has three views: the current championship, championship wins/podiums across a club\u2019s whole history, and event wins/podiums across every event a club has ever run.',
+      'New Standings tab for every club, not just GRF Themed/Teamed.',
+      'New: Stage Interview \u2014 leave an optional comment after each stage, review everything at the end, then copy it or post it straight to your club\u2019s Discord. Needs a one-time PIN from zephyr first time you use it.',
+      'Handbook reorganized: general site-wide info (Stats, Interviews, ELO, sync timing, fair play) is now separate from GRF Themed\u2019s own rules \u2014 needed now that the site covers many clubs, not just Themed.',
+      'Mobile fixes: the on-screen keyboard no longer covers the Next button while commenting, expanded stage times no longer run off the edge of the screen on club pages, and a couple of small tap-target bugs.',
+    ],
+  },
   {
     version: '1.5',
     date:    '2026-08-18',
