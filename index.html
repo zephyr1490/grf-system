@@ -4268,7 +4268,7 @@ async function _fetchAndRenderResults(eventId) {
                 <div class="slim-badge"><div class="slim-badge-lbl">×CR</div><div class="slim-badge-val">${crStr}</div></div>
               </div>
               ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
-              <div style="text-align:right;margin-top:6px;">
+              <div class="slim-detail-extra" style="text-align:right !important;">
                 <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
                   data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
                   onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
@@ -4331,6 +4331,31 @@ function _cacheEventStages(eventId, stages) {
 
 let _interview = null; // { eventId, driverName, pin, stages, comments:{stageId:text}, stepIndex }
 
+/**
+ * Hält das Interview-Modal komplett OBERHALB der Bildschirmtastatur —
+ * `position:fixed; inset:0` allein reicht dafür nicht, weil viele mobile
+ * Browser den Layout-Viewport beim Öffnen der Tastatur NICHT neu
+ * berechnen (die Tastatur legt sich einfach visuell über den unteren
+ * Bildschirmbereich, ohne dass CSS davon erfährt). Die VisualViewport-API
+ * kennt dagegen die tatsächlich sichtbare (nicht von der Tastatur
+ * verdeckte) Fläche live — genau das nutzen wir hier, um Höhe und
+ * Position des Overlays laufend anzupassen, während die Tastatur auf-
+ * oder zuklappt.
+ */
+function _adjustInterviewModalForViewport() {
+  const overlay = $('interview-modal-overlay');
+  const box     = $('interview-modal-box');
+  if (!overlay || !window.visualViewport) return;
+  overlay.style.height = window.visualViewport.height + 'px';
+  overlay.style.top    = window.visualViewport.offsetTop + 'px';
+  // max-height:85vh (im Grund-CSS) bezieht sich auf den VOLLEN Layout-
+  // Viewport, nicht auf den durch die Tastatur verkleinerten sichtbaren
+  // Bereich — ohne diese Zeile könnte die Box trotz korrekt verkleinertem
+  // Overlay immer noch zu groß sein und über den sichtbaren Bereich hinaus
+  // ragen. 32px Rand oben/unten für etwas Luft.
+  if (box) box.style.maxHeight = Math.max(200, window.visualViewport.height - 32) + 'px';
+}
+
 async function openInterviewModal(eventId, driverName) {
   let stages = _eventStagesCache[eventId];
   if (!stages) {
@@ -4362,11 +4387,30 @@ async function openInterviewModal(eventId, driverName) {
   _renderInterviewStep();
   const overlay = $('interview-modal-overlay');
   if (overlay) overlay.style.display = 'flex';
+
+  // Sofort einmal ausrichten (falls die Tastatur von einem vorherigen Feld
+  // noch offen ist) + auf künftiges Auf-/Zuklappen der Tastatur reagieren,
+  // solange das Modal offen ist.
+  _adjustInterviewModalForViewport();
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _adjustInterviewModalForViewport);
+    window.visualViewport.addEventListener('scroll', _adjustInterviewModalForViewport);
+  }
 }
 
 function closeInterviewModal() {
   const overlay = $('interview-modal-overlay');
-  if (overlay) overlay.style.display = 'none';
+  const box     = $('interview-modal-box');
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.style.height  = '';
+    overlay.style.top     = '';
+  }
+  if (box) box.style.maxHeight = '';
+  if (window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', _adjustInterviewModalForViewport);
+    window.visualViewport.removeEventListener('scroll', _adjustInterviewModalForViewport);
+  }
   _interview = null;
 }
 
@@ -5360,7 +5404,7 @@ async function _fetchAndRenderTeamedResults(eventId) {
                 <div class="slim-badge"><div class="slim-badge-lbl">×CR</div><div class="slim-badge-val">${crStr}</div></div>
               </div>
               ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
-              <div style="text-align:right;margin-top:6px;">
+              <div class="slim-detail-extra" style="text-align:right !important;">
                 <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
                   data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
                   onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
