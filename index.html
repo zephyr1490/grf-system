@@ -3447,30 +3447,16 @@ async function loadClubChampionshipStats(clubId, winsId, podiumsId) {
 
   const scoring = CLUB_SCORING_INFO[String(clubId)];
 
-  if (scoring) {
+  // Schneller Pfad: Club OHNE jedes Custom-Scoring — eine einzige DB-
+  // Aggregation über RaceNets eigene Standings für alle Championships.
+  if (!scoring) {
     try {
-      const champs = await sbAll('championships', `select=id&club_id=eq.${encodeURIComponent(clubId)}`);
-      const winsCount    = {};
-      const podiumsCount = {};
-
-      for (const champ of champs) {
-        const results = await sbAll('event_results',
-          `select=driver_name,total_points&championship_id=eq.${encodeURIComponent(champ.id)}`
-        );
-        const totals = {};
-        results.forEach(r => {
-          if (!r.driver_name) return;
-          totals[r.driver_name] = (totals[r.driver_name] || 0) + (r.total_points ?? 0);
-        });
-        const ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-        ranked.forEach(([name], i) => {
-          if (i === 0) winsCount[name]    = (winsCount[name]    || 0) + 1;
-          if (i < 3)   podiumsCount[name] = (podiumsCount[name] || 0) + 1;
-        });
-      }
-
-      renderRankedList(winsId,    Object.entries(winsCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count));
-      renderRankedList(podiumsId, Object.entries(podiumsCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count));
+      const [winsRes, podiumsRes] = await Promise.all([
+        sbRpc('club_championship_wins',    { p_club_id: String(clubId) }),
+        sbRpc('club_championship_podiums', { p_club_id: String(clubId) }),
+      ]);
+      renderRankedList(winsId,    winsRes.map(r => ({ name: r.driver_name, count: Number(r.wins) })));
+      renderRankedList(podiumsId, podiumsRes.map(r => ({ name: r.driver_name, count: Number(r.podiums) })));
     } catch (err) {
       console.error('[loadClubChampionshipStats]', err);
       renderRankedList(winsId, []);
@@ -3479,13 +3465,50 @@ async function loadClubChampionshipStats(clubId, winsId, podiumsId) {
     return;
   }
 
+  // Bug-Fix (Session 10, nach Rückmeldung): Club MIT Custom-Scoring — die
+  // alte Version hat FÜR DEN GANZEN CLUB event_results.total_points
+  // verwendet, sobald überhaupt ein Custom-System existierte. Falsch: das
+  // Custom-System gilt nur für EINE explizit konfigurierte Championship
+  // (scoring.championshipId) — bei jeder ANDEREN Championship desselben
+  // Clubs (auch vergangenen, lange vor dem Custom-System) spiegeln die
+  // total_points einfach den GRF-Standard-Punktetopf wider, NICHT RaceNets
+  // tatsächliche offizielle Platzierung. Jetzt wird pro Championship
+  // einzeln entschieden: nur die konfigurierte Championship nutzt die
+  // eigene Berechnung, jede andere nutzt championship_standings (RaceNets
+  // eigene Platzierung) — exakt wie ein generischer Club.
   try {
-    const [winsRes, podiumsRes] = await Promise.all([
-      sbRpc('club_championship_wins',    { p_club_id: String(clubId) }),
-      sbRpc('club_championship_podiums', { p_club_id: String(clubId) }),
-    ]);
-    renderRankedList(winsId,    winsRes.map(r => ({ name: r.driver_name, count: Number(r.wins) })));
-    renderRankedList(podiumsId, podiumsRes.map(r => ({ name: r.driver_name, count: Number(r.podiums) })));
+    const champs = await sbAll('championships', `select=id&club_id=eq.${encodeURIComponent(clubId)}`);
+    const winsCount    = {};
+    const podiumsCount = {};
+
+    for (const champ of champs) {
+      let ranked; // Fahrernamen, bester zuerst
+
+      if (champ.id === scoring.championshipId) {
+        const results = await sbAll('event_results',
+          `select=driver_name,total_points&championship_id=eq.${encodeURIComponent(champ.id)}`
+        );
+        const totals = {};
+        results.forEach(r => {
+          if (!r.driver_name) return;
+          totals[r.driver_name] = (totals[r.driver_name] || 0) + (r.total_points ?? 0);
+        });
+        ranked = Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([name]) => name);
+      } else {
+        const standings = await sbAll('championship_standings',
+          `select=driver_name,rank&championship_id=eq.${encodeURIComponent(champ.id)}&order=rank.asc`
+        );
+        ranked = standings.map(r => r.driver_name);
+      }
+
+      ranked.forEach((name, i) => {
+        if (i === 0) winsCount[name]    = (winsCount[name]    || 0) + 1;
+        if (i < 3)   podiumsCount[name] = (podiumsCount[name] || 0) + 1;
+      });
+    }
+
+    renderRankedList(winsId,    Object.entries(winsCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count));
+    renderRankedList(podiumsId, Object.entries(podiumsCount).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count));
   } catch (err) {
     console.error('[loadClubChampionshipStats]', err);
     renderRankedList(winsId, []);
