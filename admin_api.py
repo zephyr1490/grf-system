@@ -10,7 +10,8 @@ Environment Variables (Railway):
 ════════════════════════════════════════════════════════════════════════════════
 """
 
-import os, re, hmac, statistics, requests
+import os, re, hmac, secrets, statistics, requests
+from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from functools import wraps
 from racenet_client import RacenetClient
@@ -237,6 +238,213 @@ def stats_pageview():
             print(f"[stats_pageview ERROR] {r.status_code}: {r.text}")
             r.raise_for_status()
         return jsonify({"page_views": new_count})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  STAGE COMMENTS ("Stage-End Interview") — Session 10
+#
+#  /comments/submit und /comments/discord-post sind bewusst OHNE @auth — das
+#  sind die einzigen zwei Endpunkte hier, die normale Website-Besucher direkt
+#  aufrufen sollen, ohne das Admin-Passwort zu kennen. Identitätsschutz läuft
+#  stattdessen über einen separaten, pro Fahrer vergebenen 4-stelligen PIN
+#  (driver_pins-Tabelle) — kein echtes Login, aber verhindert spontanes
+#  Kommentieren unter fremdem Namen. PINs werden AUSSCHLIESSLICH vom Admin
+#  vergeben (kein Self-Signup, s. /admin/pins/generate) — bewusste
+#  Owner-Entscheidung, um Missbrauch von vornherein auszuschließen statt ihn
+#  nur nachträglich zu moderieren.
+#
+#  driver_pins ist NICHT über den anon-Key erreichbar (kein RLS-Grant in der
+#  SQL-Datei) — nur der Service-Role-Key hier im Backend kann die Tabelle
+#  lesen/schreiben. PINs liegen bewusst im Klartext (kleine Community, ~20
+#  Nutzer, Owner-Entscheidung) — die eigentliche Absicherung ist, dass die
+#  Tabelle serverseitig abgeschottet ist, nicht die Verschlüsselung des PINs.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _check_pin(driver_name: str, pin: str) -> bool:
+    """
+    True nur wenn für driver_name ein PIN hinterlegt ist UND er exakt passt.
+    hmac.compare_digest() wie beim Admin-Passwort (s. @auth oben) —
+    verhindert Timing-Angriffe, die den PIN Zeichen für Zeichen über
+    Antwortzeit-Unterschiede ableiten könnten.
+    """
+    rows = sb_get("driver_pins", f"driver_name=eq.{requests.utils.quote(driver_name)}&select=pin&limit=1")
+    if not rows:
+        return False
+    stored_pin = str(rows[0].get("pin", ""))
+    return hmac.compare_digest(str(pin), stored_pin)
+
+
+@app.route("/comments/submit", methods=["POST"])
+def comments_submit():
+    """
+    Legt einen Stage-Kommentar an oder überschreibt den bestehenden — gleicher
+    Fahrer + gleiches Event + gleiche Stage = derselbe Kommentar (editierbar,
+    kein Duplikat). Erfordert einen gültigen, vom Admin vergebenen PIN.
+    """
+    try:
+        body         = request.json or {}
+        driver_name  = (body.get("driver_name") or "").strip()
+        pin          = str(body.get("pin") or "").strip()
+        event_id     = (body.get("event_id") or "").strip()
+        stage_id     = (body.get("stage_id") or "").strip()
+        comment_text = (body.get("comment_text") or "").strip()
+
+        if not all([driver_name, pin, event_id, stage_id, comment_text]):
+            return jsonify({"error": "Missing required field"}), 400
+        if len(comment_text) > 2000:
+            return jsonify({"error": "Comment too long (max 2000 characters)"}), 400
+        if not _check_pin(driver_name, pin):
+            return jsonify({"error": "Invalid PIN"}), 401
+
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/stage_comments?on_conflict=event_id,stage_id,driver_name",
+            headers={**SB, "Prefer": "resolution=merge-duplicates,return=minimal"},
+            json={
+                "event_id":     event_id,
+                "stage_id":     stage_id,
+                "driver_name":  driver_name,
+                "comment_text": comment_text,
+                "updated_at":   datetime.now(timezone.utc).isoformat(),
+            },
+            timeout=10,
+        )
+        if not r.ok:
+            print(f"[comments_submit ERROR] HTTP {r.status_code}: {r.text}")
+        r.raise_for_status()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/comments/discord-post", methods=["POST"])
+def comments_discord_post():
+    """
+    Postet alle Kommentare eines Fahrers zu einem Event als fertig formatierte
+    Nachricht an den Discord-Webhook. DISCORD_WEBHOOK_URL ist eine reine
+    Railway-Umgebungsvariable — steht nie im Code, nie in Supabase.
+    """
+    try:
+        body        = request.json or {}
+        driver_name = (body.get("driver_name") or "").strip()
+        pin         = str(body.get("pin") or "").strip()
+        event_id    = (body.get("event_id") or "").strip()
+
+        if not all([driver_name, pin, event_id]):
+            return jsonify({"error": "Missing required field"}), 400
+        if not _check_pin(driver_name, pin):
+            return jsonify({"error": "Invalid PIN"}), 401
+
+        webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "")
+        if not webhook_url:
+            return jsonify({"error": "Discord webhook not configured"}), 500
+
+        event_rows = sb_get("events", f"id=eq.{requests.utils.quote(event_id)}&select=location,name&limit=1")
+        event_name = "Event"
+        if event_rows:
+            event_name = event_rows[0].get("location") or event_rows[0].get("name") or "Event"
+
+        comments = sb_get(
+            "stage_comments",
+            f"event_id=eq.{requests.utils.quote(event_id)}"
+            f"&driver_name=eq.{requests.utils.quote(driver_name)}"
+            f"&select=stage_id,comment_text"
+        )
+        if not comments:
+            return jsonify({"error": "No comments found for this driver/event"}), 400
+
+        stage_ids   = [c["stage_id"] for c in comments if c.get("stage_id")]
+        stage_qs    = ",".join(requests.utils.quote(s) for s in stage_ids)
+        stages_rows = sb_get("stages", f"id=in.({stage_qs})&select=id,name,stage_number") if stage_ids else []
+        stage_lookup = {s["id"]: s for s in stages_rows}
+
+        def _stage_num(c):
+            return stage_lookup.get(c["stage_id"], {}).get("stage_number", 0) or 0
+
+        lines = [f"🎙️ **Stage Interview — {driver_name}**", f"_{event_name}_", ""]
+        for c in sorted(comments, key=_stage_num):
+            stage = stage_lookup.get(c["stage_id"], {})
+            stage_label = stage.get("name") or f"SS{stage.get('stage_number', '?')}"
+            lines.append(f"**{stage_label}:** {c['comment_text']}")
+        message = "\n".join(lines)
+
+        r = requests.post(webhook_url, json={"content": message}, timeout=10)
+        if not r.ok:
+            print(f"[comments_discord_post ERROR] HTTP {r.status_code}: {r.text}")
+        r.raise_for_status()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/admin/pins/generate", methods=["POST"])
+@auth
+def admin_pins_generate():
+    """
+    Erzeugt (oder ersetzt) den PIN für einen Fahrer und gibt ihn im Klartext
+    zurück, damit der Admin ihn manuell weitergeben kann (z.B. per Discord-
+    DM). Ersetzt einen evtl. schon bestehenden PIN vollständig — dient auch
+    als "PIN vergessen"-Reset, kein separater Reset-Endpoint nötig.
+    """
+    try:
+        body        = request.json or {}
+        driver_name = (body.get("driver_name") or "").strip()
+        if not driver_name:
+            return jsonify({"error": "driver_name required"}), 400
+
+        pin = f"{secrets.randbelow(10000):04d}"
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/driver_pins?on_conflict=driver_name",
+            headers={**SB, "Prefer": "resolution=merge-duplicates,return=minimal"},
+            json={"driver_name": driver_name, "pin": pin},
+            timeout=10,
+        )
+        if not r.ok:
+            print(f"[admin_pins_generate ERROR] HTTP {r.status_code}: {r.text}")
+        r.raise_for_status()
+        return jsonify({"driver_name": driver_name, "pin": pin})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/admin/pins/<driver_name>", methods=["GET"])
+@auth
+def admin_pins_get(driver_name):
+    """Zeigt den aktuell hinterlegten PIN eines Fahrers — fürs erneute
+    Weitergeben, ohne extra einen neuen generieren (und damit den alten
+    ungültig machen) zu müssen."""
+    try:
+        rows = sb_get("driver_pins", f"driver_name=eq.{requests.utils.quote(driver_name)}&select=driver_name,pin&limit=1")
+        if not rows:
+            return jsonify({"error": "No PIN set for this driver"}), 404
+        return jsonify(rows[0])
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/admin/comments", methods=["GET"])
+@auth
+def admin_comments_list():
+    """Listet alle Kommentare (neueste zuerst) für die Moderations-Ansicht im
+    Admin-Panel — z.B. um einen unter fremdem Namen geposteten Kommentar zu
+    finden und zu löschen."""
+    try:
+        rows = sb_get_all("stage_comments", "select=*&order=created_at.desc")
+        return jsonify(rows)
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
+@app.route("/admin/comments/<comment_id>", methods=["DELETE"])
+@auth
+def admin_comments_delete(comment_id):
+    """Löscht einen einzelnen Kommentar (Missbrauch: Fake-Kommentar unter
+    fremdem Namen, unangemessener Inhalt o.ä.)."""
+    try:
+        if not valid_id(comment_id):
+            return jsonify({"error": "Invalid comment id"}), 400
+        sb_delete("stage_comments", f"id=eq.{comment_id}")
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": _err_detail(e)}), 500
 
