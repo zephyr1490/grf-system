@@ -1189,10 +1189,12 @@ textarea.inp-std { resize:vertical; }
               <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="ev-info-status">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val" id="ev-info-start">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val" id="ev-info-end">—</div></div>
-            </div>
-            <div style="margin-top:12px;text-align:right;">
-              <button class="ev-btn active" id="ev-interview-btn" style="font-size:12px;padding:6px 14px;"
-                onclick="openInterviewModal(this.dataset.event)">🎙️ Stage Interview</button>
+              <button class="themed-meta-item" id="ev-interview-btn"
+                style="cursor:pointer;text-align:left;background:var(--red-dark);border-left-color:var(--red-bright);font-family:inherit;margin:0;width:100%;"
+                onclick="openInterviewModal(this.dataset.event)">
+                <div class="tm-lbl" style="color:rgba(255,255,255,0.75);">🎙️</div>
+                <div class="tm-val" style="color:var(--white);">Stage Interview</div>
+              </button>
             </div>
           </div>
         </div>
@@ -1522,10 +1524,12 @@ textarea.inp-std { resize:vertical; }
               <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="teamed-ev-info-status">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val" id="teamed-ev-info-start">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val" id="teamed-ev-info-end">—</div></div>
-            </div>
-            <div style="margin-top:12px;text-align:right;">
-              <button class="ev-btn active" id="teamed-ev-interview-btn" style="font-size:12px;padding:6px 14px;"
-                onclick="openInterviewModal(this.dataset.event)">🎙️ Stage Interview</button>
+              <button class="themed-meta-item" id="teamed-ev-interview-btn"
+                style="cursor:pointer;text-align:left;background:var(--red-dark);border-left-color:var(--red-bright);font-family:inherit;margin:0;width:100%;"
+                onclick="openInterviewModal(this.dataset.event)">
+                <div class="tm-lbl" style="color:rgba(255,255,255,0.75);">🎙️</div>
+                <div class="tm-val" style="color:var(--white);">Stage Interview</div>
+              </button>
             </div>
           </div>
         </div>
