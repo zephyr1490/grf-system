@@ -289,18 +289,54 @@ def _get_webhook_for_club(club_id) -> str:
     return os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 
-def _check_pin(driver_name: str, pin: str) -> bool:
+def _check_pin(driver_name: str, pin: str):
     """
-    True nur wenn für driver_name ein PIN hinterlegt ist UND er exakt passt.
-    hmac.compare_digest() wie beim Admin-Passwort (s. @auth oben) —
-    verhindert Timing-Angriffe, die den PIN Zeichen für Zeichen über
-    Antwortzeit-Unterschiede ableiten könnten.
+    Prüft PIN gegen driver_pins — case-insensitiv beim Namen (ilike statt
+    eq), da der Name jetzt auch frei getippt werden kann (Event-basierter
+    Interview-Einstieg, s. Session 10 Folgeänderung) und nicht mehr
+    garantiert exakt aus einer angeklickten Ergebniszeile stammt.
+    hmac.compare_digest() für den PIN-Vergleich selbst (wie beim Admin-
+    Passwort) — verhindert Timing-Angriffe.
+
+    Gibt bei Erfolg den KANONISCH gespeicherten driver_name zurück (nicht
+    das, was der Aufrufer übergeben hat) — wichtig, damit stage_comments
+    immer mit derselben Schreibweise wie überall sonst auf der Seite
+    gespeichert wird. Bei Misserfolg None.
     """
-    rows = sb_get("driver_pins", f"driver_name=eq.{requests.utils.quote(driver_name)}&select=pin&limit=1")
+    rows = sb_get("driver_pins", f"driver_name=ilike.{requests.utils.quote(driver_name)}&select=driver_name,pin&limit=1")
     if not rows:
-        return False
+        return None
     stored_pin = str(rows[0].get("pin", ""))
-    return hmac.compare_digest(str(pin), stored_pin)
+    if not hmac.compare_digest(str(pin), stored_pin):
+        return None
+    return rows[0]["driver_name"]
+
+
+@app.route("/comments/whoami", methods=["POST"])
+def comments_whoami():
+    """
+    Löst allein aus dem PIN den zugehörigen Fahrernamen auf (Session 10
+    Folgeänderung: Identität läuft jetzt ausschließlich über den PIN,
+    kein separates Namensfeld mehr im Frontend nötig — PIN ist über
+    admin_pins_generate() garantiert eindeutig). Bei Mehrdeutigkeit
+    (theoretisch nur für PINs möglich, die VOR der Eindeutigkeits-
+    Erzwingung vergeben wurden) wird bewusst ein Fehler zurückgegeben,
+    statt irgendeinen der Treffer zu raten.
+    """
+    try:
+        body = request.json or {}
+        pin  = str(body.get("pin") or "").strip()
+        if not pin:
+            return jsonify({"error": "PIN required"}), 400
+
+        rows = sb_get("driver_pins", f"pin=eq.{requests.utils.quote(pin)}&select=driver_name")
+        if not rows:
+            return jsonify({"error": "PIN not recognized"}), 404
+        if len(rows) > 1:
+            return jsonify({"error": "This PIN matches more than one driver — ask zephyr for a fresh PIN"}), 409
+        return jsonify({"driver_name": rows[0]["driver_name"]})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
 
 
 @app.route("/comments/submit", methods=["POST"])
@@ -322,8 +358,10 @@ def comments_submit():
             return jsonify({"error": "Missing required field"}), 400
         if len(comment_text) > 2000:
             return jsonify({"error": "Comment too long (max 2000 characters)"}), 400
-        if not _check_pin(driver_name, pin):
+        canonical_name = _check_pin(driver_name, pin)
+        if not canonical_name:
             return jsonify({"error": "Invalid PIN"}), 401
+        driver_name = canonical_name  # kanonische Schreibweise, nicht die getippte
 
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/stage_comments?on_conflict=event_id,stage_id,driver_name",
@@ -360,8 +398,10 @@ def comments_discord_post():
 
         if not all([driver_name, pin, event_id]):
             return jsonify({"error": "Missing required field"}), 400
-        if not _check_pin(driver_name, pin):
+        canonical_name = _check_pin(driver_name, pin)
+        if not canonical_name:
             return jsonify({"error": "Invalid PIN"}), 401
+        driver_name = canonical_name  # kanonische Schreibweise, nicht die getippte
 
         club_id     = _resolve_club_id_for_event(event_id)
         webhook_url = _get_webhook_for_club(club_id)
@@ -434,6 +474,11 @@ def admin_pins_generate():
     zurück, damit der Admin ihn manuell weitergeben kann (z.B. per Discord-
     DM). Ersetzt einen evtl. schon bestehenden PIN vollständig — dient auch
     als "PIN vergessen"-Reset, kein separater Reset-Endpoint nötig.
+
+    PIN wird über ALLE Fahrer hinweg eindeutig erzwungen (Session 10
+    Folgeänderung): die Interview-Identität läuft jetzt ausschließlich über
+    den PIN selbst (kein Namensfeld mehr im Frontend), daher MUSS
+    Eindeutigkeit garantiert sein, nicht nur wahrscheinlich.
     """
     try:
         body        = request.json or {}
@@ -443,7 +488,13 @@ def admin_pins_generate():
 
         driver_name = _resolve_canonical_driver_name(driver_name)
 
+        existing_pins = {r.get("pin") for r in sb_get_all("driver_pins", "select=pin")}
         pin = f"{secrets.randbelow(10000):04d}"
+        attempts = 0
+        while pin in existing_pins and attempts < 50:
+            pin = f"{secrets.randbelow(10000):04d}"
+            attempts += 1
+
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/driver_pins?on_conflict=driver_name",
             headers={**SB, "Prefer": "resolution=merge-duplicates,return=minimal"},

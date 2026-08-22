@@ -1190,6 +1190,10 @@ textarea.inp-std { resize:vertical; }
               <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val" id="ev-info-start">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val" id="ev-info-end">—</div></div>
             </div>
+            <div style="margin-top:12px;text-align:right;">
+              <button class="ev-btn active" id="ev-interview-btn" style="font-size:12px;padding:6px 14px;"
+                onclick="openInterviewModal(this.dataset.event)">🎙️ Stage Interview</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1518,6 +1522,10 @@ textarea.inp-std { resize:vertical; }
               <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="teamed-ev-info-status">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Starts</div><div class="tm-val" id="teamed-ev-info-start">—</div></div>
               <div class="themed-meta-item"><div class="tm-lbl">Ends</div><div class="tm-val" id="teamed-ev-info-end">—</div></div>
+            </div>
+            <div style="margin-top:12px;text-align:right;">
+              <button class="ev-btn active" id="teamed-ev-interview-btn" style="font-size:12px;padding:6px 14px;"
+                onclick="openInterviewModal(this.dataset.event)">🎙️ Stage Interview</button>
             </div>
           </div>
         </div>
@@ -3916,11 +3924,6 @@ async function _fetchAndRenderClubResults(eventId) {
                 <tr>${hdrs}</tr>
                 <tr>${cells}</tr>
               </table>
-              <div style="text-align:right;margin-top:6px;">
-                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
-                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
-                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
-              </div>
             </td>
           </tr>`;
       }
@@ -3955,11 +3958,6 @@ async function _fetchAndRenderClubResults(eventId) {
         <tr class="slim-detail-row" id="${rowId}">
           <td colspan="4">
             ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
-            <div class="slim-detail-extra" style="text-align:right !important;">
-              <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
-                data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
-                onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
-            </div>
           </td>
         </tr>`;
     }).join('');
@@ -4048,15 +4046,6 @@ async function loadHome() {
   const homePage = $('page-home');
   if (!homePage || !homePage.classList.contains('active')) return;
 
-  // Egress-Optimierung: der 60s-Auto-Reload lief bisher auch weiter, wenn
-  // der Browser-Tab im Hintergrund/minimiert war (die active-Klasse bleibt
-  // ja gesetzt, das prüft nur, welcher Tab INNERHALB der App sichtbar ist,
-  // nicht ob das Browserfenster selbst gerade angeschaut wird) — kostet
-  // Egress für Updates, die ohnehin niemand sieht. document.hidden fängt
-  // das ab; beim Zurückkommen (visibilitychange-Listener unten) wird sofort
-  // neu geladen statt bis zu 60s auf den nächsten Tick zu warten.
-  if (document.hidden) return;
-
   try {
     // Home lädt nur noch, was tatsächlich noch angezeigt wird: "Most
     // Improved" (braucht drivers + 7-Tage-Delta) und die Club-Directory.
@@ -4065,11 +4054,8 @@ async function loadHome() {
     // oben) — die zugehörigen Fetches (sbCount('drivers') fürs Members-
     // Kachel, activeDrivers-Filter fürs Top10) sind mitentfernt, kein
     // unnötiger Datentransfer mehr für nicht mehr existierende Elemente.
-    // select=name,elo statt select=* (Egress-Optimierung) — renderMostImproved()
-    // liest ausschließlich d.name und d.elo (s. unten), der Rest der
-    // Fahrer-Spalten wird auf Home gar nicht angezeigt.
     const [drivers, deltaMap] = await Promise.all([
-      sbAll('drivers', 'select=name,elo&starts=gte.20&order=elo.desc'),
+      sbAll('drivers', 'select=*&starts=gte.20&order=elo.desc'),
       fetchEloDeltaMap(7),
     ]);
 
@@ -4276,6 +4262,8 @@ async function _fetchAndRenderResults(eventId) {
   }
   setText('ev-info-start',     fmtDate(ev.start_date));
   setText('ev-info-end',       fmtDate(ev.end_date));
+  const evInterviewBtn = $('ev-interview-btn');
+  if (evInterviewBtn) evInterviewBtn.dataset.event = eventId;
 
   const evStatusMap = { 0: 'Upcoming', 1: '● Live', 2: 'Finished' };
   const evStatusEl  = $('ev-info-status');
@@ -4339,11 +4327,6 @@ async function _fetchAndRenderResults(eventId) {
                 <tr>${hdrs}</tr>
                 <tr>${cells}</tr>
               </table>
-              <div style="text-align:right;margin-top:6px;">
-                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
-                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
-                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
-              </div>
             </td>
           </tr>`;
       }
@@ -4391,11 +4374,6 @@ async function _fetchAndRenderResults(eventId) {
                 <div class="slim-badge"><div class="slim-badge-lbl">×CR</div><div class="slim-badge-val">${crStr}</div></div>
               </div>
               ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
-              <div class="slim-detail-extra" style="text-align:right !important;">
-                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
-                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
-                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
-              </div>
             </td>
           </tr>`;
       }).join('');
@@ -4442,7 +4420,9 @@ function toggleSlimDetail(rowId) {
 //    Identitätsschutz über einen einmalig vom Admin vergebenen PIN (kein
 //    Login) — s. admin_api.py /comments/submit, /comments/discord-post.
 //    Ein einziges, wiederverwendbares Modal für Themed/Teamed/generische
-//    Clubs, angesteuert über openInterviewModal(eventId, driverName).
+//    Themed/Teamed, angesteuert über openInterviewModal(eventId). Nur für
+//    Themed/Teamed (Owner-Entscheidung) — generische Clubs haben das
+//    Feature nicht.
 
 let _eventStagesCache = {}; // eventId -> [{id, name, stage_number}], vermeidet wiederholte Fetches
 
@@ -4479,7 +4459,7 @@ function _adjustInterviewModalForViewport() {
   if (box) box.style.maxHeight = Math.max(200, window.visualViewport.height - 32) + 'px';
 }
 
-async function openInterviewModal(eventId, driverName) {
+async function openInterviewModal(eventId) {
   let stages = _eventStagesCache[eventId];
   if (!stages) {
     try {
@@ -4494,19 +4474,12 @@ async function openInterviewModal(eventId, driverName) {
     return;
   }
 
-  // Bestehende eigene Kommentare vorab laden — stage_comments ist öffentlich
-  // lesbar (anon SELECT), dafür ist kein PIN nötig, nur fürs spätere
-  // Speichern/Ändern.
-  let existing = [];
-  try {
-    existing = await sbAll('stage_comments',
-      `select=stage_id,comment_text&event_id=eq.${eventId}&driver_name=eq.${encodeURIComponent(driverName)}`);
-  } catch (err) { /* startet einfach leer, kein Blocker */ }
-
-  const comments = {};
-  existing.forEach(c => { comments[c.stage_id] = c.comment_text; });
-
-  _interview = { eventId, driverName, pin: '', stages, comments, stepIndex: -1 }; // -1 = PIN-Schritt zuerst
+  // Identität läuft ausschließlich über den PIN (Session 10
+  // Folgeänderung) — PINs sind über admin_pins_generate() eindeutig
+  // erzwungen, ein Namensfeld ist daher unnötig. Name wird nach PIN-
+  // Eingabe über /comments/whoami aufgelöst und angezeigt (s.
+  // _interviewSubmitPin()), Fahrername ist bis dahin unbekannt.
+  _interview = { eventId, driverName: '', pin: '', stages, comments: {}, stepIndex: -1 };
 
   // Bug-Fix: Overlay MUSS zuerst sichtbar gemacht werden — .focus() auf ein
   // Element innerhalb eines noch display:none-Elternelements ist in jedem
@@ -4548,16 +4521,16 @@ function _renderInterviewStep() {
   const content = $('interview-modal-content');
   if (!content || !_interview) return;
 
-  // Schritt -1: PIN einmalig abfragen, gilt für die ganze Sitzung (alle
-  // Stages + finaler Discord-Post), damit man nicht pro Stage neu eintippen
-  // muss.
+  // Schritt -1: nur noch PIN abfragen — Identität wird daraus allein
+  // aufgelöst (s. _interviewSubmitPin(), ruft /comments/whoami auf). Gilt
+  // für die ganze Sitzung (alle Stages + finaler Discord-Post), damit man
+  // nicht pro Stage neu eintippen muss.
   if (_interview.stepIndex === -1) {
     content.innerHTML = `
       <div class="col-hdr" style="margin:-16px -16px 12px -16px;">🎙️ STAGE INTERVIEW
         <span class="col-hdr-right" style="cursor:pointer;" onclick="closeInterviewModal()">✕</span>
       </div>
-      <p style="font-size:13px;color:var(--gray-light);margin-bottom:10px;">Interview as <strong style="color:var(--white);">${escapeHtml(_interview.driverName)}</strong></p>
-      <p style="font-size:12px;color:#888;margin-bottom:6px;">Enter your PIN to continue (ask an admin if you don't have one yet).</p>
+      <p style="font-size:12px;color:#888;margin-bottom:6px;">Enter your PIN to continue (ask zephyr if you don't have one yet).</p>
       <input type="text" inputmode="numeric" maxlength="4" id="interview-pin-input" placeholder="PIN"
         style="width:100%;padding:10px;background:#111;border:1px solid #333;color:var(--white);font-size:16px;letter-spacing:4px;text-align:center;margin-bottom:10px;box-sizing:border-box;">
       <div id="interview-status" style="margin-bottom:8px;font-size:12px;color:var(--red);"></div>
@@ -4603,12 +4576,13 @@ function _renderInterviewStep() {
     <div class="col-hdr" style="margin:-16px -16px 12px -16px;">🎙️ SS${stage.stage_number}${stage.name ? ' — ' + escapeHtml(stage.name) : ''}
       <span class="col-hdr-right" style="cursor:pointer;" onclick="closeInterviewModal()">✕</span>
     </div>
+    <p style="font-size:12px;color:var(--gray-light);margin-bottom:8px;">Interview as <strong style="color:var(--white);">${escapeHtml(_interview.driverName)}</strong> — <span style="color:var(--red);cursor:pointer;text-decoration:underline;" onclick="_interviewStep(-${_interview.stepIndex + 1})">not you?</span></p>
     <p style="font-size:11px;color:#888;margin-bottom:6px;">Step ${_interview.stepIndex + 1} of ${_interview.stages.length} — leave blank to skip this stage.</p>
     <textarea id="interview-comment-input" rows="4" placeholder="How did that stage go?"
       style="width:100%;padding:10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;margin-bottom:10px;resize:vertical;box-sizing:border-box;">${escapeHtml(existingText)}</textarea>
     <div id="interview-status" style="margin-bottom:8px;font-size:12px;color:var(--red);"></div>
     <div style="display:flex;gap:8px;">
-      ${_interview.stepIndex > 0 ? `<button class="ev-btn" onclick="_interviewStep(-1)">← Back</button>` : ''}
+      <button class="ev-btn" onclick="_interviewStep(-1)">← Back</button>
       <button class="ev-btn active" style="flex:1;" onclick="_interviewStep(1)">${isLast ? 'Finish →' : 'Next →'}</button>
     </div>
   `;
@@ -4621,7 +4595,7 @@ function _renderInterviewStep() {
   }
 }
 
-function _interviewSubmitPin() {
+async function _interviewSubmitPin() {
   const input = $('interview-pin-input');
   const pin = input ? input.value.trim() : '';
   if (!pin) {
@@ -4629,6 +4603,43 @@ function _interviewSubmitPin() {
     return;
   }
   _interview.pin = pin;
+
+  // Namen ausschließlich aus dem PIN auflösen (PINs sind eindeutig, s.
+  // admin_pins_generate()) — kein separates Namensfeld mehr nötig. Wird
+  // der aufgelöste Name danach durchgängig angezeigt (bei jeder Stage),
+  // damit man sofort merkt, falls man aus Versehen den falschen PIN
+  // getippt hat ("kein Hoppala").
+  setText('interview-status', 'Checking PIN…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/comments/whoami`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ pin }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setText('interview-status', '⚠ ' + (data.error || 'PIN not recognized.'));
+      return;
+    }
+    _interview.driverName = data.driver_name;
+  } catch (err) {
+    setText('interview-status', '⚠ Network error, try again.');
+    return;
+  }
+
+  // Bestehende eigene Kommentare jetzt nachladen (Name steht jetzt final
+  // fest) — öffentlich lesbar, kein PIN nötig zum Lesen selbst, nur fürs
+  // spätere Speichern/Ändern. Lokalen State vorher zurücksetzen: falls
+  // zuvor (versehentlich falscher PIN, dann "not you?") schon Text für
+  // eine ANDERE Identität eingetippt, aber nicht gespeichert wurde, darf
+  // der hier nicht vermischt weiterleben.
+  _interview.comments = {};
+  try {
+    const existing = await sbAll('stage_comments',
+      `select=stage_id,comment_text&event_id=eq.${_interview.eventId}&driver_name=eq.${encodeURIComponent(_interview.driverName)}`);
+    existing.forEach(c => { _interview.comments[c.stage_id] = c.comment_text; });
+  } catch (err) { /* startet einfach leer, kein Blocker */ }
+
   _interview.stepIndex = 0;
   _renderInterviewStep();
 }
@@ -5525,6 +5536,8 @@ async function _fetchAndRenderTeamedResults(eventId) {
   }
   setText('teamed-ev-info-start',     fmtDate(ev.start_date));
   setText('teamed-ev-info-end',       fmtDate(ev.end_date));
+  const teamedEvInterviewBtn = $('teamed-ev-interview-btn');
+  if (teamedEvInterviewBtn) teamedEvInterviewBtn.dataset.event = eventId;
 
   const evStatusMap = { 0: 'Upcoming', 1: '● Live', 2: 'Finished' };
   const evStatusEl  = $('teamed-ev-info-status');
@@ -5584,11 +5597,6 @@ async function _fetchAndRenderTeamedResults(eventId) {
                 <tr>${hdrs}</tr>
                 <tr>${cells}</tr>
               </table>
-              <div style="text-align:right;margin-top:6px;">
-                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
-                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
-                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
-              </div>
             </td>
           </tr>`;
       }
@@ -5634,11 +5642,6 @@ async function _fetchAndRenderTeamedResults(eventId) {
                 <div class="slim-badge"><div class="slim-badge-lbl">×CR</div><div class="slim-badge-val">${crStr}</div></div>
               </div>
               ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
-              <div class="slim-detail-extra" style="text-align:right !important;">
-                <button class="ev-btn" style="font-size:11px;padding:4px 10px;"
-                  data-event="${escapeHtml(eventId)}" data-driver="${escapeHtml(r.driver_name)}"
-                  onclick="event.stopPropagation(); openInterviewModal(this.dataset.event, this.dataset.driver)">🎙️ Interview</button>
-              </div>
             </td>
           </tr>`;
       }).join('');
@@ -5962,8 +5965,8 @@ async function loadTeamedChallenges() {
 
 let _eloData        = [];
 let _eloDataOverall = [];   // Snapshot der Overall-Ansicht, siehe loadEloData()
-let _eloResultsAll  = [];   // event_results-Cache (inkl. vehicle), Package 4 — lazy, s. eloLoadTrackView()
-let _eloEventsAll   = [];   // events-Cache (inkl. location), Package 4 — lazy, s. eloLoadTrackView()
+let _eloResultsAll  = [];   // event_results-Cache (inkl. vehicle), Package 4
+let _eloEventsAll   = [];   // events-Cache (inkl. location), Package 4
 let _eloStateJson   = null; // geparster elo_state.state_json, einmalig gecacht
 // ── Package 4: Track-View Lookups ──────────────────────────────
 // Fahrzeug → Antrieb/Ära und Location → Surface. Eingebettet statt
@@ -5984,78 +5987,79 @@ let _eloClubFilter  = 'all';
 let _eloIncludeAll  = false; // true sobald einmal explizit "alle inkl. Provisional" nachgeladen wurde
 let _eloTotalDriverCount = null; // echte Gesamtzahl (sbCount), unabhängig vom aktuell geladenen Filter
 
-// Egress-Optimierung (Session X): loadEloData() lud bisher bei JEDEM
-// ELO-Tab-Aufruf zusätzlich zu den Fahrern auch komplett event_results
-// (25k+ Zeilen) UND events, nur um clientseitig bestPos/DNF-Rate/Club-
-// Zugehörigkeit auszurechnen — das war der mit Abstand größte Egress-
-// Posten im ganzen System. Fix: diese drei Kennzahlen kommen jetzt fertig
-// aggregiert aus driver_overview_stats() (Postgres-Funktion, ein Aufruf,
-// eine Zeile pro Fahrer statt 25k Rohzeilen). event_results/events selbst
-// werden NICHT mehr hier geladen — die Track-Ansichten (Era/Surface/
-// Drivetrain), die die rohen Zeilen (inkl. vehicle) brauchen, laden sie
-// jetzt bei Bedarf selbst nach, s. eloLoadTrackView(). Wer nie einen
-// Track-Filter anklickt, zieht diese 25k Zeilen jetzt nie mehr.
-//
-// Zusätzlich: kurzer TTL-Cache, damit wiederholtes Hin-und-Herwechseln
-// zum ELO-Tab nicht jedes Mal neu fetcht — Daten ändern sich nicht
-// sekündlich, ein frischer Ladevorgang alle ELO_DATA_CACHE_TTL_MS reicht.
-// _eloDataLoadedAt = 0 erzwingt beim allerersten Aufruf immer einen echten
-// Fetch.
-let _eloDataLoadedAt = 0;
-const ELO_DATA_CACHE_TTL_MS = 90_000; // 90s — Kompromiss Frische vs. Egress
-
-async function loadEloData(includeAll = false, { forceRefresh = false } = {}) {
-  // Cache-Hit: gleiche includeAll-Anfrage, noch innerhalb der TTL, und wir
-  // haben schon Daten -> direkt aus dem Speicher neu rendern statt fetchen.
-  const cacheIsFresh = !forceRefresh
-    && _eloIncludeAll === includeAll
-    && _eloDataOverall.length > 0
-    && (Date.now() - _eloDataLoadedAt) < ELO_DATA_CACHE_TTL_MS;
-  if (cacheIsFresh) {
-    eloLoadTrackView(_eloTrack); // rendert aus _eloDataOverall/_eloData, kein Fetch
-    return;
-  }
-
+async function loadEloData(includeAll = false) {
   try {
     // Owner-Feedback (Session 3): Seite lud standardmäßig ALLE 2221 Fahrer,
     // davon sind nur die etablierten (Established, 20+ Starts) tatsächlich relevant —
     // spürbar langsam. Fix: standardmäßig server-seitig auf Established
     // filtern (starts=gte.20); nur wenn der Owner explizit "All Drivers"
     // klickt (includeAll=true), wird zusätzlich der komplette Rest
-    // nachgeladen.
-    // select=* -> explizite Spaltenliste (Egress-Optimierung): nur noch
-    // genau die Felder, die eloRender()/renderMostImproved() etc.
-    // tatsächlich lesen, statt aller (auch künftiger) Spalten der Tabelle.
-    const DRIVER_FIELDS = 'name,country,elo,elo_mu,elo_sigma,elo_k_sigma,starts,wins,elo_provisional,elo_inactive';
-    const driverParams = includeAll
-      ? `select=${DRIVER_FIELDS}&order=elo.desc`
-      : `select=${DRIVER_FIELDS}&starts=gte.20&order=elo.desc`;
-    const [totalCount, drivers, overviewStats, deltaMap, clubs] = await Promise.all([
+    // nachgeladen. event_results bleibt bewusst ein Vollständig-Fetch (wird
+    // für bestPos/DNF-Rate/Club-Zuordnung der jeweils geladenen Fahrer
+    // gebraucht) — die eigentliche Bremse war die 2221-Zeilen-Fahrertabelle
+    // + das Rendern von 2221 statt nur der etablierten DOM-Zeilen, nicht diese Abfrage.
+    const driverParams = includeAll ? 'select=*&order=elo.desc' : 'select=*&starts=gte.20&order=elo.desc';
+    const [totalCount, drivers, allResults, deltaMap, clubs, events] = await Promise.all([
       _eloTotalDriverCount != null ? Promise.resolve(_eloTotalDriverCount) : sbCount('drivers'),
       sbAll('drivers', driverParams),
-      // Ersetzt den früheren vollständigen event_results/events-Fetch (s.
-      // Kommentar oben) — eine Zeile pro Fahrer statt 25k+ Rohzeilen.
-      sbRpc('driver_overview_stats'),
+      // vehicle + location zusätzlich mitgeladen (keine Extra-Anfrage!) —
+      // werden für die Track-Ansichten (Package 4) gebraucht, um
+      // Ergebniszeilen per CATEGORY_LOOKUP_* auf Era/Antrieb/Surface zu
+      // klassifizieren. Arrays werden unten gecacht, damit eloLoadTrackView()
+      // dieselben Daten wiederverwendet statt event_results/events ein
+      // zweites Mal zu laden.
+      sbAll('event_results', 'select=driver_name,event_id,position,is_dnf,vehicle'),
       fetchEloDeltaMap(7),
-      sb('clubs', 'select=club_id,name'),
+      sb('clubs',      'select=club_id,name'),
+      sbAll('events',  'select=id,club_id,location'),
     ]);
     _eloIncludeAll = includeAll;
-    _eloDataLoadedAt = Date.now();
     if (totalCount != null) _eloTotalDriverCount = totalCount;
+    _eloResultsAll = allResults;
+    _eloEventsAll  = events;
 
     if (!drivers.length) return;
 
-    // driver_overview_stats() liefert best_position/dnf_total/dnf_count/
-    // club_ids fertig aggregiert, eine Zeile pro Fahrer — nach Namen
-    // indizieren für O(1)-Zugriff beim Zusammenbauen von _eloData unten.
-    const statsByDriver = {};
-    overviewStats.forEach(s => { statsByDriver[s.driver_name] = s; });
+    // Beste Platzierung pro Fahrer
+    const bestPos = {};
+    allResults.forEach(r => {
+      const n = r.driver_name;
+      if (!n || r.is_dnf) return;
+      const pos = parseInt(r.position) || 999;
+      if (!bestPos[n] || pos < bestPos[n]) bestPos[n] = pos;
+    });
+
+    // DNF-Rate pro Fahrer (Zuverlässigkeit) — aus denselben, schon geladenen
+    // event_results-Daten, kein zusätzlicher Query nötig. is_dnf kommt 1:1
+    // aus RaceNet; ein DNF zählt hier als eigenes Event, unabhängig davon
+    // wie es im ELO-System gewichtet wird (dort: schlechtester Platz im Feld).
+    const dnfStats = {};
+    allResults.forEach(r => {
+      const n = r.driver_name;
+      if (!n) return;
+      const s = dnfStats[n] || (dnfStats[n] = { total: 0, dnf: 0 });
+      s.total++;
+      if (r.is_dnf) s.dnf++;
+    });
+
+    // Fahrer-Club-Zugehörigkeit: club_id liegt bei euch am Event, nicht am
+    // Fahrer direkt (ein Fahrer kann in mehreren Clubs fahren) — deshalb
+    // über event_results.event_id -> events.club_id ermitteln, nicht über
+    // ein direktes drivers.club-Feld (das gibt's bei euch strukturell nicht).
+    const eventClubMap = {};
+    events.forEach(e => { eventClubMap[e.id] = e.club_id; });
+    const driverClubs = {};
+    allResults.forEach(r => {
+      const n = r.driver_name;
+      const clubId = eventClubMap[r.event_id];
+      if (!n || !clubId) return;
+      (driverClubs[n] || (driverClubs[n] = new Set())).add(String(clubId));
+    });
     const clubNameById = {};
     clubs.forEach(c => { clubNameById[String(c.club_id)] = c.name; });
 
     _eloData = drivers.map(d => {
       const past = deltaMap[d.name];
-      const s = statsByDriver[d.name] || null;
       return {
       name:        d.name,
       country:     d.country || '',
@@ -6066,9 +6070,9 @@ async function loadEloData(includeAll = false, { forceRefresh = false } = {}) {
       delta:       (past != null && d.elo != null) ? Math.round(d.elo - past) : null,
       starts:      d.starts || 0,
       wins:        d.wins || 0,
-      best:        s && s.best_position != null ? `P${s.best_position}` : '—',
-      dnfRate:     s && s.dnf_total ? (100 * s.dnf_count / s.dnf_total) : null,
-      clubIds:     s && s.club_ids ? s.club_ids : [],
+      best:        bestPos[d.name] && bestPos[d.name] < 999 ? `P${bestPos[d.name]}` : '—',
+      dnfRate:     dnfStats[d.name] ? (100 * dnfStats[d.name].dnf / dnfStats[d.name].total) : null,
+      clubIds:     driverClubs[d.name] ? [...driverClubs[d.name]] : [],
       established: (d.starts || 0) >= 20,
       provisional: !!d.elo_provisional,
       inactive:    !!d.elo_inactive,
@@ -6162,13 +6166,11 @@ async function _getEloState() {
  * KEINE Umrechnung nötig (mu-Basis ist 1500, entspricht direkt der
  * angezeigten ELO-Zahl — bestätigt).
  *
- * Wins/Best/DNF%/Starts werden aus event_results (inkl. vehicle) + events
- * (inkl. location) neu berechnet, gefiltert auf die zu diesem Track
- * passenden Zeilen (Owner-Vorgabe im Briefing). Diese beiden (großen)
- * Tabellen werden NICHT mehr in loadEloData() vorgeladen (Egress-
- * Optimierung) — beim ersten Track-Klick pro Session einmalig hier
- * nachgeladen und danach in _eloResultsAll/_eloEventsAll gecacht, sodass
- * weitere Track-Wechsel keinen erneuten Fetch auslösen.
+ * Wins/Best/DNF%/Starts werden aus den schon geladenen event_results
+ * (inkl. vehicle) + events (inkl. location) neu berechnet, gefiltert auf
+ * die zu diesem Track passenden Zeilen (Owner-Vorgabe im Briefing) — nutzt
+ * die in loadEloData() gecachten Arrays wieder, KEIN zusätzlicher Fetch
+ * dieser (großen) Tabellen.
  */
 /**
  * Übersetzt den ungeprefixten Frontend-Track-Namen ('historic', 'gravel',
@@ -6201,23 +6203,6 @@ async function eloLoadTrackView(track) {
     const state    = await _getEloState();
     const ratings  = state?.ratings?.[trackStateKey(track)] || {};
     const isVehicleTrack = ['historic', 'modern', 'AWD', 'RWD', 'FWD'].includes(track);
-
-    // Egress-Optimierung: die vollen event_results/events-Tabellen (inkl.
-    // vehicle/location, für die Era/Surface/Drivetrain-Klassifizierung)
-    // werden NICHT mehr in loadEloData() bei jedem ELO-Tab-Aufruf mitgeladen
-    // — die "Overall"-Ansicht braucht sie gar nicht (s. driver_overview_
-    // stats()-RPC dort). Erst wer wirklich einen Track-Filter anklickt,
-    // löst diesen (dann einmaligen, pro Session gecachten) Nachladevorgang
-    // hier aus. _eloResultsAll.length als Cache-Indikator: einmal geladen,
-    // bleibt es für alle weiteren Track-Wechsel in dieser Session gültig.
-    if (!_eloResultsAll.length) {
-      const [results, events] = await Promise.all([
-        sbAll('event_results', 'select=driver_name,event_id,position,is_dnf,vehicle'),
-        sbAll('events', 'select=id,club_id,location'),
-      ]);
-      _eloResultsAll = results;
-      _eloEventsAll  = events;
-    }
 
     const evLocById = {};
     _eloEventsAll.forEach(e => { evLocById[e.id] = e.location; });
@@ -7682,14 +7667,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadHome();
   setInterval(loadHome, RELOAD_INTERVAL_MS);
 
-  // Tab war im Hintergrund (s. document.hidden-Check in loadHome()) und
-  // wird jetzt wieder sichtbar -> sofort neu laden statt bis zu 60s auf den
-  // nächsten Interval-Tick zu warten (loadHome() selbst ist ohnehin ein
-  // No-Op, falls Home gar nicht die aktive Seite ist).
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) loadHome();
-  });
-
   // Changelog ist statisch (kein Supabase-Fetch nötig) — einmal beim Laden rendern
   renderChangelog();
 
@@ -7714,7 +7691,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ══════════════════════════════════════════
      STAGE INTERVIEW MODAL (Session 10) — einmalig im DOM, wird von
      Themed/Teamed/generischen Club-Ergebnissen gleichermaßen über
-     openInterviewModal(eventId, driverName) angesteuert. Inhalt wird
+     openInterviewModal(eventId) angesteuert (Themed/Teamed only). Inhalt wird
      komplett dynamisch von _renderInterviewStep() befüllt.
 ══════════════════════════════════════════ -->
 <div id="interview-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; padding:16px;">
