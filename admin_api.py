@@ -488,7 +488,7 @@ def admin_pins_generate():
 
         driver_name = _resolve_canonical_driver_name(driver_name)
 
-        existing_pins = {r.get("pin") for r in sb_get_all("driver_pins", "select=pin")}
+        existing_pins = {r.get("pin") for r in sb_get_all("driver_pins", "select=pin&order=driver_name.asc")}
         pin = f"{secrets.randbelow(10000):04d}"
         attempts = 0
         while pin in existing_pins and attempts < 50:
