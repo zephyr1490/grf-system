@@ -5998,72 +5998,48 @@ async function loadEloData(includeAll = false) {
     // spürbar langsam. Fix: standardmäßig server-seitig auf Established
     // filtern (starts=gte.20); nur wenn der Owner explizit "All Drivers"
     // klickt (includeAll=true), wird zusätzlich der komplette Rest
-    // nachgeladen. event_results bleibt bewusst ein Vollständig-Fetch (wird
-    // für bestPos/DNF-Rate/Club-Zuordnung der jeweils geladenen Fahrer
-    // gebraucht) — die eigentliche Bremse war die 2221-Zeilen-Fahrertabelle
-    // + das Rendern von 2221 statt nur der etablierten DOM-Zeilen, nicht diese Abfrage.
+    // nachgeladen.
+    //
+    // Egress-Fix (Session 10, Owner-Meldung ~160MB/Tag): beste Platzierung/
+    // DNF-Rate/Club-Zugehörigkeit kamen bisher aus einem KOMPLETTEN,
+    // unbegrenzten event_results-Fetch, der bei JEDEM Besuch dieser Seite
+    // live im Browser neu berechnet wurde — bei mittlerweile weit über
+    // hunderttausend Ergebniszeilen (Multi-Club-Historie) ein sehr großer,
+    // wiederholter Download. Diese drei Zahlen ändern sich naturgemäß
+    // selten und sind nicht "live-relevant" (Owner-Einschätzung) — kommen
+    // jetzt aus driver_stats_summary, einmal täglich im Backend berechnet
+    // (s. admin_api.py _maybe_refresh_driver_stats_summary(), läuft
+    // innerhalb des ohnehin alle 10 Min laufenden /elo/update, aber intern
+    // auf einmal-pro-Tag gegated). Eine Zeile pro Fahrer statt jede
+    // einzelne Ergebniszeile — Größenordnungen kleiner.
+    //
+    // _eloResultsAll/_eloEventsAll (für die Track-Ansichten Era/Surface/
+    // Drivetrain) sind jetzt VOLLSTÄNDIG lazy, s. _getEloResultsAndEvents()
+    // weiter unten — nicht mehr Teil dieses Standard-Fetches, da die
+    // meisten Besucher nie eine Track-Ansicht anklicken.
     const driverParams = includeAll ? 'select=*&order=elo.desc' : 'select=*&starts=gte.20&order=elo.desc';
-    const [totalCount, drivers, allResults, deltaMap, clubs, events] = await Promise.all([
+    const [totalCount, drivers, statsSummary, deltaMap, clubs] = await Promise.all([
       _eloTotalDriverCount != null ? Promise.resolve(_eloTotalDriverCount) : sbCount('drivers'),
       sbAll('drivers', driverParams),
-      // vehicle + location zusätzlich mitgeladen (keine Extra-Anfrage!) —
-      // werden für die Track-Ansichten (Package 4) gebraucht, um
-      // Ergebniszeilen per CATEGORY_LOOKUP_* auf Era/Antrieb/Surface zu
-      // klassifizieren. Arrays werden unten gecacht, damit eloLoadTrackView()
-      // dieselben Daten wiederverwendet statt event_results/events ein
-      // zweites Mal zu laden.
-      sbAll('event_results', 'select=driver_name,event_id,position,is_dnf,vehicle'),
+      sbAll('driver_stats_summary', 'select=driver_name,best_position,dnf_count,total_starts,club_ids'),
       fetchEloDeltaMap(7),
       sb('clubs',      'select=club_id,name'),
-      sbAll('events',  'select=id,club_id,location'),
     ]);
     _eloIncludeAll = includeAll;
     if (totalCount != null) _eloTotalDriverCount = totalCount;
-    _eloResultsAll = allResults;
-    _eloEventsAll  = events;
 
     if (!drivers.length) return;
 
-    // Beste Platzierung pro Fahrer
-    const bestPos = {};
-    allResults.forEach(r => {
-      const n = r.driver_name;
-      if (!n || r.is_dnf) return;
-      const pos = parseInt(r.position) || 999;
-      if (!bestPos[n] || pos < bestPos[n]) bestPos[n] = pos;
-    });
+    const statsByName = {};
+    statsSummary.forEach(s => { statsByName[s.driver_name] = s; });
 
-    // DNF-Rate pro Fahrer (Zuverlässigkeit) — aus denselben, schon geladenen
-    // event_results-Daten, kein zusätzlicher Query nötig. is_dnf kommt 1:1
-    // aus RaceNet; ein DNF zählt hier als eigenes Event, unabhängig davon
-    // wie es im ELO-System gewichtet wird (dort: schlechtester Platz im Feld).
-    const dnfStats = {};
-    allResults.forEach(r => {
-      const n = r.driver_name;
-      if (!n) return;
-      const s = dnfStats[n] || (dnfStats[n] = { total: 0, dnf: 0 });
-      s.total++;
-      if (r.is_dnf) s.dnf++;
-    });
-
-    // Fahrer-Club-Zugehörigkeit: club_id liegt bei euch am Event, nicht am
-    // Fahrer direkt (ein Fahrer kann in mehreren Clubs fahren) — deshalb
-    // über event_results.event_id -> events.club_id ermitteln, nicht über
-    // ein direktes drivers.club-Feld (das gibt's bei euch strukturell nicht).
-    const eventClubMap = {};
-    events.forEach(e => { eventClubMap[e.id] = e.club_id; });
-    const driverClubs = {};
-    allResults.forEach(r => {
-      const n = r.driver_name;
-      const clubId = eventClubMap[r.event_id];
-      if (!n || !clubId) return;
-      (driverClubs[n] || (driverClubs[n] = new Set())).add(String(clubId));
-    });
     const clubNameById = {};
     clubs.forEach(c => { clubNameById[String(c.club_id)] = c.name; });
 
     _eloData = drivers.map(d => {
       const past = deltaMap[d.name];
+      const stat = statsByName[d.name] || {};
+      const clubIds = (stat.club_ids || '').split(',').filter(Boolean);
       return {
       name:        d.name,
       country:     d.country || '',
@@ -6074,9 +6050,9 @@ async function loadEloData(includeAll = false) {
       delta:       (past != null && d.elo != null) ? Math.round(d.elo - past) : null,
       starts:      d.starts || 0,
       wins:        d.wins || 0,
-      best:        bestPos[d.name] && bestPos[d.name] < 999 ? `P${bestPos[d.name]}` : '—',
-      dnfRate:     dnfStats[d.name] ? (100 * dnfStats[d.name].dnf / dnfStats[d.name].total) : null,
-      clubIds:     driverClubs[d.name] ? [...driverClubs[d.name]] : [],
+      best:        stat.best_position != null ? `P${stat.best_position}` : '—',
+      dnfRate:     stat.total_starts ? (100 * stat.dnf_count / stat.total_starts) : null,
+      clubIds:     clubIds,
       established: (d.starts || 0) >= 20,
       provisional: !!d.elo_provisional,
       inactive:    !!d.elo_inactive,
@@ -6161,6 +6137,23 @@ async function _getEloState() {
   return _eloStateJson;
 }
 
+let _eloVehicleMap = null; // "event_id|driver_name" -> vehicle, einmalig gecacht
+
+/**
+ * Lädt eine (event_id, driver_name) -> vehicle Zuordnung — separat von
+ * loadEloData()s Standard-Fetch (Egress-Fix, Session 10), weil "vehicle"
+ * nur für die fahrzeugbasierten Track-Ansichten (Era/Drivetrain) gebraucht
+ * wird, nie für Overall oder Surface. Wird nur aufgerufen, wenn tatsächlich
+ * eine solche Track-Ansicht angeklickt wird, danach für die Sitzung gecacht.
+ */
+async function _getEloVehicleMap() {
+  if (_eloVehicleMap) return _eloVehicleMap;
+  const rows = await sbAll('event_results', 'select=driver_name,event_id,vehicle');
+  _eloVehicleMap = {};
+  rows.forEach(r => { _eloVehicleMap[r.event_id + '|' + r.driver_name] = r.vehicle; });
+  return _eloVehicleMap;
+}
+
 /**
  * Lädt die Daten für einen Track (Era/Surface/Drivetrain) und rendert sie
  * über die bestehende eloRender()-Pipeline (identisches Datenformat wie
@@ -6193,6 +6186,27 @@ function trackStateKey(track) {
   return track;
 }
 
+/**
+ * Lädt event_results (ohne vehicle, s. _getEloVehicleMap) + events —
+ * ausschließlich für die Track-Ansichten (Era/Surface/Drivetrain)
+ * gebraucht, NICHT für die normale Overall-Ansicht (die kommt seit dem
+ * Egress-Fix, Session 10, aus driver_stats_summary). Komplett lazy +
+ * gecacht — die meisten Besucher klicken nie eine Track-Ansicht an, dann
+ * fällt dieser Fetch komplett weg.
+ */
+async function _getEloResultsAndEvents() {
+  if (_eloResultsAll.length || _eloEventsAll.length) {
+    return { results: _eloResultsAll, events: _eloEventsAll };
+  }
+  const [allResults, events] = await Promise.all([
+    sbAll('event_results', 'select=driver_name,event_id,position,is_dnf'),
+    sbAll('events',        'select=id,club_id,location'),
+  ]);
+  _eloResultsAll = allResults;
+  _eloEventsAll  = events;
+  return { results: allResults, events };
+}
+
 async function eloLoadTrackView(track) {
   if (track === 'overall') {
     _eloData = _eloDataOverall;
@@ -6204,6 +6218,7 @@ async function eloLoadTrackView(track) {
   setHTML('elo-full-slim-tbody', emptyRow(6, 'LOADING…', `Computing "${track}" ratings…`));
 
   try {
+    await _getEloResultsAndEvents();
     const state    = await _getEloState();
     const ratings  = state?.ratings?.[trackStateKey(track)] || {};
     const isVehicleTrack = ['historic', 'modern', 'AWD', 'RWD', 'FWD'].includes(track);
@@ -6211,9 +6226,16 @@ async function eloLoadTrackView(track) {
     const evLocById = {};
     _eloEventsAll.forEach(e => { evLocById[e.id] = e.location; });
 
+    // "vehicle" ist bewusst NICHT Teil des Standard-event_results-Fetches
+    // in loadEloData() mehr (Egress-Fix, Session 10) — nur fahrzeugbasierte
+    // Tracks (Era/Drivetrain) brauchen es überhaupt, Surface-Tracks nicht.
+    // Separater, gecachter Nachlade-Schritt, nur wenn wirklich gebraucht.
+    const vehicleMap = isVehicleTrack ? await _getEloVehicleMap() : null;
+
     const matchesTrack = (r) => {
       if (isVehicleTrack) {
-        const info = CATEGORY_LOOKUP_VEHICLES[r.vehicle];
+        const vehicle = vehicleMap[r.event_id + '|' + r.driver_name];
+        const info = CATEGORY_LOOKUP_VEHICLES[vehicle];
         return !!info && (info.era === track || info.drivetrain === track);
       }
       return CATEGORY_LOOKUP_SURFACE[evLocById[r.event_id]] === track;

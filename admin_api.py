@@ -1604,6 +1604,66 @@ def elo_clubs():
 
 # ── ELO UPDATE ───────────────────────────────────────────────────────────────
 
+def _maybe_refresh_driver_stats_summary(log):
+    """
+    Berechnet beste Platzierung / DNF-Rate / Club-Zugehörigkeit pro Fahrer
+    neu und schreibt sie in driver_stats_summary — aber NUR, wenn das heute
+    noch nicht passiert ist (Egress-Fix, Session 10, nach Owner-Meldung
+    ~160MB/Tag Gesamt-Egress: diese Zahlen wurden bisher bei JEDEM
+    ELO-Rankings-Seitenbesuch live aus der kompletten, unbegrenzten
+    event_results-Historie im Frontend berechnet — der eigentliche Hebel
+    ist nicht "weniger Daten pro Abruf", sondern "ein Abruf pro Tag statt
+    ein Abruf pro Website-Besuch").
+
+    Bewusst ALLE event_results (kein 90-Tage-Fenster wie beim normalen
+    Delta-Sync weiter oben in elo_update()) — "beste Platzierung
+    jemals"/"DNF-Rate insgesamt"/"je gefahrene Clubs" sollen die komplette
+    Fahrer-Historie widerspiegeln, nicht nur die letzten 90 Tage. Läuft
+    trotzdem nur 1x/Tag, nicht bei jedem der alle-10-Minuten-Sync-Läufe.
+    """
+    existing = sb_get("driver_stats_summary", "select=updated_at&order=updated_at.desc&limit=1")
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    if existing and str(existing[0].get("updated_at", ""))[:10] == today_str:
+        log("Driver stats summary already refreshed today, skipping.")
+        return
+
+    log("Refreshing driver stats summary (once-daily, full history scan)...")
+    all_results = sb_get_all("event_results", "select=driver_name,event_id,position,is_dnf")
+    all_events  = sb_get_all("events", "select=id,club_id")
+    event_club  = {e["id"]: e.get("club_id") for e in all_events}
+
+    stats = {}
+    for r in all_results:
+        name = r.get("driver_name")
+        if not name:
+            continue
+        s = stats.setdefault(name, {"best": None, "dnf": 0, "total": 0, "clubs": set()})
+        s["total"] += 1
+        if r.get("is_dnf"):
+            s["dnf"] += 1
+        else:
+            pos = r.get("position")
+            if pos is not None and (s["best"] is None or pos < s["best"]):
+                s["best"] = pos
+        club_id = event_club.get(r.get("event_id"))
+        if club_id:
+            s["clubs"].add(str(club_id))
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    rows = [{
+        "driver_name":   name,
+        "best_position": s["best"],
+        "dnf_count":     s["dnf"],
+        "total_starts":  s["total"],
+        "club_ids":      ",".join(sorted(s["clubs"])),
+        "updated_at":    now_iso,
+    } for name, s in stats.items()]
+
+    if rows:
+        sb_upsert_all("driver_stats_summary", rows, on_conflict="driver_name")
+    log(f"Driver stats summary refreshed: {len(rows)} driver(s).")
+
+
 @app.route("/elo/update", methods=["POST"])
 @auth
 def elo_update():
@@ -1981,6 +2041,11 @@ def elo_update():
         ]
         sb_upsert_all("elo_history", history_rows, on_conflict="driver_name,snapshot_date")
         log(f"ELO history snapshot written: {len(history_rows)} drivers, date={today_str}")
+
+        # Egress-Fix (Session 10): beste Platzierung/DNF-Rate/Club-
+        # Zugehörigkeit werden hier mit erledigt statt live im Frontend —
+        # intern selbst wieder auf einmal-pro-Tag gegated, s. Funktion oben.
+        _maybe_refresh_driver_stats_summary(log)
 
         log(f"✓ ELO update complete. {drivers_updated} drivers updated.")
         return jsonify({"ok": True, "log": log_lines, "drivers": drivers_updated})
