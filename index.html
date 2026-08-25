@@ -3459,8 +3459,8 @@ async function showClubDetail(clubId, initialTab = 'results') {
     subnav.innerHTML = `
       <div class="sub-tab" data-tab="results" onclick="showClubDetailTab('results',this)">Live Results</div>
       <div class="sub-tab" data-tab="standings" onclick="showClubDetailTab('standings',this)">Standings</div>
-      ${scoring ? `<div class="sub-tab" data-tab="rules" onclick="showClubDetailTab('rules',this)">Rules</div>` : ''}
       <div class="sub-tab" data-tab="stats" onclick="showClubDetailTab('stats',this)">Stats</div>
+      ${scoring ? `<div class="sub-tab" data-tab="rules" onclick="showClubDetailTab('rules',this)">Rules</div>` : ''}
     `;
   }
 
