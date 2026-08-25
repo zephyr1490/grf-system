@@ -53,7 +53,7 @@ import sys
 import os
 import time
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1171,6 +1171,20 @@ def main():
     # neu dazugekommene, ohne Code-Änderung). force_reset bleibt False (Delta-
     # Update); der einmalige volle Rebuild läuft weiterhin manuell über Admin
     # (Checkbox "alle Clubs" + Force-Reset-Toggle, siehe elo/update im Admin-Tab).
+    if not test_mode:
+        # "Last synced"-Kachel im Frontend-Footer (Session 10) — reiner
+        # Zeitstempel, wann der Sync zuletzt tatsächlich durchgelaufen ist.
+        # Bewusst HIER (Datensync selbst fertig, bevor der ELO-Update-
+        # Trigger unten läuft) statt danach — soll widerspiegeln, wann GRFs
+        # eigene Daten zuletzt von RaceNet geholt wurden, nicht wann die
+        # ELO-Neuberechnung fertig war.
+        try:
+            db.upsert("system_config",
+                      {"key": "last_sync_at", "value": datetime.now(timezone.utc).isoformat()},
+                      on_conflict="key")
+        except Exception as ex:
+            log(f"  ⚠ Could not write last_sync_at: {ex}")
+
     # Wiederverwendet dieselbe club_ids-Liste vom Sync-Loop oben (Zeile ~700) —
     # kein zweiter get_active_clubs()-Call nötig, RaceNet-Aufrufe sparen.
     if not test_mode:

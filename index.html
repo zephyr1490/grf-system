@@ -459,7 +459,7 @@ body::after {
   background:var(--black);
   border-top:2px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
   padding:6px 8px;
-  display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;
+  display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;
 }
 .sb-panel {
   border:1px solid; border-color:var(--bd) var(--bl) var(--bl) var(--bd);
@@ -2459,10 +2459,8 @@ textarea.inp-std { resize:vertical; }
 
   <!-- STATUS BAR -->
   <div class="statusbar">
-    <div class="sb-panel"><div class="led lg"></div> Supabase: OK</div>
-    <div class="sb-panel"><div class="led lg"></div> RaceNet: OK</div>
-    <div class="sb-panel"><div class="led lr"></div> Event Active</div>
-    <div class="sb-panel"><div class="led ly"></div> Entries Open</div>
+    <div class="sb-panel"><div class="led" id="sb-live-led"></div> <span id="sb-live-text">— clubs live</span></div>
+    <div class="sb-panel"><span id="sb-sync-text">Last synced: —</span></div>
     <div class="clock-box" id="clock"><span id="clock-date"></span><span id="clock-time">00:00</span></div>
     <div class="views-box"><span class="views-lbl">VIEWS</span><span id="page-views">—</span></div>
   </div>
@@ -3099,6 +3097,60 @@ function computeClubStatus(events, today) {
   if (events.some(e => e.status === 1)) return 'active';
   if (events.some(e => e.status === 0 && e.start_date && e.start_date >= today)) return 'upcoming';
   return 'idle';
+}
+
+/**
+ * Globale Fußleisten-Statuskacheln (Session 10, Nachfolger der vier
+ * funktionslosen Deko-Kacheln "Supabase/RaceNet/Event Active/Entries
+ * Open"): "X clubs live now" + "Last synced". Läuft auf JEDER Seite (die
+ * Leiste ist global), nicht nur auf Home/Clubs — nutzt _clubDirectory
+ * wieder, falls die durch einen Home/Clubs-Besuch in dieser Sitzung schon
+ * befüllt wurde, sonst ein eigener, leichter Fetch.
+ */
+async function loadStatusBar() {
+  try {
+    let clubs = _clubDirectory;
+    if (!clubs.length) {
+      const today = new Date().toISOString().split('T')[0];
+      const [clubRows, events] = await Promise.all([
+        sbAll('clubs',  'select=club_id,name&order=name.asc'),
+        sbAll('events', 'select=club_id,status,start_date'),
+      ]);
+      const eventsByClub = groupEventsByClub(events);
+      clubs = clubRows.map(c => {
+        const cid = String(c.club_id);
+        return { club_id: cid, name: c.name || `Club ${cid}`, status: computeClubStatus(eventsByClub[cid] || [], today) };
+      });
+    }
+
+    const liveCount = clubs.filter(c => c.status === 'active').length;
+    setText('sb-live-text', `${liveCount} of ${clubs.length} clubs live`);
+    const liveLed = $('sb-live-led');
+    // Rot-blinkend für "live" (dieselbe Farbkonvention wie das LIVE-Badge
+    // oben rechts im Titelbalken), ruhiges Grün wenn gerade nichts läuft.
+    if (liveLed) liveLed.className = 'led ' + (liveCount > 0 ? 'lr' : 'lg');
+  } catch (err) {
+    console.error('[loadStatusBar clubs]', err);
+    setText('sb-live-text', '— clubs live');
+  }
+
+  try {
+    const rows = await sb('system_config', 'key=eq.last_sync_at&select=value');
+    setText('sb-sync-text', 'Last synced: ' + (rows.length ? formatRelativeTime(new Date(rows[0].value)) : '—'));
+  } catch (err) {
+    console.error('[loadStatusBar sync]', err);
+    setText('sb-sync-text', 'Last synced: —');
+  }
+}
+
+/** "vor X Min/Std/Tagen" — grob gerundet, keine Sekundengenauigkeit nötig. */
+function formatRelativeTime(date) {
+  const diffMin = Math.round((Date.now() - date.getTime()) / 60000);
+  if (diffMin < 1)  return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24)  return `${diffHr}h ago`;
+  return `${Math.round(diffHr / 24)}d ago`;
 }
 
 /**
@@ -7679,6 +7731,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Countdown starten
   setInterval(_tickCountdown, 1000);
+
+  // Status-Fußleiste ("X clubs live", "Last synced") — läuft auf jeder
+  // Seite, unabhängig von Home/Clubs. Periodisch nachladen, damit "Last
+  // synced" und "clubs live" auch ohne Seiten-Reload aktuell bleiben.
+  loadStatusBar();
+  setInterval(loadStatusBar, 60000);
 
   // Router: falls die Seite mit einem Hash geöffnet wurde (Deep-Link, z.B.
   // aus Discord), gleich den richtigen Tab anzeigen statt immer auf Home
