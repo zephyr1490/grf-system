@@ -554,6 +554,36 @@ def admin_pins_delete(driver_name):
         return jsonify({"error": _err_detail(e)}), 500
 
 
+@app.route("/admin/clubs/narrative", methods=["POST"])
+@auth
+def admin_clubs_set_narrative():
+    """
+    Setzt (oder löscht, bei leerem Text) das club-eigene, von der aktuellen
+    Championship unabhängige Beschreibungs-Narrativ. Wird im Hero als
+    Fallback verwendet, wenn die gerade aktive Championship selbst kein
+    narrative gesetzt hat.
+    """
+    try:
+        body      = request.json or {}
+        club_id   = (body.get("club_id") or "").strip()
+        narrative = (body.get("narrative") or "").strip()
+        if not club_id:
+            return jsonify({"error": "club_id required"}), 400
+
+        r = requests.patch(
+            f"{SUPABASE_URL}/rest/v1/clubs?club_id=eq.{requests.utils.quote(club_id)}",
+            headers={**SB, "Prefer": "return=minimal"},
+            json={"narrative": narrative},
+            timeout=10,
+        )
+        if not r.ok:
+            print(f"[admin_clubs_set_narrative ERROR] HTTP {r.status_code}: {r.text}")
+        r.raise_for_status()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
 @app.route("/admin/webhooks", methods=["GET"])
 @auth
 def admin_webhooks_list():

@@ -872,6 +872,40 @@ def sync_championship_standings(db: SupabaseClient, client, club_id: str, champ_
         log(f"    🏆 Standings synced: {len(rows)} driver(s)")
 
 
+def _fill_season_numbers(db: SupabaseClient, club_id: str, log):
+    """
+    Setzt season_number automatisch für Championships eines Clubs, wo noch
+    keine manuell gesetzt wurde: älteste Championship = Season 1,
+    aufsteigend nach start_date. Bereits gesetzte Werte (egal ob vom Admin
+    manuell oder aus einem früheren Lauf dieser Funktion) werden NIE
+    überschrieben — die Funktion befüllt ausschließlich echte NULL-Werte.
+
+    Bewusst pro Club einzeln aufgerufen (nicht global über alle Clubs
+    hinweg) — die Nummerierung ist club-relativ, nicht club-übergreifend.
+    """
+    champs = db.select_all(
+        "championships",
+        f"club_id=eq.{club_id}&select=id,name,season_number,start_date&order=start_date.asc"
+    )
+    if not champs:
+        return
+
+    updates = []
+    for i, c in enumerate(champs, start=1):
+        if c.get("season_number") is None:
+            # "name" wird unverändert mitgeschickt (nicht nur id+season_number)
+            # — championships.name ist NOT NULL ohne Default; ein Upsert ohne
+            # dieses Feld würde am Insert-Versuch scheitern, selbst wenn die
+            # Zeile längst existiert und eigentlich nur ein UPDATE passieren
+            # soll (Postgres prüft NOT-NULL-Constraints vor der Conflict-
+            # Auflösung).
+            updates.append({"id": c["id"], "name": c.get("name"), "season_number": i})
+
+    if updates:
+        db.upsert_all("championships", updates, on_conflict="id")
+        log(f"  🔢 Season numbers filled: {len(updates)} championship(s)")
+
+
 def sync_championship(db: SupabaseClient, client,
                       club_id: str, champ: dict,
                       test: bool = False, force_stage_reload: bool = False):
@@ -1150,6 +1184,18 @@ def main():
             n = sync_championship(db, client, club_id, current,
                               test=test_mode, force_stage_reload=force_stages)
             total_synced += (n or 0)
+
+        # Season-Nummern automatisch auffüllen (Session 10, Owner-Wunsch):
+        # älteste Championship eines Clubs = Season 1, aufsteigend nach
+        # start_date. Überschreibt NIE einen bereits gesetzten Wert (auch
+        # nicht bei --full) — nur dort befüllt, wo season_number aktuell
+        # NULL ist, damit ein manuell im Admin-Panel gesetzter Wert
+        # garantiert erhalten bleibt.
+        if not test_mode:
+            try:
+                _fill_season_numbers(db, club_id, log)
+            except Exception as ex:
+                log(f"  ⚠ Could not fill season numbers: {ex}")
 
     print()
     print("=" * 60)

@@ -969,7 +969,6 @@ textarea.inp-std { resize:vertical; }
            editierbar im Admin-Panel unter "Narratives" (dort bereits
            club-unabhängig, keine Änderung dafür nötig gewesen). -->
       <div class="themed-hero" id="cd-champ-hero">
-        <div class="themed-eyebrow">// <span id="cd-champ-club-name">—</span> — SEASON <span id="cd-champ-season">—</span> //</div>
         <div class="themed-champ-name" id="cd-champ-name">—</div>
         <div class="themed-narrative" id="cd-champ-narrative"></div>
         <div class="themed-meta">
@@ -1139,7 +1138,6 @@ textarea.inp-std { resize:vertical; }
 
     <!-- CHAMPIONSHIP HERO -->
     <div class="themed-hero">
-      <div class="themed-eyebrow">// GRF THEMED — SEASON <span id="champ-season">—</span> //</div>
       <div class="themed-champ-name" id="champ-name">—</div>
       <div class="themed-narrative" id="champ-narrative">
         —
@@ -1533,7 +1531,6 @@ textarea.inp-std { resize:vertical; }
 
     <!-- CHAMPIONSHIP HERO -->
     <div class="themed-hero">
-      <div class="themed-eyebrow">// GRF TEAMED — SEASON <span id="teamed-champ-season">—</span> //</div>
       <div class="themed-champ-name" id="teamed-champ-name">—</div>
       <div class="themed-narrative" id="teamed-champ-narrative">
         —
@@ -2316,6 +2313,31 @@ textarea.inp-std { resize:vertical; }
           <div class="col-hdr" style="margin-bottom:0;">NARRATIVES — CHAMPIONSHIP &amp; EVENT TEXT</div>
         </div>
         <div style="background:var(--black); padding:16px 20px; display:flex; flex-direction:column; gap:16px;">
+
+          <!-- Club narrative (Session 10) — dauerhaft, unabhängig von der
+               aktuellen Championship. Hero fällt darauf zurück, wenn die
+               aktive Championship selbst kein narrative hat. -->
+          <div style="background:#1a1a1a; border:1px solid #252729; padding:14px;">
+            <div style="font-family:'Oswald',sans-serif; font-size:12px; color:var(--red); letter-spacing:2px; margin-bottom:10px;">CLUB NARRATIVE <span style="color:#666;letter-spacing:0;font-family:var(--ui-font);font-size:11px;">— dauerhaft, unabhängig von der aktuellen Championship</span></div>
+            <div style="display:grid; grid-template-columns:220px 1fr; gap:12px; align-items:start;">
+              <div>
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">CLUB</label>
+                <select id="nav-club" onchange="navLoadClub()" style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:5px 8px; outline:none; margin-bottom:8px;">
+                  <option value="">— select —</option>
+                </select>
+                <button onclick="navSaveClub()"
+                  style="width:100%; background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:7px; cursor:pointer;">
+                  SAVE NARRATIVE
+                </button>
+                <div id="nav-club-status" style="font-size:11px; color:#555; margin-top:6px; min-height:16px;"></div>
+              </div>
+              <div>
+                <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">NARRATIVE TEXT</label>
+                <textarea id="nav-club-text" rows="4" placeholder="Club description shown on the website (fallback if the current championship has none)…"
+                  style="width:100%; background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:13px; padding:6px 8px; outline:none; resize:vertical;"></textarea>
+              </div>
+            </div>
+          </div>
 
           <!-- Championship narrative -->
           <div style="background:#1a1a1a; border:1px solid #252729; padding:14px;">
@@ -3487,8 +3509,22 @@ async function loadClubHero(clubId) {
 
   const cached = _clubDirectory.find(c => c.club_id === String(clubId));
   const clubName = cached ? cached.name : `Club ${clubId}`;
-  setText('cd-champ-club-name', clubName.toUpperCase());
+  // Titel zeigt jetzt den Club-Namen statt dem generischen RaceNet-
+  // Championship-Namen ("Championship" für praktisch jede Championship,
+  // nicht aussagekräftig — Owner-Meldung Session 10).
+  setText('cd-champ-name',     clubName.toUpperCase());
   setText('cd-champ-club-val', clubName);
+
+  // Club-Narrative vorab laden — unabhängig davon, ob überhaupt eine
+  // Championship existiert (Owner-Wunsch: dauerhafte Club-Beschreibung,
+  // die auch ohne aktive Championship im Hero steht).
+  let clubNarrative = '';
+  try {
+    const clubRows = await sb('clubs', `select=narrative&club_id=eq.${clubId}`);
+    if (clubRows.length) clubNarrative = clubRows[0].narrative || '';
+  } catch (err) { /* bleibt leer, kein Blocker */ }
+
+  heroEl.style.display = '';
 
   try {
     let champ = null;
@@ -3506,17 +3542,25 @@ async function loadClubHero(clubId) {
       const found = await sb('championships', `select=*&club_id=eq.${clubId}&limit=1`);
       if (found.length) champ = found[0];
     }
+
+    // Ohne jede Championship: Hero bleibt trotzdem sichtbar (Name +
+    // Club-Narrative), nur die championship-spezifischen Meta-Felder
+    // bleiben leer statt komplett zu verschwinden.
     if (!champ) {
-      heroEl.style.display = 'none';
+      setText('cd-champ-season-val', '—');
+      setText('cd-champ-rounds', '—');
+      setText('cd-champ-current-round', '—');
+      setText('cd-champ-status', '—');
+      const narElEmpty = $('cd-champ-narrative');
+      if (narElEmpty) narElEmpty.textContent = clubNarrative;
       return;
     }
-    heroEl.style.display = '';
 
-    setText('cd-champ-name',       champ.name || '—');
-    setText('cd-champ-season',     champ.season_number || '—');
     setText('cd-champ-season-val', champ.season_number || '—');
+    // Narrative: Championship-eigenes hat Vorrang, fällt sonst auf das
+    // dauerhafte Club-Narrative zurück (Session 10, Owner-Wunsch).
     const narEl = $('cd-champ-narrative');
-    if (narEl) narEl.textContent = champ.narrative || '';
+    if (narEl) narEl.textContent = champ.narrative || clubNarrative;
 
     const evs = await sb('events', `select=*&championship_id=eq.${champ.id}&order=round_number.asc`);
     setText('cd-champ-rounds', evs.length || '—');
@@ -3548,7 +3592,6 @@ async function loadClubHero(clubId) {
       : '—');
   } catch (err) {
     console.error('[loadClubHero]', err);
-    heroEl.style.display = 'none';
   }
 }
 
@@ -4366,12 +4409,22 @@ async function loadThemedResults() {
 
     _themedChampId = champ.id;
 
-    // 2. Championship Hero befüllen
-    setText('champ-name',     champ.name || '—');
-    setText('champ-season',   champ.season_number || '—');
+    // 2. Championship Hero befüllen — Titel zeigt jetzt den Club-Namen
+    // statt dem generischen RaceNet-Championship-Namen ("Championship" für
+    // fast alle, war nicht aussagekräftig, Owner-Meldung Session 10).
+    setText('champ-name',     'GRF THEMED');
     setText('champ-season-val', champ.season_number || '—');
+    // Narrative: Championship-eigenes hat Vorrang, fällt sonst auf das
+    // dauerhafte Club-Narrative zurück (Session 10, Owner-Wunsch).
+    let narrativeText = champ.narrative || '';
+    if (!narrativeText) {
+      try {
+        const clubRows = await sb('clubs', 'select=narrative&club_id=eq.23799');
+        if (clubRows.length) narrativeText = clubRows[0].narrative || '';
+      } catch (err) { /* bleibt leer, kein Blocker */ }
+    }
     const narEl = $('champ-narrative');
-    if (narEl) narEl.textContent = champ.narrative || '';
+    if (narEl) narEl.textContent = narrativeText;
 
     // 3. Alle Events dieser Championship laden, sortiert nach round_number
     const evs = await sb('events',
@@ -5643,12 +5696,20 @@ async function loadTeamedResults() {
 
     _teamedChampId = champ.id;
 
-    // 2. Championship Hero befüllen
-    setText('teamed-champ-name',     champ.name || '—');
-    setText('teamed-champ-season',   champ.season_number || '—');
+    // 2. Championship Hero befüllen — Titel zeigt jetzt den Club-Namen
+    // statt dem generischen RaceNet-Championship-Namen (Owner-Meldung
+    // Session 10, analog zu Themed).
+    setText('teamed-champ-name',     'GRF TEAMED');
     setText('teamed-champ-season-val', champ.season_number || '—');
+    let teamedNarrativeText = champ.narrative || '';
+    if (!teamedNarrativeText) {
+      try {
+        const clubRows = await sb('clubs', 'select=narrative&club_id=eq.39230');
+        if (clubRows.length) teamedNarrativeText = clubRows[0].narrative || '';
+      } catch (err) { /* bleibt leer, kein Blocker */ }
+    }
     const narEl = $('teamed-champ-narrative');
-    if (narEl) narEl.textContent = champ.narrative || '';
+    if (narEl) narEl.textContent = teamedNarrativeText;
 
     // 3. Alle Events dieser Championship laden, sortiert nach round_number
     const evs = await sb('events',
@@ -6781,7 +6842,31 @@ async function _buildEloClubList() {
 
 // Loads all championships into all admin dropdowns
 async function adminLoadChampionships() {
-  const champs = await sb('championships', 'select=id,name,season_number&order=start_date.desc');
+  // Bug-Fix (Owner-Meldung): championship.name ist bei fast allen
+  // Championships nur der generische RaceNet-Titel "Championship" — allein
+  // damit war eine bestimmte Championship in der Dropdown praktisch nicht
+  // sicher zu identifizieren (mehrere Clubs starten/enden oft am selben
+  // Tag). Label jetzt: [Club-Name] Season X · Startdatum → Enddatum.
+  // sbAll() statt sb() — bei über 1000 Championships (mittlerweile über
+  // alle Clubs hinweg realistisch) würde sb() sonst stillschweigend welche
+  // weglassen.
+  const [champs, clubs] = await Promise.all([
+    sbAll('championships', 'select=id,name,club_id,season_number,start_date,end_date&order=start_date.desc'),
+    sb('clubs', 'select=club_id,name'),
+  ]);
+  const clubNameById = {};
+  clubs.forEach(c => { clubNameById[String(c.club_id)] = c.name; });
+
+  // Club-Dropdown für die neue Club-Narrative-Sektion — Clubs sind hier
+  // schon geladen (für die Championship-Label-Auflösung oben), keine
+  // zusätzliche Anfrage nötig.
+  const clubSel = $('nav-club');
+  if (clubSel) {
+    const prevClub = clubSel.value;
+    clubSel.innerHTML = '<option value="">— select —</option>' +
+      clubs.map(c => `<option value="${c.club_id}">${escapeHtml(c.name)}</option>`).join('');
+    if (prevClub) clubSel.value = prevClub;
+  }
 
   const selects = ['mb-champ','nav-champ','nav-ev-champ'];
   selects.forEach(id => {
@@ -6789,7 +6874,12 @@ async function adminLoadChampionships() {
     if (!el) return;
     const prev = el.value;
     el.innerHTML = '<option value="">— select —</option>' +
-      champs.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      champs.map(c => {
+        const clubName   = clubNameById[String(c.club_id)] || `Club ${c.club_id}`;
+        const seasonStr  = c.season_number ? `S${c.season_number}` : 'S—';
+        const dateStr    = c.start_date ? `${c.start_date}${c.end_date ? ' → ' + c.end_date : ''}` : '—';
+        return `<option value="${c.id}">[${escapeHtml(clubName)}] ${seasonStr} · ${dateStr}</option>`;
+      }).join('');
     if (prev) el.value = prev;
   });
 }
@@ -7798,6 +7888,28 @@ async function mbDelete(id) {
 
 
 // ── 14. ADMIN — NARRATIVES ────────────────────────────────────
+
+async function navLoadClub() {
+  const clubId = $('nav-club')?.value;
+  if (!clubId) return;
+  const rows = await sb('clubs', `club_id=eq.${clubId}&select=narrative`);
+  if (rows.length && $('nav-club-text')) $('nav-club-text').value = rows[0].narrative || '';
+}
+
+async function navSaveClub() {
+  const clubId = $('nav-club')?.value;
+  const text   = $('nav-club-text')?.value.trim();
+  if (!clubId) { setText('nav-club-status', '⚠ Select a club.'); return; }
+  setText('nav-club-status', '⏳ Saving…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/admin/clubs/narrative`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body:    JSON.stringify({ club_id: clubId, narrative: text }),
+    });
+    setText('nav-club-status', res.ok ? '✓ Saved.' : `❌ Error ${res.status}`);
+  } catch (err) { setText('nav-club-status', `❌ ${err.message}`); }
+}
 
 async function navLoadChamp() {
   const champId = $('nav-champ')?.value;
