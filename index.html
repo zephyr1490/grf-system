@@ -140,7 +140,7 @@ body::after {
 @keyframes idle { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
 .hero-copy { flex:1; position:relative; z-index:1; }
 .hero-top-row { display:contents; } /* transparent on desktop */
-.hero-eyebrow { font-size:10px; color:var(--red); letter-spacing:4px; margin-bottom:6px; opacity:.8; }
+.hero-eyebrow { display:none; } /* Session 10: auf Desktop entfernt (Owner-Entscheidung) — .hero-copy{flex:1} sorgt automatisch dafür, dass Logo/Titel/Text/Discord-Button korrekt nachrücken, die absolut positionierte Trennlinie (.hero::after) bleibt davon unberührt */
 .hero-title {
   font-family:'VT323',monospace; font-size:72px;
   line-height:.85; color:var(--white);
@@ -843,9 +843,6 @@ textarea.inp-std { resize:vertical; }
     <div class="menu-item" data-tab="elo" onclick="showPage('elo',this)">ELO Rankings</div>
     <div class="menu-item" data-tab="handbook" onclick="showPage('handbook',this)">Handbook</div>
     <div class="menu-item" data-tab="admin" onclick="showPage('admin',this)">Admin</div>
-    <div class="menu-right">
-      <div class="live-pill"><div class="live-dot"></div> LIVE</div>
-    </div>
   </div>
 
   <!-- ══════════════════════════════════════════
@@ -965,6 +962,23 @@ textarea.inp-std { resize:vertical; }
     <div id="club-detail-view" style="display:none;">
       <div class="col-hdr" style="cursor:pointer;" onclick="backToClubDirectory()">‹ ALL CLUBS
         <span class="col-hdr-right" id="club-detail-name">—</span>
+      </div>
+
+      <!-- CHAMPIONSHIP HERO — dieselbe Struktur/CSS wie bei Themed, nur mit
+           generischen IDs. Narrative-Text kommt aus championships.narrative,
+           editierbar im Admin-Panel unter "Narratives" (dort bereits
+           club-unabhängig, keine Änderung dafür nötig gewesen). -->
+      <div class="themed-hero" id="cd-champ-hero">
+        <div class="themed-eyebrow">// <span id="cd-champ-club-name">—</span> — SEASON <span id="cd-champ-season">—</span> //</div>
+        <div class="themed-champ-name" id="cd-champ-name">—</div>
+        <div class="themed-narrative" id="cd-champ-narrative"></div>
+        <div class="themed-meta">
+          <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val" id="cd-champ-club-val">—</div></div>
+          <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val" id="cd-champ-season-val">—</div></div>
+          <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val" id="cd-champ-rounds">—</div></div>
+          <div class="themed-meta-item"><div class="tm-lbl" id="cd-champ-round-lbl">Current Round</div><div class="tm-val" id="cd-champ-current-round">—</div></div>
+          <div class="themed-meta-item"><div class="tm-lbl">Status</div><div class="tm-val" id="cd-champ-status">—</div></div>
+        </div>
       </div>
 
       <!-- Wird von showClubDetail() bei jedem Öffnen neu aufgebaut — nur
@@ -1146,6 +1160,7 @@ textarea.inp-std { resize:vertical; }
       <div class="sub-tab" data-tab="carratings" onclick="showSubTab('carratings',this)">Car Ratings</div>
       <div class="sub-tab" data-tab="challenges" onclick="showSubTab('challenges',this)">Challenges</div>
       <div class="sub-tab" data-tab="stats" onclick="showSubTab('stats',this)">Stats</div>
+      <div class="sub-tab" data-tab="rules" onclick="showSubTab('rules',this)">Rules</div>
     </div>
 
     <!-- TAB: LIVE RESULTS -->
@@ -1326,6 +1341,64 @@ textarea.inp-std { resize:vertical; }
           <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
         </div>
       </div>
+    </div>
+
+    <!-- SUB-TAB: RULES — dieselben Inhalte wie im Handbook (bleiben dort
+         zusätzlich stehen, Owner-Entscheidung), hier aber als durchgehend
+         sichtbare Referenzseite statt Klapp-Karten — wer hierher
+         navigiert, will die Regeln lesen, nicht erst aufklappen. -->
+    <div class="themed-tab" id="tab-rules">
+
+      <div class="club-directory-wrap">
+        <div class="col-hdr" style="border-bottom:none;">WHAT'S THE IDEA BEHIND GRF THEMED?</div>
+        <div style="padding:12px;font-size:13px;color:#999;line-height:1.65;">
+          <p style="margin:0;">GRF Themed combines historic and fictional themes with a car-balanced point system. A fast driver will always be fast — no matter the car. But a consistently well-driven underdog car might just bring a surprise to the podium. Anything can happen in GRF Themed!</p>
+        </div>
+      </div>
+
+      <div class="club-directory-wrap" style="margin-top:6px;">
+        <div class="col-hdr" style="border-bottom:none;">HOW IS A CHAMPIONSHIP STRUCTURED?</div>
+        <div style="padding:12px;font-size:13px;color:#999;line-height:1.65;">
+          <p style="margin:0 0 10px 0;">A championship generally lasts <b style="color:var(--gray-light);">3 to 6 weeks</b>, with occasional deviations. Each event lasts exactly one week, starting on GRF Tuesday at 12am (CET) and running until the following Tuesday at 12am.</p>
+          <p style="margin:0;">GRF Themed is a closed, Discord-only club. Join the <a href="https://discord.gg/global-rally-fans-817110244547100762" target="_blank" style="color:var(--discord);">GlobalRallyFans Discord</a> and befriend <b style="color:var(--gray-light);">"zephyr1490"</b> on RaceNet to gain access. RaceNet isn't always user-friendly — if your friend request takes longer than expected, ping @zephyr in the #grf-themed channel.</p>
+        </div>
+      </div>
+
+      <div class="club-directory-wrap" style="margin-top:6px;">
+        <div class="col-hdr" style="border-bottom:none;">HOW ARE POINTS CALCULATED?</div>
+        <div style="padding:12px;font-size:13px;color:#999;line-height:1.65;">
+          <p style="margin:0 0 10px 0;">All cars from the presented class are allowed. Points for rankings (1st–30th) are:</p>
+          <p style="color:var(--gray-light);font-size:12px;line-height:2;margin:0 0 10px 0;">50 – 44 – 40 – 38 – 36 – 34 – 32 – 30 – 28 – 26 – 25 – 24 – 23 – 22 – 21 – 20 – 19 – 18 – 17 – 16 – 15 – 14 – 13 – 12 – 11 – 10 – 9 – 8 – 7 – 6 (30th and following receive 6)</p>
+          <p style="margin:0 0 10px 0;"><b style="color:var(--gray-light);">× the Car Rating (CR)</b> — a factor given to each car based on its power and handling. A CR of 1 signals the best car of a class; a higher CR (up to 2) is given to slower/weaker cars. The CR table for the class is published before each championship. Ranking points are rounded mathematically (x.50 → x+1, x.49 → x).</p>
+          <p style="margin:0 0 10px 0;"><b style="color:var(--gray-light);">DNF:</b> if a driver can't finish the last stage of an event, for whatever reason, the event counts as DNF — worth 2 ranking points (× CR).</p>
+          <p style="margin:0 0 10px 0;"><b style="color:var(--gray-light);">Driving the same car</b> throughout an entire championship earns an additional <b style="color:var(--gray-light);">+50 points</b> (Loyalty Bonus) at the end.</p>
+          <p style="margin:0 0 10px 0;">Some championships feature one or more <b style="color:var(--gray-light);">challenges</b>, named before the championship starts. Details on any active challenge are announced in the championship structure at the time.</p>
+          <p style="color:#666;font-style:italic;margin:0;">Example: Colin drives a Subaru Impreza '95 with CR 1.2. He DNFs Monte Carlo (2 × 1.2 → 2 pts), finishes Portugal 3rd (40 × 1.2 = 48 pts), finishes France 5th despite a puncture (36 × 1.2 = 43.2 → 43 pts), and wins Britain (50 × 1.2 = 60 pts). Same car all season: +50. Total: 2 + 48 + 43 + 60 + 50 = 203 points.</p>
+        </div>
+      </div>
+
+      <div class="club-directory-wrap" style="margin-top:6px;">
+        <div class="col-hdr" style="border-bottom:none;">WHAT IF I CAN ONLY JOIN SOME EVENTS?</div>
+        <div style="padding:12px;font-size:13px;color:#999;line-height:1.65;">
+          <p style="margin:0;">Partaking in only selected events is allowed — no penalties are given. The 50-point Loyalty Bonus can still be collected in full as long as at least one event was driven in the same car.</p>
+        </div>
+      </div>
+
+      <div class="club-directory-wrap" style="margin-top:6px;">
+        <div class="col-hdr" style="border-bottom:none;">HOW DO CAR RATINGS ACTUALLY WORK?</div>
+        <div style="padding:12px;font-size:13px;color:#999;line-height:1.65;">
+          <p style="margin:0;">Car Ratings may change depending on the specific events in a championship. They're always published before the championship starts and are valid for that specific championship only.</p>
+        </div>
+      </div>
+
+      <div class="club-directory-wrap" style="margin-top:6px;">
+        <div class="col-hdr" style="border-bottom:none;">WHAT ABOUT MULTI-CLUB AND MULTICLASS EVENTS?</div>
+        <div style="padding:12px;font-size:13px;color:#999;line-height:1.65;">
+          <p style="margin:0 0 10px 0;">Some championships feature <b style="color:var(--gray-light);">double club</b> or <b style="color:var(--gray-light);">multiclass</b> events, where two clubs/classes run simultaneously. Drivers can choose freely which one to participate in, and are generally allowed to run in both — with points rewarded respectively.</p>
+          <p style="margin:0;">How exactly the two results interact can differ from championship to championship — sometimes only the worse of the two counts, sometimes both count fully, sometimes something else entirely. This is announced for the specific championship it applies to, same as with challenges.</p>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -3397,7 +3470,86 @@ async function showClubDetail(clubId, initialTab = 'results') {
             : 'results';
   showClubDetailTab(tab, _findSubTabEl('#club-detail-view', tab));
 
+  loadClubHero(clubId);
   await loadClubResults(clubId);
+}
+
+/**
+ * Championship-Hero für generische Clubs — exakt dieselbe Auswahl-Logik
+ * wie bei Themed (bevorzugt Championship mit laufendem Event, sonst
+ * neueste nach start_date, sonst erste verfügbare). narrative-Text kommt
+ * 1:1 aus championships.narrative, editierbar im Admin-Panel unter
+ * "Narratives" (dort bereits club-unabhängig).
+ */
+async function loadClubHero(clubId) {
+  const heroEl = $('cd-champ-hero');
+  if (!heroEl) return;
+
+  const cached = _clubDirectory.find(c => c.club_id === String(clubId));
+  const clubName = cached ? cached.name : `Club ${clubId}`;
+  setText('cd-champ-club-name', clubName.toUpperCase());
+  setText('cd-champ-club-val', clubName);
+
+  try {
+    let champ = null;
+
+    const activeEvs = await sb('events', `select=championship_id&club_id=eq.${clubId}&status=eq.1&limit=1`);
+    if (activeEvs.length) {
+      const found = await sb('championships', `select=*&id=eq.${activeEvs[0].championship_id}&limit=1`);
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      const found = await sb('championships', `select=*&club_id=eq.${clubId}&order=start_date.desc&limit=1`);
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      const found = await sb('championships', `select=*&club_id=eq.${clubId}&limit=1`);
+      if (found.length) champ = found[0];
+    }
+    if (!champ) {
+      heroEl.style.display = 'none';
+      return;
+    }
+    heroEl.style.display = '';
+
+    setText('cd-champ-name',       champ.name || '—');
+    setText('cd-champ-season',     champ.season_number || '—');
+    setText('cd-champ-season-val', champ.season_number || '—');
+    const narEl = $('cd-champ-narrative');
+    if (narEl) narEl.textContent = champ.narrative || '';
+
+    const evs = await sb('events', `select=*&championship_id=eq.${champ.id}&order=round_number.asc`);
+    setText('cd-champ-rounds', evs.length || '—');
+
+    const liveEvs     = evs.filter(e => e.status === 1);
+    const finishedEvs = evs.filter(e => e.status === 2);
+    const upcomingEvs = evs.filter(e => e.status !== 1 && e.status !== 2);
+
+    const statusEl = $('cd-champ-status');
+    const roundLbl = $('cd-champ-round-lbl');
+    let roundEvent = null;
+
+    if (liveEvs.length) {
+      if (statusEl) { statusEl.textContent = '● LIVE'; statusEl.style.color = 'var(--green)'; }
+      if (roundLbl) roundLbl.textContent = 'Current Round';
+      roundEvent = liveEvs[0];
+    } else if (evs.length && finishedEvs.length === evs.length) {
+      if (statusEl) { statusEl.textContent = 'FINISHED'; statusEl.style.color = '#999'; }
+      if (roundLbl) roundLbl.textContent = 'Final Round';
+      roundEvent = evs[evs.length - 1];
+    } else if (upcomingEvs.length) {
+      if (statusEl) { statusEl.textContent = 'UPCOMING'; statusEl.style.color = '#999'; }
+      if (roundLbl) roundLbl.textContent = 'Next Round';
+      roundEvent = upcomingEvs[0];
+    }
+
+    setText('cd-champ-current-round', roundEvent
+      ? `RD.${roundEvent.round_number || '?'} — ${roundEvent.location || roundEvent.name || '—'}`
+      : '—');
+  } catch (err) {
+    console.error('[loadClubHero]', err);
+    heroEl.style.display = 'none';
+  }
 }
 
 /** Wechselt zwischen "Live Results" und "Stats" innerhalb eines Club-Details. */
