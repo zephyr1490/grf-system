@@ -2972,12 +2972,22 @@ function fmtDate(str) {
  * Stunde), Millisekunden immer auf 3 Stellen normiert. Nimmt sowohl
  * "H:MM:SS.ffff" als auch "MM:SS.ff" als Rohformat aus der DB entgegen.
  */
+/**
+ * Bug-Fix (Session 10, Owner-Meldung): die Stunde war bisher eine
+ * NICHT-erfassende, optionale Regex-Gruppe ("(?:\d+:)?") — bei Zeiten über
+ * einer Stunde wurde die Stunde dadurch komplett verworfen statt
+ * eingerechnet (z.B. "1:00:22.174" wurde fälschlich zu "00:22.174" statt
+ * "60:22.174"). Jetzt wird die Stunde (falls vorhanden) erfasst und in die
+ * Minuten eingerechnet — aus Platzgründen bewusst KEIN HH:MM:SS-Format,
+ * die Minuten zählen einfach über 59 hinaus weiter (Owner-Vorgabe).
+ */
 function fmtStageTime(raw) {
   if (!raw || raw === '—') return raw;
-  const m = String(raw).trim().match(/(?:\d+:)?(\d{1,2}):(\d{1,2})(?:[.:](\d+))?/);
+  const m = String(raw).trim().match(/(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[.:](\d+))?/);
   if (!m) return raw;
-  const [, min, sec, frac] = m;
-  const mm = min.padStart(2, '0');
+  const [, hr, min, sec, frac] = m;
+  const totalMin = (hr ? parseInt(hr, 10) : 0) * 60 + parseInt(min, 10);
+  const mm = String(totalMin).padStart(2, '0');
   const ss = sec.padStart(2, '0');
   const ms = (frac || '000').padEnd(3, '0').slice(0, 3);
   return `${mm}:${ss}:${ms}`;
