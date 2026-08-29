@@ -250,6 +250,11 @@ class SupabaseClient:
             "Authorization": f"Bearer {key}",
             "Content-Type":  "application/json",
         }
+        # Egress-Diagnose (Owner-Meldung, ~140MB/Tag trotz vorheriger Fixes):
+        # zeichnet jeden Lesezugriff auf (Tabelle, Bytes, Zeilen), damit
+        # main() am Ende eine echte Aufschlüsselung ausgeben kann — Messwerte
+        # statt Schätzung.
+        self.read_log: list = []
 
     def select(self, table: str, filters: str = "") -> list:
         url = f"{self.url}/rest/v1/{table}"
@@ -257,7 +262,29 @@ class SupabaseClient:
             url += f"?{filters}"
         r = requests.get(url, headers=self.headers, timeout=15)
         r.raise_for_status()
-        return r.json()
+        data = r.json()
+        self.read_log.append((table, len(r.content), len(data) if isinstance(data, list) else 1))
+        return data
+
+    def count(self, table: str, filters: str = "") -> int:
+        """
+        Nur die ANZAHL passender Zeilen, ohne die Zeilen selbst zu laden —
+        HEAD-Request mit "Prefer: count=exact", die Zahl steht im
+        Content-Range-Response-Header ("0-0/42"), der Body bleibt leer.
+        Praktisch egress-frei im Vergleich zu select_all() für denselben
+        Filter, wenn nur die Anzahl gebraucht wird.
+        """
+        url = f"{self.url}/rest/v1/{table}"
+        if filters:
+            url += f"?{filters}"
+        h = {**self.headers, "Prefer": "count=exact"}
+        r = requests.head(url, headers=h, timeout=15)
+        r.raise_for_status()
+        content_range = r.headers.get("content-range", "")  # z.B. "0-0/42" oder "*/42"
+        try:
+            return int(content_range.split("/")[-1])
+        except (ValueError, IndexError):
+            return 0
 
     def select_all(self, table: str, filters: str = "", page_size: int = 1000) -> list:
         """
@@ -883,23 +910,51 @@ def _fill_season_numbers(db: SupabaseClient, club_id: str, log):
     Bewusst pro Club einzeln aufgerufen (nicht global über alle Clubs
     hinweg) — die Nummerierung ist club-relativ, nicht club-übergreifend.
     """
+    # Egress-Fix (Owner-Meldung, ~140MB/Tag trotz vorheriger Fixes): diese
+    # Funktion lief bisher bei JEDEM 10-Minuten-Sync mit `select_all()` über
+    # die KOMPLETTE Championship-Historie eines Clubs (bei mittlerweile
+    # 140+ Championships pro Club × 11 Clubs × 144 Läufe/Tag ein
+    # signifikanter, fast immer unnötiger Dauer-Verbrauch — season_number
+    # ist so gut wie nie noch NULL, nachdem der erste Durchlauf alles
+    # aufgefüllt hat). Jetzt: nur Championships MIT season_number IS NULL
+    # laden — nach dem ersten Auffüllen ist das praktisch immer eine leere
+    # oder sehr kurze Liste statt der ganzen Historie.
     champs = db.select_all(
         "championships",
-        f"club_id=eq.{club_id}&select=id,name,season_number,start_date&order=start_date.asc"
+        f"club_id=eq.{club_id}&season_number=is.null&select=id,name,start_date"
     )
     if not champs:
         return
 
+    # Für die korrekte Season-Nummer (Rang unter ALLEN Championships des
+    # Clubs, nicht nur den noch unnummerierten) brauchen wir trotzdem die
+    # Gesamtzahl der bereits nummerierten — aber nur EIN Zähl-Wert, nicht
+    # jede einzelne Zeile.
+    #
+    # Bekannte, bewusst in Kauf genommene Einschränkung: diese Annahme geht
+    # davon aus, dass neu entdeckte (season_number IS NULL) Championships
+    # chronologisch NEUER sind als alle bereits nummerierten — im normalen
+    # 10-Minuten-Sync praktisch immer der Fall, da RaceNet Championships
+    # fortlaufend anlegt, keine rückwirkend eingefügten alten Saisons.
+    # Einziger Fall, wo das kippen könnte: ein `--full`-Lauf entdeckt eine
+    # ÄLTERE, bisher nie synchronisierte historische Championship NACHDEM
+    # neuere bereits nummeriert wurden — dann bekäme sie fälschlich eine zu
+    # hohe statt einer niedrigeren Nummer. Sehr seltener Fall (season_number
+    # ist ohnehin nur Anzeige, keine funktionskritische Zahl); der volle,
+    # korrekte Rebuild über die gesamte Historie ist bewusst nicht mehr Teil
+    # des routinemäßigen 10-Minuten-Laufs, aus Egress-Gründen.
+    already_numbered = db.count("championships", f"club_id=eq.{club_id}&season_number=not.is.null")
+
+    champs.sort(key=lambda c: c.get("start_date") or "")
     updates = []
     for i, c in enumerate(champs, start=1):
-        if c.get("season_number") is None:
-            # "name" wird unverändert mitgeschickt (nicht nur id+season_number)
-            # — championships.name ist NOT NULL ohne Default; ein Upsert ohne
-            # dieses Feld würde am Insert-Versuch scheitern, selbst wenn die
-            # Zeile längst existiert und eigentlich nur ein UPDATE passieren
-            # soll (Postgres prüft NOT-NULL-Constraints vor der Conflict-
-            # Auflösung).
-            updates.append({"id": c["id"], "name": c.get("name"), "season_number": i})
+        # "name" wird unverändert mitgeschickt (nicht nur id+season_number)
+        # — championships.name ist NOT NULL ohne Default; ein Upsert ohne
+        # dieses Feld würde am Insert-Versuch scheitern, selbst wenn die
+        # Zeile längst existiert und eigentlich nur ein UPDATE passieren
+        # soll (Postgres prüft NOT-NULL-Constraints vor der Conflict-
+        # Auflösung).
+        updates.append({"id": c["id"], "name": c.get("name"), "season_number": already_numbered + i})
 
     if updates:
         db.upsert_all("championships", updates, on_conflict="id")
@@ -1204,6 +1259,24 @@ def main():
         print("  ℹ TEST MODE — nothing written to Supabase")
     print("=" * 60)
 
+    # Egress-Diagnose (Owner-Meldung, ~140MB/Tag trotz vorheriger Fixes):
+    # Aufschlüsselung nach Tabelle für ALLE Lesezugriffe dieses grf_sync.py-
+    # Laufs selbst (die separate Aufschlüsselung für /elo/update kommt weiter
+    # unten mit dessen Response). Absteigend nach Bytes sortiert — die
+    # Tabelle ganz oben ist der größte Verdächtige dieses Laufs.
+    if db.read_log:
+        by_table: dict = {}
+        for table, nbytes, nrows in db.read_log:
+            e = by_table.setdefault(table, {"bytes": 0, "rows": 0, "calls": 0})
+            e["bytes"] += nbytes
+            e["rows"]  += nrows
+            e["calls"] += 1
+        total_bytes = sum(e["bytes"] for e in by_table.values())
+        print(f"  📊 grf_sync.py egress this run: {total_bytes/1024:.1f} KB total")
+        for table, e in sorted(by_table.items(), key=lambda x: -x[1]["bytes"]):
+            print(f"     {table}: {e['bytes']/1024:.1f} KB ({e['rows']} rows, {e['calls']} calls)")
+        print("=" * 60)
+
     # ── ELO automatisch aktualisieren ──────────────────────────────────────
     # WICHTIG: läuft bei JEDEM Sync-Durchlauf, nicht nur wenn total_synced > 0.
     # Grund: die Inaktivitäts-Decay-Berechnung (4-Wochen-Frist) hängt vom
@@ -1253,6 +1326,14 @@ def main():
                 if resp.ok:
                     data = resp.json()
                     log(f"  ✅ ELO updated: {data.get('drivers', '?')} drivers")
+                    # Egress-Diagnose (Owner-Meldung, ~140MB/Tag): Aufschlüsselung
+                    # aus der elo_update-Response mit ins Sync-Log übernehmen,
+                    # damit alles an einer Stelle in den Railway-Logs steht.
+                    by_table = data.get("egress_by_table") or {}
+                    if by_table:
+                        log(f"     📊 Egress this run: {data.get('egress_kb', '?')} KB total")
+                        for table, e in sorted(by_table.items(), key=lambda x: -x[1]["kb"]):
+                            log(f"        {table}: {e['kb']} KB ({e['rows']} rows, {e['calls']} calls)")
                 else:
                     log(f"  ❌ ELO update failed: HTTP {resp.status_code} — {resp.text[:200]}")
         except Exception as ex:

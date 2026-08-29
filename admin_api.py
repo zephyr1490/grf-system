@@ -60,6 +60,9 @@ SUPABASE_URL     = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SVC_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 ALLOWED_ORIGIN   = os.environ.get("ALLOWED_ORIGIN", "*")
 
+# Egress-Diagnose (s. sb_get() unten) — pro elo_update()-Aufruf zurückgesetzt.
+_read_log: list = []
+
 SB = {
     "apikey":        SUPABASE_SVC_KEY,
     "Authorization": f"Bearer {SUPABASE_SVC_KEY}",
@@ -114,7 +117,15 @@ def valid_id(value) -> bool:
 
 def sb_get(table, qs=""):
     r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}?{qs}", headers=SB, timeout=10)
-    r.raise_for_status(); return r.json()
+    r.raise_for_status()
+    data = r.json()
+    # Egress-Diagnose (Owner-Meldung, ~140MB/Tag trotz vorheriger Fixes):
+    # zeichnet jeden Lesezugriff auf, damit elo_update() am Ende eine echte
+    # Aufschlüsselung nach Tabelle zurückgeben kann — Messwerte statt
+    # Schätzung. _read_log wird pro elo_update()-Aufruf zurückgesetzt (s.
+    # dort), sammelt sich also nicht über die Lebensdauer des Prozesses an.
+    _read_log.append((table, len(r.content), len(data) if isinstance(data, list) else 1))
+    return data
 
 def sb_get_all(table, qs="", page_size=1000):
     """
@@ -1732,6 +1743,10 @@ def elo_update():
     if not club_ids:
         return jsonify({"error": "club_ids required"}), 400
 
+    # Egress-Diagnose: pro Aufruf zurücksetzen, damit die Aufschlüsselung am
+    # Ende nur DIESEN Lauf zeigt, nicht die Lebensdauer des Prozesses.
+    _read_log.clear()
+
     try:
         from elo_engine   import Rating
         from elo_pipeline import RawEvent, process_racenet_events, summarize_track
@@ -2094,8 +2109,29 @@ def elo_update():
         # intern selbst wieder auf einmal-pro-Tag gegated, s. Funktion oben.
         _maybe_refresh_driver_stats_summary(log)
 
+        # Egress-Diagnose (Owner-Meldung, ~140MB/Tag trotz vorheriger Fixes):
+        # echte Aufschlüsselung nach Tabelle statt Schätzung — steht in den
+        # Railway-Logs von grf_sync.py (das die /elo/update-Response
+        # protokolliert), zeigt für DIESEN Lauf, welche Tabelle wie viele
+        # Bytes/Zeilen tatsächlich verursacht hat.
+        by_table: dict = {}
+        for table, nbytes, nrows in _read_log:
+            e = by_table.setdefault(table, {"bytes": 0, "rows": 0, "calls": 0})
+            e["bytes"] += nbytes
+            e["rows"]  += nrows
+            e["calls"] += 1
+        total_bytes = sum(e["bytes"] for e in by_table.values())
+        log(f"📊 Egress this run: {total_bytes/1024:.1f} KB total")
+        for table, e in sorted(by_table.items(), key=lambda x: -x[1]["bytes"]):
+            log(f"     {table}: {e['bytes']/1024:.1f} KB ({e['rows']} rows, {e['calls']} calls)")
+
         log(f"✓ ELO update complete. {drivers_updated} drivers updated.")
-        return jsonify({"ok": True, "log": log_lines, "drivers": drivers_updated})
+        return jsonify({
+            "ok": True, "log": log_lines, "drivers": drivers_updated,
+            "egress_kb": round(total_bytes / 1024, 1),
+            "egress_by_table": {t: {"kb": round(e["bytes"]/1024, 1), "rows": e["rows"], "calls": e["calls"]}
+                                 for t, e in by_table.items()},
+        })
 
     except Exception as e:
         import traceback
