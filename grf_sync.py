@@ -919,9 +919,19 @@ def _fill_season_numbers(db: SupabaseClient, club_id: str, log):
     # aufgefüllt hat). Jetzt: nur Championships MIT season_number IS NULL
     # laden — nach dem ersten Auffüllen ist das praktisch immer eine leere
     # oder sehr kurze Liste statt der ganzen Historie.
+    #
+    # select=* (komplette Zeile, nicht nur einzelne Spalten): zwei Runden
+    # zuvor scheiterte der Upsert erst an "name", dann an "club_id" NOT
+    # NULL — beide standen nicht im (veralteten) supabase_schema.sql als
+    # NOT NULL. Statt eine dritte fehlende Spalte zu raten: komplette
+    # bestehende Zeile laden und unverändert mit der neuen season_number
+    # zurückschicken — unabhängig davon, welche Spalten tatsächlich NOT
+    # NULL sind. Bleibt trotzdem klein, da nur die (üblicherweise 0 oder
+    # sehr wenigen) noch unnummerierten Zeilen betroffen sind, nicht die
+    # ganze Historie.
     champs = db.select_all(
         "championships",
-        f"club_id=eq.{club_id}&season_number=is.null&select=id,name,start_date"
+        f"club_id=eq.{club_id}&season_number=is.null&select=*"
     )
     if not champs:
         return
@@ -948,13 +958,9 @@ def _fill_season_numbers(db: SupabaseClient, club_id: str, log):
     champs.sort(key=lambda c: c.get("start_date") or "")
     updates = []
     for i, c in enumerate(champs, start=1):
-        # "name" wird unverändert mitgeschickt (nicht nur id+season_number)
-        # — championships.name ist NOT NULL ohne Default; ein Upsert ohne
-        # dieses Feld würde am Insert-Versuch scheitern, selbst wenn die
-        # Zeile längst existiert und eigentlich nur ein UPDATE passieren
-        # soll (Postgres prüft NOT-NULL-Constraints vor der Conflict-
-        # Auflösung).
-        updates.append({"id": c["id"], "name": c.get("name"), "season_number": already_numbered + i})
+        row = dict(c)  # komplette bestehende Zeile unverändert übernehmen
+        row["season_number"] = already_numbered + i
+        updates.append(row)
 
     if updates:
         db.upsert_all("championships", updates, on_conflict="id")
@@ -1309,35 +1315,65 @@ def main():
     if not test_mode:
         elo_club_ids = club_ids
 
-        log(f"\n🔢 Triggering ELO/inactivity update for {len(elo_club_ids)} club(s) "
-            f"({total_synced} new event(s) this run)...")
+        # Egress-Fix (Owner-Vorschlag): ELO-Update lief bisher bei JEDEM
+        # 10-Minuten-Sync (144x/Tag) — für ein Hobby-Projekt unnötig oft,
+        # zumal ELO ohnehin die am wenigsten "live-kritische" Funktion ist
+        # (niemand erwartet, dass sich das eigene Rating innerhalb von
+        # Minuten nach einem Rennen ändert). Jetzt: automatischer Trigger
+        # nur noch 1x/Tag, geprüft über denselben system_config-Zeitstempel-
+        # Ansatz wie schon bei last_sync_at/driver_stats_summary. Ergebnisse/
+        # Zeiten selbst bleiben davon unberührt — die laufen weiterhin über
+        # den normalen Sync alle 10 Minuten, nur die ELO-NEUBERECHNUNG
+        # verzögert sich um bis zu 24h. Der manuelle "ELO Update"-Knopf im
+        # Admin-Panel nutzt einen ANDEREN Code-Pfad (direkter Browser-Aufruf
+        # von /elo/update) und ist von diesem Gate nicht betroffen — jederzeit
+        # sofort auslösbar.
+        already_today = False
         try:
-            admin_api_url = os.environ.get("ADMIN_API_URL", "").rstrip("/")
-            admin_api_pw  = os.environ.get("ADMIN_API_PASSWORD", "")
-            if not admin_api_url:
-                log("  ⚠ ADMIN_API_URL not set — skipping ELO auto-update")
-            else:
-                resp = requests.post(
-                    f"{admin_api_url}/elo/update",
-                    headers={"X-Admin-Password": admin_api_pw, "Content-Type": "application/json"},
-                    json={"club_ids": elo_club_ids, "force_reset": False},
-                    timeout=120,
-                )
-                if resp.ok:
-                    data = resp.json()
-                    log(f"  ✅ ELO updated: {data.get('drivers', '?')} drivers")
-                    # Egress-Diagnose (Owner-Meldung, ~140MB/Tag): Aufschlüsselung
-                    # aus der elo_update-Response mit ins Sync-Log übernehmen,
-                    # damit alles an einer Stelle in den Railway-Logs steht.
-                    by_table = data.get("egress_by_table") or {}
-                    if by_table:
-                        log(f"     📊 Egress this run: {data.get('egress_kb', '?')} KB total")
-                        for table, e in sorted(by_table.items(), key=lambda x: -x[1]["kb"]):
-                            log(f"        {table}: {e['kb']} KB ({e['rows']} rows, {e['calls']} calls)")
-                else:
-                    log(f"  ❌ ELO update failed: HTTP {resp.status_code} — {resp.text[:200]}")
+            existing = db.select("system_config", "key=eq.last_elo_update_at&select=value")
+            today_str = datetime.now(timezone.utc).date().isoformat()
+            already_today = bool(existing) and str(existing[0].get("value", ""))[:10] == today_str
         except Exception as ex:
-            log(f"  ❌ ELO update request failed: {ex}")
+            log(f"  ⚠ Could not check last_elo_update_at: {ex}")
+
+        if already_today:
+            log("\n🔢 ELO/inactivity update already ran today — skipping automatic trigger.")
+        else:
+            log(f"\n🔢 Triggering ELO/inactivity update for {len(elo_club_ids)} club(s) "
+                f"({total_synced} new event(s) this run)...")
+            try:
+                admin_api_url = os.environ.get("ADMIN_API_URL", "").rstrip("/")
+                admin_api_pw  = os.environ.get("ADMIN_API_PASSWORD", "")
+                if not admin_api_url:
+                    log("  ⚠ ADMIN_API_URL not set — skipping ELO auto-update")
+                else:
+                    resp = requests.post(
+                        f"{admin_api_url}/elo/update",
+                        headers={"X-Admin-Password": admin_api_pw, "Content-Type": "application/json"},
+                        json={"club_ids": elo_club_ids, "force_reset": False},
+                        timeout=120,
+                    )
+                    if resp.ok:
+                        data = resp.json()
+                        log(f"  ✅ ELO updated: {data.get('drivers', '?')} drivers")
+                        try:
+                            db.upsert("system_config",
+                                      {"key": "last_elo_update_at", "value": datetime.now(timezone.utc).isoformat()},
+                                      on_conflict="key")
+                        except Exception as ex:
+                            log(f"  ⚠ Could not write last_elo_update_at: {ex}")
+                        # Egress-Diagnose (Owner-Meldung, ~140MB/Tag): Aufschlüsselung
+                        # aus der elo_update-Response mit ins Sync-Log übernehmen,
+                        # damit alles an einer Stelle in den Railway-Logs steht.
+                        by_table = data.get("egress_by_table") or {}
+                        if by_table:
+                            log(f"     📊 Egress this run: {data.get('egress_kb', '?')} KB total")
+                            for table, e in sorted(by_table.items(), key=lambda x: -x[1]["kb"]):
+                                log(f"        {table}: {e['kb']} KB ({e['rows']} rows, {e['calls']} calls)")
+                    else:
+                        log(f"  ❌ ELO update failed: HTTP {resp.status_code} — {resp.text[:200]}")
+            except Exception as ex:
+                log(f"  ❌ ELO update request failed: {ex}")
 
 
 if __name__ == "__main__":
