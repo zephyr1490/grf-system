@@ -3272,8 +3272,15 @@ async function loadStatusBar() {
   }
 
   try {
-    const rows = await sb('system_config', 'key=eq.last_sync_at&select=value');
-    setText('sb-sync-text', 'Last synced: ' + (rows.length ? formatRelativeTime(new Date(rows[0].value)) : '—'));
+    // Bug-Fix (Owner-Meldung): system_config war nie für Lesezugriff über
+    // den Anon-Key gedacht (nur Server-seitig via Service-Role-Key,
+    // s. /stats/pageview) — ein direkter sb('system_config', ...)-Aufruf
+    // scheiterte hier still an RLS, die Kachel zeigte deshalb seit dem
+    // Rollout durchgehend nur "—". Jetzt über denselben Backend-Endpoint-
+    // Ansatz wie beim Page-Views-Zähler.
+    const res = await fetch(`${ADMIN_API_URL}/stats/last-sync`);
+    const data = await res.json();
+    setText('sb-sync-text', 'Last synced: ' + (data.last_sync_at ? formatRelativeTime(new Date(data.last_sync_at)) : '—'));
   } catch (err) {
     console.error('[loadStatusBar sync]', err);
     setText('sb-sync-text', 'Last synced: —');

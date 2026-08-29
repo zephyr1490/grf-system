@@ -210,6 +210,23 @@ def health(): return jsonify({"status": "ok"})
 # Championship-Daten, kein anderes Feld betroffen. Selbst absichtlicher
 # Missbrauch (Skript das den Endpoint spammt) hat keine schädlichere Folge
 # als eine unrealistisch hohe Zahl auf der Startseite, kein echtes Risiko.
+@app.route("/stats/last-sync", methods=["GET"])
+def stats_last_sync():
+    """
+    Öffentlicher, unauthentifizierter Endpoint für die "Last synced"-Kachel
+    im Frontend-Footer — analog zu /stats/pageview oben. Bewusst über einen
+    Backend-Endpoint statt eines direkten Frontend-sb()-Aufrufs: system_config
+    war nie für Lesezugriff über den Anon-Key gedacht (nur Server-seitig via
+    Service-Role-Key), ein direkter Frontend-Zugriff würde an RLS scheitern.
+    Reine Lesezugriff auf einen Zeitstempel, kein Sicherheitsrisiko.
+    """
+    try:
+        rows = sb_get("system_config", "key=eq.last_sync_at&select=value")
+        return jsonify({"last_sync_at": rows[0]["value"] if rows else None})
+    except Exception as e:
+        return jsonify({"error": _err_detail(e)}), 500
+
+
 @app.route("/stats/pageview", methods=["POST"])
 def stats_pageview():
     """
