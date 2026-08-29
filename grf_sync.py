@@ -804,18 +804,30 @@ def sync_event(db: SupabaseClient, client,
             existing_drivers |= {d["name"] for d in new_drivers}
 
     # ── 6. Update driver stats (starts, wins) ───────────────────────────────
-    # Egress-Fix (Session 10): vorher wurde bei JEDEM Event-Sync die KOMPLETTE
-    # event_results-Tabelle (25k+ Zeilen, alle Fahrer, alle Clubs) geladen,
-    # nur um starts/wins für ALLE Fahrer neu zu berechnen. Jetzt: nur die
-    # event_results der Fahrer laden, die in DIESEM Event mitgefahren sind —
-    # via driver_name IN (...), bewusst OHNE club_id/championship_id-Filter,
-    # damit jeder Fahrer weiterhin seine korrekte, clubübergreifende
-    # Gesamt-Statistik bekommt (ein Fahrer ohne Themed-Start, aber mit
-    # Starts in anderen Clubs, zählt weiterhin richtig). Ergebnis ist
-    # identisch zum alten Vollrecompute — nur die Datenmenge pro Aufruf
-    # schrumpft von "ganze Liga" auf "die paar Fahrer, die gerade gefahren
-    # sind".
-    if not test and driver_info:
+    # Egress-Fix (Owner-Meldung, ~140MB/Tag): DIES war der eigentliche
+    # Hauptverursacher, bestätigt durch die Log-Diagnose (968.5 KB von
+    # 1087.4 KB grf_sync.py-Egress in einem einzigen Lauf, ~89%). Die
+    # frühere "Session 10"-Optimierung (nur die Fahrer DIESES Events statt
+    # der ganzen Liga) hat das Problem verkleinert, aber nicht behoben: für
+    # jeden Fahrer wird weiterhin seine KOMPLETTE Ergebnis-Historie (alle
+    # Events, alle Clubs, seit jeher) neu geladen, nur um starts/wins neu
+    # zu zählen — UND das passierte bei einem noch laufenden (status=1)
+    # Event bei JEDEM der 144 täglichen 10-Minuten-Läufe erneut, nicht nur
+    # einmal.
+    #
+    # Fix: läuft jetzt NUR NOCH, wenn das Event tatsächlich FERTIG ist
+    # (status==2) — nicht bei jedem Zwischenstand eines laufenden Events.
+    # Das ist sicher, weil sync_event() für ein Event mit status==2 UND
+    # bereits vorhandenen stage_results beim nächsten Lauf ohnehin
+    # komplett übersprungen wird (s. Skip-Logik in sync_championship()) —
+    # der teure Vollrecompute läuft dadurch effektiv genau EINMAL pro
+    # Event-Lebenszyklus (wenn es fertig wird), nicht mehr wiederholt
+    # während der gesamten ~1 Woche, die ein Event typischerweise läuft.
+    # Nebeneffekt (bewusst in Kauf genommen): starts/wins eines Fahrers
+    # zählen ein laufendes Event erst mit, sobald es fertig ist, nicht
+    # schon während es noch läuft — bei ~1 Woche Eventdauer ein kleiner,
+    # sinnvoller Kompromiss für die massive Egress-Einsparung.
+    if not test and driver_info and ev_status == 2:
         try:
             names = list(driver_info.keys())
             name_list = pg_in_list(names)
