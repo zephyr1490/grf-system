@@ -1018,16 +1018,16 @@ textarea.inp-std { resize:vertical; }
             <div class="col-hdr" id="cd-results-hdr">RESULTS — LOADING…</div>
             <div class="elo-wrap full-wrap">
               <table class="elo-table">
-                <thead><tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th></tr></thead>
+                <thead><tr id="cd-results-thead-row"><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th></tr></thead>
                 <tbody id="cd-results-tbody">
                   <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
                 </tbody>
               </table>
             </div>
             <div class="elo-wrap slim-wrap">
-              <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR STAGE TIMES →</div>
+              <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;" id="cd-results-slim-hint">TAP A ROW FOR STAGE TIMES →</div>
               <table class="elo-table slim-table">
-                <thead><tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th></tr></thead>
+                <thead><tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th id="cd-results-slim-col4">TIME</th></tr></thead>
                 <tbody id="cd-results-slim-tbody">
                   <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
                 </tbody>
@@ -1108,12 +1108,44 @@ textarea.inp-std { resize:vertical; }
            Variante (keine Streichresultate/Team-Wertung wie bei Themed) —
            kann bei Bedarf später erweitert werden. -->
       <div class="themed-tab" id="cd-tab-standings">
-        <div class="club-directory-wrap">
+        <!-- Für generische (RaceNet-native) Clubs: einfache Rangliste, wie
+             bisher. Für Clubs mit CUSTOM_SCORING (aktuell nur 14317): per
+             JS ausgeblendet, stattdessen die Themed-Style-Tabelle unten. -->
+        <div class="club-directory-wrap" id="cd-standings-simple-wrap">
           <div class="col-hdr" style="border-bottom:none;">CHAMPIONSHIP STANDINGS
             <span class="col-hdr-right">TOTAL POINTS</span>
           </div>
           <div id="cd-standings-list">
             <div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>
+          </div>
+        </div>
+
+        <!-- Themed-Style expandierbare Tabelle für Custom-Scoring-Clubs
+             (Session 10, Owner-Wunsch: dieselbe Runden-für-Runden-
+             Aufschlüsselung wie bei Themed). Keine LOYALTY-Spalte — das ist
+             eine Themed-eigene Regel, kein Teil von CUSTOM_SCORING. -->
+        <div id="cd-standings-scored-wrap" style="display:none;">
+          <div class="standings-wrap">
+            <div class="col-hdr" style="margin-bottom:6px;" id="cd-standings-scored-hdr">CHAMPIONSHIP STANDINGS — LOADING…
+              <span class="col-hdr-right" id="cd-standings-scored-hdr-right"></span>
+            </div>
+          </div>
+          <div class="standings-wrap full-wrap">
+            <table class="standings-table">
+              <thead><tr id="cd-standings-scored-thead-row"><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TOTAL PTS</th></tr></thead>
+              <tbody id="cd-standings-scored-tbody">
+                <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="standings-wrap slim-wrap">
+            <div style="padding:6px 10px; font-size:10px; color:#666; letter-spacing:1px; border-bottom:1px solid #1a1a1a;">TAP A ROW FOR ROUND-BY-ROUND POINTS →</div>
+            <table class="standings-table slim-table">
+              <thead><tr><th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TOTAL</th></tr></thead>
+              <tbody id="cd-standings-scored-slim-tbody">
+                <tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -3895,44 +3927,29 @@ async function loadClubChampionshipStats(clubId, winsId, podiumsId) {
  * points enthält bereits Positions- + Stage-Bonus-Punkte, s. grf_sync.py.
  */
 async function loadClubStandings(clubId) {
-  setHTML('cd-standings-list', '<div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>');
-
   const scoring = CLUB_SCORING_INFO[String(clubId)];
 
-  // Fall A: Club mit eigenem, dokumentiertem Punktesystem (aktuell nur
-  // 14317) — eigene Aggregation aus event_results.total_points (dort
-  // stehen bereits die club-eigenen Punkte drin, s. grf_sync.py).
+  // Sichtbarkeit umschalten: Custom-Scoring-Clubs (aktuell nur 14317)
+  // bekommen die Themed-Style-Tabelle, alle anderen bleiben bei der
+  // einfachen Rangliste. Bewusst bei JEDEM Aufruf neu gesetzt (nicht nur
+  // einmalig) — Standings-Tab kann pro Sitzung mehrfach für verschiedene
+  // Clubs geöffnet werden, der vorherige Zustand darf nicht hängen bleiben.
+  const simpleWrap = $('cd-standings-simple-wrap');
+  const scoredWrap = $('cd-standings-scored-wrap');
+  if (simpleWrap) simpleWrap.style.display = scoring ? 'none' : '';
+  if (scoredWrap) scoredWrap.style.display = scoring ? '' : 'none';
+
   if (scoring) {
-    const championshipId = scoring.championshipId;
-    try {
-      const results = await sbAll('event_results',
-        `select=driver_name,total_points&championship_id=eq.${encodeURIComponent(championshipId)}`
-      );
-      if (!results.length) {
-        renderRankedList('cd-standings-list', [], 'NO RESULTS YET');
-        return;
-      }
-      const totals = {};
-      results.forEach(r => {
-        if (!r.driver_name) return;
-        totals[r.driver_name] = (totals[r.driver_name] || 0) + (r.total_points ?? 0);
-      });
-      const rows = Object.entries(totals)
-        .map(([name, count]) => ({ name, count: Math.round(count) }))
-        .sort((a, b) => b.count - a.count);
-      renderRankedList('cd-standings-list', rows);
-    } catch (err) {
-      console.error('[loadClubStandings]', err);
-      renderRankedList('cd-standings-list', []);
-    }
+    await loadScoredClubStandings(clubId, scoring);
     return;
   }
 
-  // Fall B: generischer Club — RaceNets EIGENER (dynamischer, fahreranzahl-
-  // abhängiger) Punktestand aus championship_standings, befüllt von
-  // grf_sync.py über den bisher ungenutzten /championship/points/-
-  // Endpoint. Wir berechnen hier NICHTS selbst, nur Anzeige der fertigen
-  // RaceNet-Zahlen.
+  setHTML('cd-standings-list', '<div class="improved-row"><div class="improved-rank" style="color:#333;font-size:13px;width:100%;text-align:center;">Loading…</div></div>');
+
+  // RaceNets EIGENER (dynamischer, fahreranzahl-abhängiger) Punktestand aus
+  // championship_standings, befüllt von grf_sync.py über den bisher
+  // ungenutzten /championship/points/-Endpoint. Wir berechnen hier NICHTS
+  // selbst, nur Anzeige der fertigen RaceNet-Zahlen.
   if (!_clubDetailChampId) {
     // Championship (und damit die Live-Results-Selektion) evtl. noch nicht
     // geladen, z.B. bei einem Deep-Link direkt auf #clubs/<id>/standings —
@@ -3957,6 +3974,124 @@ async function loadClubStandings(clubId) {
   } catch (err) {
     console.error('[loadClubStandings]', err);
     renderRankedList('cd-standings-list', []);
+  }
+}
+
+/**
+ * Standings für Custom-Scoring-Clubs (aktuell nur 14317) — dieselbe
+ * Runden-für-Runden-Aufschlüsselung wie bei Themed (loadStandings()),
+ * angepasst: kein LOYALTY-Bonus (Themed-eigene Regel, nicht Teil von
+ * CUSTOM_SCORING), Datenquelle ist die eine explizit konfigurierte
+ * championshipId aus CLUB_SCORING_INFO statt der gerade offenen Club-
+ * Championship.
+ */
+async function loadScoredClubStandings(clubId, scoring) {
+  const championshipId = scoring.championshipId;
+  setHTML('cd-standings-scored-tbody', '<tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>');
+  setHTML('cd-standings-scored-slim-tbody', '<tr><td colspan="4"><div class="empty"><div class="empty-title">LOADING…</div></div></td></tr>');
+
+  try {
+    const evs = await sb('events', `select=id,round_number,location,name&championship_id=eq.${championshipId}&order=round_number.asc`);
+    const evOrder = evs.map(e => e.id);
+
+    const results = await sb('event_results',
+      `select=driver_name,vehicle,total_points,event_id,is_dnf&championship_id=eq.${championshipId}&order=event_id.asc`
+    );
+
+    if (!results.length) {
+      setHTML('cd-standings-scored-tbody', '<tr><td colspan="4"><div class="empty"><div class="empty-title">NO STANDINGS DATA</div></div></td></tr>');
+      setHTML('cd-standings-scored-slim-tbody', '<tr><td colspan="4"><div class="empty"><div class="empty-title">NO STANDINGS DATA</div></div></td></tr>');
+      setText('cd-standings-scored-hdr', 'CHAMPIONSHIP STANDINGS — NO DATA');
+      return;
+    }
+
+    // Best-of-N (Streichresultat) — nur falls diese Championship das nutzt,
+    // sonst zählen alle Runden (dasselbe Fallback-Verhalten wie bei Themed).
+    const champMeta = await sb('championships', `select=name,best_of_events&id=eq.${championshipId}&limit=1`);
+    const bestOf = champMeta[0]?.best_of_events || null;
+
+    const driverMap = {};
+    results.forEach(r => {
+      const name = r.driver_name;
+      if (!name) return;
+      if (!driverMap[name]) driverMap[name] = { name, vehicles: new Set(), roundPts: {}, total: 0 };
+      if (r.vehicle) driverMap[name].vehicles.add(r.vehicle);
+      const pts = r.total_points ?? 0;
+      driverMap[name].roundPts[r.event_id] = (driverMap[name].roundPts[r.event_id] || 0) + pts;
+    });
+
+    Object.values(driverMap).forEach(d => {
+      Object.keys(d.roundPts).forEach(evId => { d.roundPts[evId] = Math.round(d.roundPts[evId]); });
+    });
+
+    Object.values(driverMap).forEach(d => {
+      const roundTotals = Object.values(d.roundPts).sort((a, b) => b - a);
+      const n = bestOf ? Math.min(bestOf, roundTotals.length) : roundTotals.length;
+      d.total = roundTotals.slice(0, n).reduce((s, p) => s + p, 0);
+    });
+
+    const sorted = Object.values(driverMap).sort((a, b) => b.total - a.total);
+
+    setText('cd-standings-scored-hdr', `${champMeta[0]?.name || 'CHAMPIONSHIP'} — STANDINGS`);
+    setText('cd-standings-scored-hdr-right', `${evOrder.length} ROUNDS`);
+
+    const theadRow = $('cd-standings-scored-thead-row');
+    if (theadRow) {
+      const roundHdrs = evs.map(ev =>
+        `<th title="${escapeHtml(ev.name || ev.location || '')}" style="font-size:11px;">R${ev.round_number || '?'}</th>`
+      ).join('');
+      theadRow.innerHTML = `<th>#</th><th>DRIVER</th><th>CAR</th>${roundHdrs}<th>TOTAL PTS</th>`;
+    }
+
+    const tbody = $('cd-standings-scored-tbody');
+    if (tbody) {
+      tbody.innerHTML = sorted.map((d, i) => {
+        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : `${d.vehicles.size} cars`;
+        const roundCells = evOrder.map(evId => {
+          const rd  = evs.find(e => e.id === evId);
+          const lbl = `R${rd?.round_number ?? '?'}`;
+          const pts = d.roundPts[evId];
+          return pts != null
+            ? `<td style="font-size:12px;color:#ccc;" data-label="${lbl}">${fmtPts(pts)}</td>`
+            : `<td style="font-size:12px;color:#555;" data-label="${lbl}">—</td>`;
+        }).join('');
+        return `
+          <tr>
+            <td class="${rankClass(i)}" data-label="#">${String(i + 1).padStart(2, '0')}</td>
+            <td data-label="DRIVER">${escapeHtml(d.name)}</td>
+            <td style="font-size:12px;color:#aaa;" data-label="CAR">${escapeHtml(carStr)}</td>
+            ${roundCells}
+            <td class="ev" style="color:var(--green);font-weight:bold;" data-label="TOTAL">${fmtPts(d.total)}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    const slimTbody = $('cd-standings-scored-slim-tbody');
+    if (slimTbody) {
+      slimTbody.innerHTML = sorted.map((d, i) => {
+        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : `${d.vehicles.size} cars`;
+        const rowId  = `cd-standings-scored-slim-${i}`;
+        const roundBadges = evOrder.map(evId => {
+          const rd  = evs.find(e => e.id === evId);
+          const lbl = `R${rd?.round_number ?? '?'}`;
+          const pts = d.roundPts[evId];
+          return `<div class="slim-badge"><div class="slim-badge-lbl">${lbl}</div><div class="slim-badge-val">${pts != null ? fmtPts(pts) : '—'}</div></div>`;
+        }).join('');
+        return `
+          <tr onclick="toggleSlimDetail('${rowId}')">
+            <td class="${rankClass(i)}">${String(i + 1).padStart(2, '0')}</td>
+            <td>${escapeHtml(d.name)}</td>
+            <td style="font-size:12px;color:#aaa;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(carStr)}</td>
+            <td class="ev" style="color:var(--green);font-weight:bold;">${fmtPts(d.total)}</td>
+          </tr>
+          <tr class="slim-detail-row" id="${rowId}">
+            <td colspan="4"><div class="slim-detail-inner">${roundBadges}</div></td>
+          </tr>`;
+      }).join('');
+    }
+  } catch (err) {
+    console.error('[loadScoredClubStandings]', err);
+    setHTML('cd-standings-scored-tbody', '<tr><td colspan="4"><div class="empty"><div class="empty-title">ERROR LOADING STANDINGS</div></div></td></tr>');
   }
 }
 
@@ -4096,8 +4231,23 @@ async function selectClubEvent(eventId, el) {
 async function _fetchAndRenderClubResults(eventId) {
   if (!eventId) return;
 
+  // Custom-Scoring-Clubs (aktuell nur 14317) brauchen auf Desktop mehr
+  // Spalten (TIME/BASE/BONUS/TOTAL PTS alle direkt sichtbar, exakt wie bei
+  // Themed — nur Stage-Zeiten bleiben hinter dem Klick versteckt). Mobile
+  // bleibt für alle Clubs unverändert kompakt (Total sichtbar, Rest im
+  // Aufklapp-Bereich).
+  const scoring = CLUB_SCORING_INFO[String(_clubDetailId)];
+  const colCount = scoring ? 7 : 4;
+
+  const theadRow = $('cd-results-thead-row');
+  if (theadRow) {
+    theadRow.innerHTML = scoring
+      ? '<th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th><th>BASE</th><th>BONUS</th><th>TOTAL PTS</th>'
+      : '<th>#</th><th>DRIVER</th><th>VEHICLE</th><th>TIME</th>';
+  }
+
   setText('cd-results-hdr', 'RESULTS — LOADING…');
-  setHTML('cd-results-tbody', emptyRow(4, 'LOADING…'));
+  setHTML('cd-results-tbody', emptyRow(colCount, 'LOADING…'));
   setHTML('cd-results-slim-tbody', emptyRow(4, 'LOADING…'));
 
   const ev = _clubDetailEvents.find(e => e.id === eventId) || {};
@@ -4128,7 +4278,7 @@ async function _fetchAndRenderClubResults(eventId) {
     if (!tbody) return;
 
     if (!results.length) {
-      tbody.innerHTML = emptyRow(4, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
+      tbody.innerHTML = emptyRow(colCount, 'NO RESULTS YET', 'Results appear as drivers finish the event.');
       setHTML('cd-results-slim-tbody', emptyRow(4, 'NO RESULTS YET', 'Results appear as drivers finish the event.'));
       setText('cd-results-hdr', `${rdLabel} ${evLabel} — NO DATA`.trim());
       return;
@@ -4143,6 +4293,14 @@ async function _fetchAndRenderClubResults(eventId) {
       stageIdx[r.stage_id][r.driver_name] = r;
     });
 
+    // col4SlimHdr/slimHint gelten nur für die Mobile-Tabelle (bleibt bei 4
+    // Spalten, TOTAL statt TIME) — die Desktop-Kopfzeile wurde oben bereits
+    // komplett neu aufgebaut (mehr Spalten für Custom-Scoring-Clubs).
+    const col4SlimHdr = $('cd-results-slim-col4');
+    const slimHint = $('cd-results-slim-hint');
+    if (col4SlimHdr) col4SlimHdr.textContent = scoring ? 'TOTAL' : 'TIME';
+    if (slimHint)     slimHint.textContent   = scoring ? 'TAP A ROW FOR TIME & POINTS BREAKDOWN →' : 'TAP A ROW FOR STAGE TIMES →';
+
     // Bug-Fix (Session 10, nach Rückmeldung): Voll- und Slim-Ansicht nutzten
     // bisher DIESELBE <table>-Struktur für Stage-Zeiten (eine Spalte pro
     // Stage) — auf schmalen Bildschirmen lief das seitlich aus dem Bild,
@@ -4156,36 +4314,55 @@ async function _fetchAndRenderClubResults(eventId) {
       const posStr = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
       const rowId  = `cd-stages-row-${r.driver_id || i}`;
 
-      let stageRow = '';
+      // Nur die Stage-für-Stage-Zeiten bleiben hinter dem Klick versteckt —
+      // TIME/BASE/BONUS/TOTAL stehen für Custom-Scoring-Clubs auf Desktop
+      // alle direkt in der Hauptzeile, exakt wie bei Themed (dort TIME/
+      // BASE/×CR/TOTAL alle offen sichtbar, nur Stage-Zeiten aufklappbar).
+      let detailRow = '';
       if (stages.length) {
-        const cells = stages.map(st => {
+        const stageHdrs = stages.map(st =>
+          `<td style="font-size:10px;color:var(--red);letter-spacing:1px;">SS${st.stage_number}</td>`
+        ).join('');
+        const stageCells = stages.map(st => {
           const sr = stageIdx[st.id]?.[r.driver_name];
           if (!sr) return `<td style="color:#555;">—</td>`;
           const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
           return `<td ${cls}>${fmtStageTime(sr.time_str) || '—'}</td>`;
         }).join('');
-        const hdrs = stages.map(st =>
-          `<td style="font-size:10px;color:var(--red);letter-spacing:1px;">SS${st.stage_number}</td>`
-        ).join('');
-        stageRow = `
+        detailRow = `
           <tr id="${rowId}" style="display:none;background:#0a0a0a;">
             <td></td>
-            <td colspan="3">
+            <td colspan="${scoring ? 6 : 3}">
               <table style="width:100%;border-collapse:collapse;font-size:12px;">
-                <tr>${hdrs}</tr>
-                <tr>${cells}</tr>
+                <tr>${stageHdrs}</tr>
+                <tr>${stageCells}</tr>
               </table>
             </td>
           </tr>`;
       }
 
+      const scoredCols = scoring ? (() => {
+        const base  = r.base_points ?? null;
+        const bonus = (base != null && r.total_points != null) ? Math.round(r.total_points - base) : null;
+        return `
+          <td data-label="TIME">${fmtStageTime(r.time) || '—'}</td>
+          <td data-label="BASE">${base ?? '—'}</td>
+          <td class="ev" data-label="BONUS">${bonus != null ? '+' + bonus : '—'}</td>
+          <td class="ev" style="color:var(--green);" data-label="TOTAL">${fmtPts(r.total_points)}</td>`;
+      })() : `<td data-label="TIME">${fmtStageTime(r.time) || '—'}</td>`;
+
+      // Zeile ist nur klickbar, wenn es tatsächlich Stage-Zeiten zum
+      // Aufklappen gibt (bei scored Clubs steht sonst nichts mehr
+      // "versteckt", ein Klick ohne Effekt wäre irreführend).
+      const clickable = stages.length > 0;
+
       return `
-        <tr${dnf ? ' style="opacity:.55"' : ''} style="cursor:pointer;" onclick="toggleStageRow('${rowId}')">
+        <tr${dnf ? ' style="opacity:.55"' : ''}${clickable ? ` style="cursor:pointer;" onclick="toggleStageRow('${rowId}')"` : ''}>
           <td class="${rankClass(i)}" data-label="#">${posStr}</td>
           <td data-label="DRIVER">${escapeHtml(r.driver_name) || '—'}</td>
           <td style="font-size:12px;color:#aaa;" data-label="VEHICLE">${escapeHtml(r.vehicle) || '—'}</td>
-          <td data-label="TIME">${fmtStageTime(r.time) || '—'}</td>
-        </tr>${stageRow}`;
+          ${scoredCols}
+        </tr>${detailRow}`;
     }).join('');
 
     const buildSlimRows = () => results.map((r, i) => {
@@ -4199,17 +4376,34 @@ async function _fetchAndRenderClubResults(eventId) {
         return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || '—'}</div></div>`;
       }).join('');
 
+      const col4 = scoring
+        ? `<td class="ev" style="color:var(--green);">${fmtPts(r.total_points)}</td>`
+        : `<td>${fmtStageTime(r.time) || '—'}</td>`;
+
+      let detailInner = '';
+      if (scoring) {
+        const base  = r.base_points ?? null;
+        const bonus = (base != null && r.total_points != null) ? Math.round(r.total_points - base) : null;
+        detailInner = `
+          <div class="slim-detail-inner">
+            <div class="slim-badge"><div class="slim-badge-lbl">TIME</div><div class="slim-badge-val">${fmtStageTime(r.time) || '—'}</div></div>
+            <div class="slim-badge"><div class="slim-badge-lbl">BASE</div><div class="slim-badge-val">${base ?? '—'}</div></div>
+            <div class="slim-badge"><div class="slim-badge-lbl">BONUS</div><div class="slim-badge-val">${bonus != null ? '+' + bonus : '—'}</div></div>
+          </div>
+          ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}`;
+      } else {
+        detailInner = stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : '';
+      }
+
       return `
         <tr${dnf ? ' style="opacity:.55"' : ''} onclick="toggleSlimDetail('${rowId}')">
           <td class="${rankClass(i)}">${posStr}</td>
           <td>${escapeHtml(r.driver_name) || '—'}</td>
           <td style="font-size:12px;color:#aaa;">${escapeHtml(r.vehicle) || '—'}</td>
-          <td>${fmtStageTime(r.time) || '—'}</td>
+          ${col4}
         </tr>
         <tr class="slim-detail-row" id="${rowId}">
-          <td colspan="4">
-            ${stages.length ? `<div class="slim-detail-label">STAGE TIMES</div><div class="slim-detail-inner">${stageBadges}</div>` : ''}
-          </td>
+          <td colspan="4">${detailInner}</td>
         </tr>`;
     }).join('');
 
