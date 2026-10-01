@@ -191,33 +191,55 @@ def _supabase_get_refresh_token() -> str:
     return ""
 
 
-def _supabase_save_refresh_token(token: str):
+def _supabase_save_refresh_token(token: str, max_retries: int = 3):
     """
     Speichert den aktuellen Refresh Token in Supabase system_config.
     Upsert — erstellt oder aktualisiert den Eintrag.
+
+    Resilienz-Fix (Owner-Diagnose, Session 10, nach echtem Vorfall): RaceNet
+    rotiert den Refresh Token bei JEDER Nutzung — ein einziger
+    fehlgeschlagener Schreibvorgang hierher (z.B. durch eine Supabase-
+    Latenz-Störung) lässt den alten, bereits verbrauchten Token in Supabase
+    stehen, was den NÄCHSTEN Lauf sofort und dauerhaft scheitern lässt —
+    jeder Cron-Lauf startet in einem frischen, flüchtigen Container, es
+    gibt keinen lokalen Fallback, Supabase ist der EINZIGE Gedächtnis-Ort.
+    Jetzt: kurze Retry-Schleife mit Backoff (2s/4s) statt einem einzigen
+    Versuch mit nur 5s Timeout, bevor endgültig aufgegeben wird.
     """
     url = os.environ.get("SUPABASE_URL", "").strip()
     key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
     if not url or not key or not token:
         return
-    try:
-        r = requests.post(
-            f"{url}/rest/v1/system_config",
-            headers={
-                "apikey":        key,
-                "Authorization": f"Bearer {key}",
-                "Content-Type":  "application/json",
-                "Prefer":        "resolution=merge-duplicates",
-            },
-            json={"key": "racenet_refresh_token", "value": token},
-            timeout=5,
-        )
-        if r.status_code in (200, 201):
-            print("  ☁️  Refresh Token in Supabase gesichert.")
-        else:
-            print(f"  ⚠  Supabase Token-Speichern fehlgeschlagen: HTTP {r.status_code}")
-    except Exception as e:
-        print(f"  ⚠  Supabase Token-Speichern fehlgeschlagen: {e}")
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            r = requests.post(
+                f"{url}/rest/v1/system_config",
+                headers={
+                    "apikey":        key,
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type":  "application/json",
+                    "Prefer":        "resolution=merge-duplicates",
+                },
+                json={"key": "racenet_refresh_token", "value": token},
+                timeout=10,
+            )
+            if r.status_code in (200, 201):
+                print("  ☁️  Refresh Token in Supabase gesichert.")
+                return
+            print(f"  ⚠  Supabase Token-Speichern fehlgeschlagen "
+                  f"(Versuch {attempt}/{max_retries}): HTTP {r.status_code}")
+        except Exception as e:
+            print(f"  ⚠  Supabase Token-Speichern fehlgeschlagen "
+                  f"(Versuch {attempt}/{max_retries}): {e}")
+
+        if attempt < max_retries:
+            time.sleep(2 * attempt)  # 2s, dann 4s
+
+    print("  ❌ ACHTUNG: Refresh Token konnte nach mehreren Versuchen NICHT in "
+          "Supabase gespeichert werden! Der nächste Lauf wird vermutlich mit "
+          "einem ungültigen Token scheitern — manuelle Erneuerung könnte "
+          "nötig werden (s. Anleitung weiter unten).")
 
 
 def _bootstrap_from_env():
@@ -237,6 +259,15 @@ def _bootstrap_from_env():
         return  # lokale Entwicklung — normale Datei-basierte Logik
 
     force_reset = os.environ.get("RACENET_TOKEN_RESET", "").strip() == "1"
+    # Diagnose-Erweiterung (Owner meldet wiederholte Fehlschläge trotz
+    # mehrfach frisch gesetztem Token) — zeigt zweifelsfrei, ob
+    # RACENET_TOKEN_RESET korrekt als "1" gelesen wurde (statt das nur zu
+    # vermuten), plus die LÄNGE des Env-Var-Werts (nicht den Wert selbst)
+    # als groben Format-Sanity-Check — ein echter RaceNet-Refresh-Token
+    # sollte eine bestimmte charakteristische Länge haben; weicht sie
+    # stark ab, deutet das auf einen falsch kopierten Wert hin.
+    print(f"  🔍 Debug: RACENET_TOKEN_RESET erkannt als force_reset={force_reset}, "
+          f"RACENET_REFRESH_TOKEN Länge={len(rt_env)} Zeichen")
 
     # Zuerst Supabase prüfen — hat den zuletzt rotierten Token
     rt_supabase = _supabase_get_refresh_token() if not force_reset else ""
@@ -365,6 +396,20 @@ class _TokenManager:
                     print(f"  ✅ Token erneuert — gültig bis {exp}")
                     return True
             print(f"  ⚠ Refresh fehlgeschlagen (HTTP {r.status_code})")
+            # Diagnose-Erweiterung (Owner meldet wiederholte Fehlschläge trotz
+            # mehrfach frisch kopiertem Token) — bisher wurde bei einem
+            # Fehlschlag NUR der Statuscode ausgegeben, nichts davon, was
+            # RaceNet tatsächlich zurückmeldet. Zeigt jetzt Response-Header
+            # (z.B. Set-Cookie, die auf eine neue Rotation hindeuten könnten)
+            # und die ersten 300 Zeichen des Response-Bodys — bewusst OHNE
+            # den eigenen Cookie/Token-Wert mitzuloggen (steht nur im
+            # Request, nicht in diesem Debug-Block).
+            try:
+                print(f"     Response-Header: {dict(r.headers)}")
+                body_preview = r.text[:300] if r.text else "(leer)"
+                print(f"     Response-Body (erste 300 Zeichen): {body_preview}")
+            except Exception:
+                pass
             if r.status_code in (401, 403):
                 self._print_setup_help()
             return False
