@@ -744,8 +744,10 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
     bevor mehrere Strecken (mit völlig unterschiedlichen absoluten Zeiten)
     überhaupt miteinander verglichen werden dürfen.
 
-    Gibt (factors_by_car, n_total) zurück, oder (None, 0) wenn die Stage
-    übersprungen werden muss (zu wenig Autos / min_n pro Stage nicht erreicht).
+    Gibt (factors_by_car, n_total, n_by_car) zurück, oder (None, 0, {}) wenn
+    die Stage übersprungen werden muss (zu wenig Autos / min_n pro Stage nicht
+    erreicht). n_by_car = Anzahl der gültigen Zeiten (nach DNF-Filter) JEDES
+    einzelnen Autos auf dieser Stage — nur zur Anzeige, geht nicht in die CR ein.
     """
     stage_ms = [_parse_time_ms(e.get("time","")) for e in entries]
     stage_ms = [t for t in stage_ms if t]
@@ -759,14 +761,14 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
         times_by_car.setdefault(vehicle, []).append(ms)
 
     if len(times_by_car) < 2:
-        return None, 0
+        return None, 0, {}
 
     for car in times_by_car:
         times_by_car[car].sort()
 
     # min_n gilt PRO STAGE, nicht global über alle Strecken summiert
     if any(len(t) < min_n for t in times_by_car.values()):
-        return None, 0
+        return None, 0, {}
 
     n_total = sum(len(t) for t in times_by_car.values())
 
@@ -779,10 +781,11 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
 
     best_ref = min(ref_times.values())
     if best_ref <= 0:
-        return None, 0
+        return None, 0, {}
 
     factors = {car: ref / best_ref for car, ref in ref_times.items()}
-    return factors, n_total
+    n_by_car = {car: len(times) for car, times in times_by_car.items()}
+    return factors, n_total, n_by_car
 
 
 def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int):
@@ -824,6 +827,13 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
 
     wsum: dict[str, float] = {}
     wtot: dict[str, float] = {}
+    # Reine Anzeige-/Diagnosewerte pro Auto (gehen NICHT in die CR ein):
+    #   n_own   = eigene Zeiten des Autos über alle verwendeten Stages
+    #   n_stage = auf wie vielen verwendeten Stages das Auto vorkommt
+    #   n_low   = kleinstes N des Autos auf einer einzelnen Stage
+    n_own:   dict[str, int] = {}
+    n_stage: dict[str, int] = {}
+    n_low:   dict[str, int] = {}
     stages_used    = 0
     stages_skipped = 0
     total_entries  = 0
@@ -832,7 +842,7 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
         if not entries or route_id in incomplete_routes:
             stages_skipped += 1
             continue
-        factors, n_total = _compute_stage_factors(entries, top_pct, min_n)
+        factors, n_total, n_by_car = _compute_stage_factors(entries, top_pct, min_n)
         if factors is None:
             stages_skipped += 1
             continue
@@ -841,6 +851,10 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
         for car, fac in factors.items():
             wsum[car] = wsum.get(car, 0.0) + fac * n_total
             wtot[car] = wtot.get(car, 0.0) + n_total
+            n_car = n_by_car.get(car, 0)
+            n_own[car]   = n_own.get(car, 0) + n_car
+            n_stage[car] = n_stage.get(car, 0) + 1
+            n_low[car]   = min(n_low.get(car, n_car), n_car)
 
     if not wsum:
         return [], {"stages_used": 0, "stages_skipped": stages_skipped, "total_entries": 0}
@@ -857,8 +871,17 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
     best_pow = min(powered.values())
     final_cr = {car: v / best_pow for car, v in powered.items()} if best_pow > 0 else powered
 
+    # "n" = eigene Zeiten des Autos (vorher: Summe aller Zeiten ALLER Autos der
+    # Stages, bei gleichem Stage-Set daher für jedes Auto identisch — reiner
+    # Anzeigefehler, die CR war nie betroffen).
     results = [
-        {"vehicle": car, "n": int(wtot[car]), "cr": round(cr, 4)}
+        {
+            "vehicle": car,
+            "n":       int(n_own.get(car, 0)),
+            "stages":  int(n_stage.get(car, 0)),
+            "n_min":   int(n_low.get(car, 0)),
+            "cr":      round(cr, 4),
+        }
         for car, cr in final_cr.items()
     ]
     results.sort(key=lambda x: x["cr"])
