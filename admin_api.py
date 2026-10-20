@@ -746,7 +746,9 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
 
     Gibt (factors_by_car, n_total, n_by_car) zurück, oder (None, 0, {}) wenn
     die Stage übersprungen werden muss (zu wenig Autos / min_n pro Stage nicht
-    erreicht). n_by_car = Anzahl der gültigen Zeiten (nach DNF-Filter) JEDES
+    erreicht). Im Skip-Fall enthält das dritte Element eine Diagnose
+    {"reason": "min_n"|"too_few_cars"|"invalid_times", "cars": {auto: n}}
+    (bei min_n: die Autos unter min_n). n_by_car = Anzahl der gültigen Zeiten (nach DNF-Filter) JEDES
     einzelnen Autos auf dieser Stage — nur zur Anzeige, geht nicht in die CR ein.
     """
     stage_ms = [_parse_time_ms(e.get("time","")) for e in entries]
@@ -761,14 +763,16 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
         times_by_car.setdefault(vehicle, []).append(ms)
 
     if len(times_by_car) < 2:
-        return None, 0, {}
+        return None, 0, {"reason": "too_few_cars",
+                         "cars": {c: len(t) for c, t in times_by_car.items()}}
 
     for car in times_by_car:
         times_by_car[car].sort()
 
     # min_n gilt PRO STAGE, nicht global über alle Strecken summiert
     if any(len(t) < min_n for t in times_by_car.values()):
-        return None, 0, {}
+        return None, 0, {"reason": "min_n",
+                         "cars": {c: len(t) for c, t in times_by_car.items() if len(t) < min_n}}
 
     n_total = sum(len(t) for t in times_by_car.values())
 
@@ -781,7 +785,7 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
 
     best_ref = min(ref_times.values())
     if best_ref <= 0:
-        return None, 0, {}
+        return None, 0, {"reason": "invalid_times", "cars": {}}
 
     factors = {car: ref / best_ref for car, ref in ref_times.items()}
     n_by_car = {car: len(times) for car, times in times_by_car.items()}
@@ -837,14 +841,19 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
     stages_used    = 0
     stages_skipped = 0
     total_entries  = 0
+    skipped_detail: list = []   # Übeltäter pro übersprungener Strecke
 
     for route_id, entries in entries_by_route.items():
         if not entries or route_id in incomplete_routes:
             stages_skipped += 1
+            skipped_detail.append({"route_id": route_id, "reason": "no_data", "cars": {}})
             continue
         factors, n_total, n_by_car = _compute_stage_factors(entries, top_pct, min_n)
         if factors is None:
             stages_skipped += 1
+            skipped_detail.append({"route_id": route_id,
+                                   "reason": n_by_car.get("reason", "unknown"),
+                                   "cars":   n_by_car.get("cars", {})})
             continue
         stages_used   += 1
         total_entries += n_total
@@ -857,7 +866,8 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
             n_low[car]   = min(n_low.get(car, n_car), n_car)
 
     if not wsum:
-        return [], {"stages_used": 0, "stages_skipped": stages_skipped, "total_entries": 0}
+        return [], {"stages_used": 0, "stages_skipped": stages_skipped, "total_entries": 0,
+                    "skipped_detail": skipped_detail}
 
     # Gewichteter Durchschnitt über alle Stages
     wavg = {car: wsum[car] / wtot[car] for car in wsum if wtot[car] > 0}
@@ -885,7 +895,8 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
         for car, cr in final_cr.items()
     ]
     results.sort(key=lambda x: x["cr"])
-    return results, {"stages_used": stages_used, "stages_skipped": stages_skipped, "total_entries": total_entries}
+    return results, {"stages_used": stages_used, "stages_skipped": stages_skipped,
+                     "total_entries": total_entries, "skipped_detail": skipped_detail}
 
 
 @app.route("/cr/values", methods=["GET"])
@@ -954,6 +965,7 @@ def cr_calculate():
             "stages_loaded":  stats["stages_used"],
             "stages_skipped": stats["stages_skipped"],
             "vehicles_found": len(results),
+            "skipped_detail": stats.get("skipped_detail", []),
             # Leaderboards, die RaceNet auch nach Wiederholung nicht lieferte
             # (technischer Fehler, nicht "zu wenig Autos")
             "load_failed":    [{"route_id": f["stage_id"], "class_id": f["class_id"]}

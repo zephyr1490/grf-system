@@ -7262,7 +7262,18 @@ async function crCalculate() {
       const list = loadFailed.map(f => `${f.route_id}/${f.class_id}`).join(', ');
       setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${loadFailed.length} leaderboard(s) could not be loaded from RaceNet (even after retry): ${list}</span>. ${skipped} of ${stats.stages_loaded + skipped} stage(s) skipped in total. Please recalculate before saving.`);
     } else if (skipped > 0) {
-      setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${skipped} of ${stats.stages_loaded + skipped} selected stage(s) were skipped</span> (RaceNet timeout, too few cars, or min N=${minN} not reached on that stage). Review preview carefully before saving.`);
+      const detail = (stats.skipped_detail || []).map(d => {
+        const cb   = document.querySelector(`input[name="cr-route"][value="${d.route_id}"]`);
+        const name = cb ? cb.parentElement.textContent.trim() : `Route ${d.route_id}`;
+        const cars = Object.entries(d.cars || {}).map(([c, n]) => `${c} (N=${n})`).join(', ');
+        let why;
+        if (d.reason === 'min_n')              why = `below min N=${minN}: ${cars}`;
+        else if (d.reason === 'too_few_cars')  why = `fewer than 2 cars with valid times${cars ? ': ' + cars : ''}`;
+        else if (d.reason === 'no_data')       why = 'no leaderboard data returned';
+        else                                   why = d.reason || 'unknown';
+        return `<li>${escapeHtml(name)} — ${escapeHtml(why)}</li>`;
+      }).join('');
+      setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${skipped} of ${stats.stages_loaded + skipped} selected stage(s) were skipped</span>. Review preview carefully before saving.<ul style="margin:6px 0 0 18px;">${detail}</ul>`);
     } else {
       setText('cr-status', `✓ ${results.length} vehicles — all ${stats.stages_loaded} selected stages used, review preview then confirm to save.`);
     }
