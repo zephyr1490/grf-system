@@ -787,8 +787,19 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
 
 def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int):
     """
-    CR-Berechnung — vollständig nach points_auto_fixed_28.py:
+    CR-Berechnung — nach points_auto_fixed_28.py, MULTICLASS-FIX (2026-10):
 
+    0. Leaderboards einer Strecke aus ALLEN gewählten Klassen werden vor der
+       Normierung zu EINEM Feld zusammengeführt. Vorher wurde jedes
+       (Strecke, Klasse)-Leaderboard einzeln normiert — dadurch bekam das
+       schnellste Auto JEDER Klasse auf jeder Stage den Faktor 1.0, und der
+       absolute Zeitunterschied zwischen den Klassen (z.B. AWD S2000 gegen
+       FWD S1600) floss nie in die CR ein. Bei nur einer Klasse ändert sich
+       am Ergebnis nichts.
+       Fehlt eine gewählte Klasse auf einer Strecke komplett (leeres
+       Leaderboard, z.B. RaceNet-Timeout), wird die Strecke übersprungen —
+       sonst würde sie nur innerhalb der übrigen Klasse normiert und der
+       alte Fehler käme für diese Strecke zurück.
     1. Pro Stage einzeln normalisieren (_compute_stage_factors, s.o.)
     2. Über alle Stages gewichtet mitteln — Gewicht = Teilnehmerzahl der
        jeweiligen Stage (eine Strecke mit 80 Fahrern zählt mehr als eine
@@ -797,15 +808,28 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
        Auto liegt exakt bei 1.0
     4. Exponent anwenden, danach NOCHMAL normieren → garantiert exakt 1.0
        für das schnellste Auto, unabhängig von Anzahl/Auswahl der Autos
+
+    HINWEIS: min_n gilt jetzt für das zusammengeführte Feld — ein Auto mit
+    zu wenig Zeiten streicht die Strecke damit für BEIDE Klassen.
     """
+    # Leaderboards pro Strecke zusammenführen (alle gewählten Klassen)
+    entries_by_route: dict = {}
+    incomplete_routes: set = set()
+    for (route_id, class_id), entries in leaderboards.items():
+        bucket = entries_by_route.setdefault(route_id, [])
+        if entries:
+            bucket.extend(entries)
+        else:
+            incomplete_routes.add(route_id)
+
     wsum: dict[str, float] = {}
     wtot: dict[str, float] = {}
     stages_used    = 0
     stages_skipped = 0
     total_entries  = 0
 
-    for (route_id, class_id), entries in leaderboards.items():
-        if not entries:
+    for route_id, entries in entries_by_route.items():
+        if not entries or route_id in incomplete_routes:
             stages_skipped += 1
             continue
         factors, n_total = _compute_stage_factors(entries, top_pct, min_n)
