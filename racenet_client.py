@@ -96,6 +96,7 @@ import json
 import time
 import base64
 import os
+import threading
 from datetime import datetime
 from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -315,6 +316,7 @@ class _TokenManager:
         self.access_token  = None
         self.refresh_token = None
         self.token_expiry  = 0
+        self._refresh_lock = threading.RLock()
         self._load_tokens()
 
     def _load_tokens(self):
@@ -441,8 +443,16 @@ class _TokenManager:
         if self.access_token and not self._is_expired():
             return self.access_token
 
-        if self.refresh_token and self._refresh():
-            return self.access_token
+        # Refresh-Token rotiert bei jeder Benutzung: parallele Refreshes
+        # entwerten sich gegenseitig (HTTP 204 + Cookie gelöscht). Deshalb
+        # nur ein Thread erneuert, die anderen warten und übernehmen dessen
+        # Ergebnis (Double-Check nach Erhalt der Sperre).
+        with self._refresh_lock:
+            if self.access_token and not self._is_expired():
+                return self.access_token
+
+            if self.refresh_token and self._refresh():
+                return self.access_token
 
         self._print_setup_help()
         return None
@@ -482,6 +492,11 @@ class RacenetClient:
         # dokumentiert, also reagieren statt raten: wird dieser Zähler während
         # eines Parallel-Batches erhöht, war RaceNet erkennbar überlastet.
         self.throttle_events = 0
+
+        # Ergebnis des letzten get_public_leaderboards_parallel-Aufrufs:
+        # Liste von {"stage_id", "class_id", "error"} für Leaderboards, die
+        # auch nach dem Wiederholungsversuch nicht geladen werden konnten.
+        self.last_load_failures: list[dict] = []
 
     # ── HTTP ──────────────────────────────────────────────────────────────────
 
@@ -815,31 +830,55 @@ class RacenetClient:
             results = client.get_public_leaderboards_parallel(combos)
             entries_252 = results[(252, 21)]
         """
-        import threading
         results = {}
         total   = len(combos)
         done    = 0
         lock    = threading.Lock()
+        failed: dict[tuple[int, int], str] = {}
+        self.last_load_failures = []
+
+        # Token EINMAL vor dem Start der Threads beschaffen — sonst starten
+        # alle Worker mit abgelaufenem Token gleichzeitig einen Refresh.
+        try:
+            self._headers()
+        except Exception as e:
+            print(f"  ⚠ Token-Vorwärmung fehlgeschlagen: {e}")
 
         def _fetch(stage_id, class_id):
             try:
                 return (stage_id, class_id), self.get_public_leaderboard(
                     stage_id, class_id, max_results=max_results
-                )
+                ), None
             except Exception as e:
                 print(f"  ⚠ Stage {stage_id}/{class_id}: {e}")
-                return (stage_id, class_id), []
+                return (stage_id, class_id), [], str(e)
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(_fetch, s, c): (s, c) for s, c in combos}
             for fut in as_completed(futures):
-                key, entries = fut.result()
+                key, entries, err = fut.result()
                 results[key] = entries
+                if err:
+                    failed[key] = err
                 with lock:
                     done += 1
                 if on_progress:
                     on_progress(done, total, key[0], key[1])
 
+        # Gescheiterte einmal nacheinander wiederholen (kein Wettlauf mehr)
+        for key in list(failed):
+            time.sleep(0.5)
+            k, entries, err = _fetch(*key)
+            if err is None:
+                results[k] = entries
+                del failed[key]
+            else:
+                failed[key] = err
+
+        self.last_load_failures = [
+            {"stage_id": s, "class_id": c, "error": e}
+            for (s, c), e in failed.items()
+        ]
         return results
 
     # ── Convenience: Alle Daten einer aktiven Championship ────────────────────

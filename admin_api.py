@@ -954,6 +954,10 @@ def cr_calculate():
             "stages_loaded":  stats["stages_used"],
             "stages_skipped": stats["stages_skipped"],
             "vehicles_found": len(results),
+            # Leaderboards, die RaceNet auch nach Wiederholung nicht lieferte
+            # (technischer Fehler, nicht "zu wenig Autos")
+            "load_failed":    [{"route_id": f["stage_id"], "class_id": f["class_id"]}
+                               for f in client.last_load_failures],
         }
     })
 

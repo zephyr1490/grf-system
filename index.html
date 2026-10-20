@@ -7257,7 +7257,11 @@ async function crCalculate() {
     setText('cr-preview-info', `${results.length} vehicles · ${stats.stages_loaded} stages · ${stats.total_entries} entries · exp=${exponent}`);
 
     const skipped = stats.stages_skipped || 0;
-    if (skipped > 0) {
+    const loadFailed = stats.load_failed || [];
+    if (loadFailed.length > 0) {
+      const list = loadFailed.map(f => `${f.route_id}/${f.class_id}`).join(', ');
+      setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${loadFailed.length} leaderboard(s) could not be loaded from RaceNet (even after retry): ${list}</span>. ${skipped} of ${stats.stages_loaded + skipped} stage(s) skipped in total. Please recalculate before saving.`);
+    } else if (skipped > 0) {
       setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${skipped} of ${stats.stages_loaded + skipped} selected stage(s) were skipped</span> (RaceNet timeout, too few cars, or min N=${minN} not reached on that stage). Review preview carefully before saving.`);
     } else {
       setText('cr-status', `✓ ${results.length} vehicles — all ${stats.stages_loaded} selected stages used, review preview then confirm to save.`);
