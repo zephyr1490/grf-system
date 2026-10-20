@@ -367,6 +367,61 @@ in `index.html` einbauen (Muster: bestehende `.faq-card`-Einträge dort).
   (`FOR SELECT USING (true)`) für den `anon`-Key. `driver_pins` und
   `club_discord_webhooks` bewusst NICHT.
 
+## Team Sign-up + Wünsche (Teamed, 20.10.2026)
+
+Spieler melden sich auf der Teamed-Seite (Button "Sign up" im Hero, nur sichtbar solange die
+Anmeldung offen ist) mit ihrem Fahrer-PIN an und geben genau EINEN Wunschpartner an. Konzept und
+alle abgestimmten Regeln: `claude/team_lottery_concept.md`.
+
+- **Dateien:** `team_signup.sql` (Tabellen + Grants, einmal in Supabase ausführen), `team_signup.py`
+  (liegt neben `admin_api.py`, dort per `team_signup.register_routes(...)` eingehängt —
+  MUSS mit deployt werden), Frontend in `index.html` (Modal `signup-modal-*`, Admin-Tab "Team Sign-up").
+- **Tabellen:** `team_signups` (öffentlich lesbar = Anmelde-Pool), `team_wishes` (GEHEIM, nur
+  service_role). `championships.signup_open` / `signup_deadline` steuern die Anmeldung
+  (Admin-Panel → Team Sign-up).
+- **Endpunkte (PIN-geprüft):** `/teamsignup/status|register|unregister|wish|wish/delete`;
+  Admin: `/admin/team-signup/config|overview|remove`. Zu viele falsche PINs pro IP → HTTP 429.
+- **Gruppenerkennung** (`analyze_wishes`): Kreise der Länge 2–4 = feste Gruppen, alles andere weich;
+  Wünsche auf/von nicht Angemeldete zählen nicht (gelten wieder, sobald der Partner angemeldet ist).
+- Ob ein Wunsch gegenseitig ist, sehen Spieler bewusst NICHT.
+- **Noch nicht gebaut:** erwartete Punkte aus ELO, Auslosung/Balancing, Reveal, Placement-Event.
+
+## ⚠️ Supabase ändert ab 30.10.2026 die Data-API-Grants (Hinweis-Mail vom 20.10.2026)
+
+Ab dem **30. Oktober 2026** gewährt Supabase für **neue** Tabellen im
+`public`-Schema bei **bestehenden Projekten** nicht mehr automatisch
+Data-API-Zugriff (supabase-js, PostgREST, GraphQL). **Bestehende Tabellen
+sind NICHT betroffen** — sie behalten ihre Grants.
+
+- **Gilt für jede Tabelle, die ab dem 30.10. neu angelegt wird** — auch über
+  Migrationen, die das Schema neu aufbauen (neue Projekte, Preview-Branches,
+  lokales `supabase db reset`). Ohne expliziten `GRANT` kommt von der API
+  `permission denied` — die Fehlermeldung enthält das auszuführende
+  Statement.
+- **Regel für jede künftige `CREATE TABLE` (SQL-Dateien, Migrationen,
+  Schema-Skripte):** im selben Skript direkt die Grants mitliefern:
+  ```sql
+  grant select on public.<tabelle> to anon;
+  grant select, insert, update, delete on public.<tabelle> to authenticated;
+  grant select, insert, update, delete on public.<tabelle> to service_role;
+  ```
+  Wichtig: **auch `service_role`** — das Backend (`admin_api.py`,
+  `grf_sync.py`) schreibt über den Service-Role-Key und braucht den Grant
+  künftig ebenfalls, RLS-Bypass ersetzt ihn nicht.
+- **Abschottung beibehalten:** Tabellen, die bewusst NICHT über `anon`
+  erreichbar sein sollen (`driver_pins`, `club_discord_webhooks`,
+  `system_config`), bekommen **keinen** `anon`-Grant (und am besten auch
+  keinen für `authenticated`) — nur `service_role`. Nicht pauschal die
+  Vorlage oben kopieren.
+- Bei bestehenden SQL-Dateien im Projekt (`supabase_schema.sql`,
+  `driver_stats_summary.sql`, `club_narrative.sql`, ...) fehlen teils
+  `service_role`-Grants (z.B. hat `driver_stats_summary.sql` nur
+  `GRANT SELECT ... TO anon, authenticated`). Für bestehende Tabellen
+  unkritisch; nur relevant, falls das Schema irgendwo neu aufgebaut wird
+  (neues Projekt, Branch, `db reset`) — dann Grants ergänzen.
+- Welche Tabellen die Data API überhaupt exponiert, steht in den
+  Supabase-Projekteinstellungen unter "Data API settings".
+
 ## Bekannte Stolperfallen
 
 - **RaceNet-Feldpfade NIE unabhängig neu raten** (Session 9): `grf_sync.py`s

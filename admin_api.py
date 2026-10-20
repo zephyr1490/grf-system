@@ -948,8 +948,37 @@ def _cr_store_run(leaderboards, params, results):
     return run_id
 
 
-def _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank=1):
+def _entry_has_no_assists(e):
+    """True, wenn der Leaderboard-Eintrag ohne Fahrhilfen gefahren wurde
+    (assistFlags == [0]). Fehlt das Feld ganz, gilt der Eintrag als unbekannt
+    und wird NICHT als "ohne Assists" gezählt."""
+    flags = e.get("assistFlags")
+    if isinstance(flags, str):
+        try:
+            import json as _j
+            flags = _j.loads(flags)
+        except Exception:
+            return False
+    if not isinstance(flags, (list, tuple)):
+        return False
+    return all(int(f) == 0 for f in flags)
+
+
+def _filter_no_assists(leaderboards):
+    """Nur Einträge ohne Assists behalten. Zeigt das Feld in den Daten gar nicht
+    auf (API-Änderung), wird NICHT gefiltert, statt alles zu verwerfen."""
+    if not any(("assistFlags" in e) for lb in leaderboards.values() for e in lb):
+        return leaderboards, False
+    return {k: [e for e in lb if _entry_has_no_assists(e)] if lb else lb
+            for k, lb in leaderboards.items()}, True
+
+
+def _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank=1, no_assists=False):
     """Gemeinsame Auswertung für normalen und Streaming-Modus → (dict, http_status)."""
+    filtered = False
+    if no_assists:
+        leaderboards, filtered = _filter_no_assists(leaderboards)
+
     results, stats = _compute_cr(leaderboards, top_pct, exponent, min_n, min_rank)
 
     if not results:
@@ -957,7 +986,8 @@ def _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank=
 
     run_id = _cr_store_run(
         leaderboards,
-        {"top_pct": top_pct, "min_n": min_n, "min_rank": min_rank, "exponent": exponent},
+        {"top_pct": top_pct, "min_n": min_n, "min_rank": min_rank, "exponent": exponent,
+         "no_assists": bool(filtered)},
         results,
     )
     return {
@@ -968,6 +998,7 @@ def _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank=
             "stages_loaded":  stats["stages_used"],
             "stages_skipped": stats["stages_skipped"],
             "vehicles_found": len(results),
+            "no_assists":     bool(filtered),
             "skipped_detail": stats.get("skipped_detail", []),
             # Leaderboards, die RaceNet auch nach Wiederholung nicht lieferte
             # (technischer Fehler, nicht "zu wenig Autos")
@@ -982,7 +1013,7 @@ def _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank=
 def cr_calculate():
     """
     Berechnet CR aus RaceNet Time Trial Leaderboards.
-    Body: { route_ids, class_ids, top_pct, min_n, min_rank, exponent, max_results, stream }
+    Body: { route_ids, class_ids, top_pct, min_n, min_rank, exponent, no_assists, max_results, stream }
 
     stream=true → NDJSON-Stream (eine JSON-Zeile pro Ereignis):
         {"type":"progress","done":n,"total":m}   nach jedem fertigen Leaderboard
@@ -1000,6 +1031,7 @@ def cr_calculate():
     min_n       = int(body.get("min_n",      10))
     exponent    = float(body.get("exponent", 1.5))
     min_rank    = max(1, int(body.get("min_rank", 1)))
+    no_assists  = bool(body.get("no_assists", False))
     max_results = int(body.get("max_results", 99999))
     stream      = bool(body.get("stream", False))
 
@@ -1016,7 +1048,7 @@ def cr_calculate():
             )
         except Exception as e:
             return jsonify({"error": f"RaceNet error: {e}"}), 500
-        data, status = _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank)
+        data, status = _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank, no_assists)
         return jsonify(data), status
 
     # ── Streaming-Modus ───────────────────────────────────────────────────────
@@ -1031,7 +1063,7 @@ def cr_calculate():
                 on_progress=lambda done, total, sid, cid:
                     q.put({"type": "progress", "done": done, "total": total}),
             )
-            data, status = _cr_build_response(lbs, client, top_pct, exponent, min_n, min_rank)
+            data, status = _cr_build_response(lbs, client, top_pct, exponent, min_n, min_rank, no_assists)
             print(f"  ⏱ CR-Berechnung: {len(combos)} Leaderboards in "
                   f"{_time.time() - t0:.0f}s, throttle_events={client.throttle_events}, "
                   f"load_failed={len(client.last_load_failures)}")
@@ -2318,6 +2350,15 @@ def elo_update():
         import traceback
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
+
+# ── Team Sign-up + Wünsche (Teamed) ───────────────────────────────────────────
+# Eigenes Modul team_signup.py (liegt neben dieser Datei), s.
+# claude/team_lottery_concept.md und team_signup.sql.
+import team_signup
+team_signup.register_routes(app, {
+    "sb_get": sb_get, "sb_post": sb_post, "sb_patch": sb_patch, "sb_delete": sb_delete,
+    "auth": auth, "err_detail": _err_detail,
+})
 
 # ── Start ─────────────────────────────────────────────────────────────────────
 
