@@ -732,7 +732,7 @@ def _is_dnf_ms(ms, all_ms=None):
             if ms < med * 1.3: return False
     return True
 
-def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
+def _compute_stage_factors(entries: list, top_pct: float, min_n: int, min_rank: int = 1):
     """
     Pro-Stage-Normalisierung — 1:1 aus points_auto_fixed_28.py portiert.
 
@@ -743,6 +743,12 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
     einen Wert >= 1.0 relativ dazu. Diese Pro-Stage-Normalisierung ist nötig,
     bevor mehrere Strecken (mit völlig unterschiedlichen absoluten Zeiten)
     überhaupt miteinander verglichen werden dürfen.
+
+    min_rank (Standard 1 = altes Verhalten): Die Referenz liegt nie weiter
+    vorn als dieser Rang der EIGENEN sortierten Zeiten des Autos, auch wenn
+    top_pct/100*N kleiner wäre. Fängt Autos mit wenig Einträgen ab, deren
+    Referenz sonst die Bestzeit eines einzelnen Fahrers wäre (DLC, unbeliebte
+    Autos); bei vielen Einträgen ändert sich nichts.
 
     Gibt (factors_by_car, n_total, n_by_car) zurück, oder (None, 0, {}) wenn
     die Stage übersprungen werden muss (zu wenig Autos / min_n pro Stage nicht
@@ -780,7 +786,7 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
     ref_times = {}
     for car, times in times_by_car.items():
         n_car  = len(times)
-        stelle = max(1, min(round(top_pct / 100 * n_car), n_car))
+        stelle = max(1, min(max(min_rank, round(top_pct / 100 * n_car)), n_car))
         ref_times[car] = times[stelle - 1]
 
     best_ref = min(ref_times.values())
@@ -792,7 +798,7 @@ def _compute_stage_factors(entries: list, top_pct: float, min_n: int):
     return factors, n_total, n_by_car
 
 
-def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int):
+def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int, min_rank: int = 1):
     """
     CR-Berechnung — nach points_auto_fixed_28.py, MULTICLASS-FIX (2026-10):
 
@@ -848,7 +854,7 @@ def _compute_cr(leaderboards: dict, top_pct: float, exponent: float, min_n: int)
             stages_skipped += 1
             skipped_detail.append({"route_id": route_id, "reason": "no_data", "cars": {}})
             continue
-        factors, n_total, n_by_car = _compute_stage_factors(entries, top_pct, min_n)
+        factors, n_total, n_by_car = _compute_stage_factors(entries, top_pct, min_n, min_rank)
         if factors is None:
             stages_skipped += 1
             skipped_detail.append({"route_id": route_id,
@@ -925,14 +931,37 @@ def cr_values():
         return jsonify({"error": detail, "trace": tb}), 500
 
 
-def _cr_build_response(leaderboards, client, top_pct, exponent, min_n):
+# Letzte CR-Läufe (Leaderboards + Parameter) für den Excel-Export, damit
+# RaceNet dafür nicht erneut abgefragt werden muss. Nur im Arbeitsspeicher
+# (eine Railway-Instanz), maximal 3 Läufe; nach Neustart ist ein Lauf weg →
+# dann einfach neu berechnen.
+_CR_RUNS: dict = {}
+_CR_RUNS_MAX = 3
+
+
+def _cr_store_run(leaderboards, params, results):
+    run_id = secrets.token_hex(6)
+    _CR_RUNS[run_id] = {"leaderboards": leaderboards, "params": params,
+                        "results": results, "ts": datetime.now(timezone.utc)}
+    while len(_CR_RUNS) > _CR_RUNS_MAX:
+        _CR_RUNS.pop(next(iter(_CR_RUNS)))
+    return run_id
+
+
+def _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank=1):
     """Gemeinsame Auswertung für normalen und Streaming-Modus → (dict, http_status)."""
-    results, stats = _compute_cr(leaderboards, top_pct, exponent, min_n)
+    results, stats = _compute_cr(leaderboards, top_pct, exponent, min_n, min_rank)
 
     if not results:
         return {"error": f"No valid stages found (min N={min_n} per stage, at least 2 cars per stage required)"}, 404
 
+    run_id = _cr_store_run(
+        leaderboards,
+        {"top_pct": top_pct, "min_n": min_n, "min_rank": min_rank, "exponent": exponent},
+        results,
+    )
     return {
+        "run_id":  run_id,
         "results": results,
         "stats": {
             "total_entries":  stats["total_entries"],
@@ -953,7 +982,7 @@ def _cr_build_response(leaderboards, client, top_pct, exponent, min_n):
 def cr_calculate():
     """
     Berechnet CR aus RaceNet Time Trial Leaderboards.
-    Body: { route_ids, class_ids, top_pct, min_n, exponent, max_results, stream }
+    Body: { route_ids, class_ids, top_pct, min_n, min_rank, exponent, max_results, stream }
 
     stream=true → NDJSON-Stream (eine JSON-Zeile pro Ereignis):
         {"type":"progress","done":n,"total":m}   nach jedem fertigen Leaderboard
@@ -970,6 +999,7 @@ def cr_calculate():
     top_pct     = float(body.get("top_pct",  25))
     min_n       = int(body.get("min_n",      10))
     exponent    = float(body.get("exponent", 1.5))
+    min_rank    = max(1, int(body.get("min_rank", 1)))
     max_results = int(body.get("max_results", 99999))
     stream      = bool(body.get("stream", False))
 
@@ -986,7 +1016,7 @@ def cr_calculate():
             )
         except Exception as e:
             return jsonify({"error": f"RaceNet error: {e}"}), 500
-        data, status = _cr_build_response(leaderboards, client, top_pct, exponent, min_n)
+        data, status = _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank)
         return jsonify(data), status
 
     # ── Streaming-Modus ───────────────────────────────────────────────────────
@@ -1001,7 +1031,7 @@ def cr_calculate():
                 on_progress=lambda done, total, sid, cid:
                     q.put({"type": "progress", "done": done, "total": total}),
             )
-            data, status = _cr_build_response(lbs, client, top_pct, exponent, min_n)
+            data, status = _cr_build_response(lbs, client, top_pct, exponent, min_n, min_rank)
             print(f"  ⏱ CR-Berechnung: {len(combos)} Leaderboards in "
                   f"{_time.time() - t0:.0f}s, throttle_events={client.throttle_events}, "
                   f"load_failed={len(client.last_load_failures)}")
@@ -1027,6 +1057,39 @@ def cr_calculate():
     resp.headers["Cache-Control"]     = "no-cache"
     resp.headers["X-Accel-Buffering"] = "no"
     return resp
+
+
+@app.route("/cr/export-xlsx", methods=["POST"])
+@auth
+def cr_export_xlsx():
+    """
+    Detail-Excel zu einem berechneten CR-Lauf (siehe cr_export.py).
+    Body: { run_id, routes: {route_id: {loc, name}}, classes: {class_id: name} }
+    """
+    from flask import send_file
+    import io as _io
+    from cr_export import build_workbook
+
+    body   = request.json or {}
+    run    = _CR_RUNS.get(body.get("run_id", ""))
+    if not run:
+        return jsonify({"error": "Run not found (server restarted or too old) — please calculate again."}), 404
+
+    routes  = {int(k): v for k, v in (body.get("routes")  or {}).items()}
+    classes = {int(k): v for k, v in (body.get("classes") or {}).items()}
+    try:
+        data = build_workbook(
+            run, routes, classes, run["results"],
+            {"parse_time_ms": _parse_time_ms, "is_dnf_ms": _is_dnf_ms,
+             "compute_stage_factors": _compute_stage_factors},
+        )
+    except Exception as e:
+        import traceback
+        return jsonify({"error": f"Excel export failed: {e}", "trace": traceback.format_exc()}), 500
+
+    return send_file(_io.BytesIO(data),
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                     as_attachment=True, download_name="cr_detail.xlsx")
 
 
 @app.route("/cr/save", methods=["POST"])

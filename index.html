@@ -1958,6 +1958,13 @@ textarea.inp-std { resize:vertical; }
             </div>
 
             <div>
+              <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">MIN REFERENCE RANK</label>
+              <input type="text" value="1" id="cr-min-rank"
+                style="background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; width:100%; outline:none;">
+              <div style="font-size:10px; color:#444; margin-top:3px;">Reference is never better than this rank per car (1 = off). Dampens cars with few entries, e.g. 3.</div>
+            </div>
+
+            <div>
               <label style="font-size:11px; color:#888; letter-spacing:1px; display:block; margin-bottom:4px;">EXPONENT</label>
               <input type="text" value="1.5" id="cr-exponent"
                 style="background:#252729; border:1px solid #333; border-color:var(--bd) var(--bl) var(--bl) var(--bd); color:var(--gray-light); font-family:var(--ui-font); font-size:14px; padding:5px 8px; width:100%; outline:none;">
@@ -1992,6 +1999,10 @@ textarea.inp-std { resize:vertical; }
               <button onclick="crExport()"
                 style="background:#252729; color:#aaa; border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:6px 12px; cursor:pointer;">
                 EXPORT CSV
+              </button>
+              <button onclick="crExportXlsx()"
+                style="background:#252729; color:#aaa; border:2px solid; border-color:#333 #1a1a1a #1a1a1a #333; font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:6px 12px; cursor:pointer;">
+                EXPORT EXCEL (DETAIL)
               </button>
             </div>
             <div id="cr-status" style="font-size:11px; color:#555; min-height:16px; line-height:1.5;"></div>
@@ -7100,6 +7111,7 @@ async function adminLoadChampionships() {
 
 // Stores last calculated CR results for save
 let _crLastResults = [];
+let _crLastRunId = null;         // Server-Lauf für den Excel-Export
 let _crLastStagesTotal = null;   // verwendete Stages der letzten Berechnung (für STAGES x/y + CSV)
 
 function crUpdateCounts() {
@@ -7237,6 +7249,7 @@ async function _crReadStream(res, onProgress) {
 async function crCalculate() {
   const topPct   = parseFloat($('cr-top-pct')?.value)  || 25;
   const minN     = parseInt($('cr-min-n')?.value)       || 10;
+  const minRank  = Math.max(1, parseInt($('cr-min-rank')?.value) || 1);
   const exponent = parseFloat($('cr-exponent')?.value)  || 1.5;
 
   const routeIds  = [...document.querySelectorAll('input[name="cr-route"]:checked')].map(c => parseInt(c.value));
@@ -7260,7 +7273,7 @@ async function crCalculate() {
     const res  = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
-      body: JSON.stringify({ route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, exponent, max_results: 99999, stream: true }),
+      body: JSON.stringify({ route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, min_rank: minRank, exponent, max_results: 99999, stream: true }),
     });
 
     if (!res.ok) {
@@ -7284,6 +7297,7 @@ async function crCalculate() {
     const stats   = data.stats   || {};
 
     _crLastResults = results;
+    _crLastRunId   = data.run_id || null;
 
     if (!results.length) {
       if (tbody) tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
@@ -7414,6 +7428,44 @@ function crExport() {
   a.href = URL.createObjectURL(blob);
   a.download = 'car_ratings.csv';
   a.click();
+}
+
+// Detail-Excel zum letzten Lauf: Location/Stage/Auto-Kennzahlen, Matrizen, Rohdaten.
+async function crExportXlsx() {
+  if (!_crLastRunId) { setText('cr-status', '⚠ Calculate first.'); return; }
+  // Namen aus der aktuellen Auswahl (Server kennt nur IDs)
+  const locNames = {};
+  document.querySelectorAll('input[name="cr-loc-hdr"]').forEach(cb => {
+    locNames[cb.value] = cb.parentElement.textContent.trim();
+  });
+  const routes = {};
+  document.querySelectorAll('input[name="cr-route"]').forEach(cb => {
+    routes[cb.value] = { loc: locNames[cb.dataset.loc] || `Location ${cb.dataset.loc}`, name: cb.parentElement.textContent.trim() };
+  });
+  const classes = {};
+  document.querySelectorAll('input[name="cr-cls"]').forEach(cb => { classes[cb.value] = cb.parentElement.textContent.trim(); });
+
+  setText('cr-status', '⏳ Building Excel…');
+  try {
+    const res = await fetch(`${ADMIN_API_URL}/cr/export-xlsx`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+      body: JSON.stringify({ run_id: _crLastRunId, routes, classes }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setText('cr-status', `❌ ${err.error || res.status}`);
+      return;
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'cr_detail.xlsx';
+    a.click();
+    setText('cr-status', '✓ Excel downloaded.');
+  } catch (err) {
+    setText('cr-status', `❌ Network error: ${err.message}`);
+  }
 }
 
 // When championship changes in CR tab — reload existing
