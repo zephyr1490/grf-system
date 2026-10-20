@@ -7202,6 +7202,38 @@ async function crViewSet(name) {
   }
 }
 
+function _crShowProgress(done, total) {
+  const pct = total ? Math.round(done / total * 100) : 0;
+  setHTML('cr-status',
+    `⏳ Loading leaderboards from RaceNet… ${done} / ${total} (${pct}%)` +
+    `<div style="margin-top:4px;height:6px;background:#1a1a1a;border:1px solid #333;">` +
+    `<div style="height:100%;width:${pct}%;background:var(--red,#c33);transition:width .3s;"></div></div>`);
+}
+
+// Liest den NDJSON-Stream von /cr/calculate; gibt das result-Ereignis zurück
+// ({status, data}) oder null, wenn die Verbindung vorher endete.
+async function _crReadStream(res, onProgress) {
+  const reader  = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let final = null;
+  const handle = line => {
+    if (!line.trim()) return;
+    let ev; try { ev = JSON.parse(line); } catch (_) { return; }
+    if (ev.type === 'progress') onProgress(ev.done, ev.total);
+    else if (ev.type === 'result') final = ev;
+  };
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) { handle(buf.slice(0, i)); buf = buf.slice(i + 1); }
+  }
+  handle(buf);
+  return final;
+}
+
 async function crCalculate() {
   const topPct   = parseFloat($('cr-top-pct')?.value)  || 25;
   const minN     = parseInt($('cr-min-n')?.value)       || 10;
@@ -7228,16 +7260,26 @@ async function crCalculate() {
     const res  = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
-      body: JSON.stringify({ route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, exponent, max_results: 99999 }),
+      body: JSON.stringify({ route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, exponent, max_results: 99999, stream: true }),
     });
 
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       setText('cr-status', `❌ ${err.error || res.status}`);
       return;
     }
 
-    const data    = await res.json();
+    // Streaming: Fortschritt pro geladenem Leaderboard, am Ende das Ergebnis
+    const final = await _crReadStream(res, (done, total) => _crShowProgress(done, total));
+    if (!final) {
+      setText('cr-status', '❌ Connection closed before the calculation finished. Please try again.');
+      return;
+    }
+    if (final.status !== 200) {
+      setText('cr-status', `❌ ${final.data?.error || final.status}`);
+      return;
+    }
+    const data    = final.data;
     const results = data.results || [];
     const stats   = data.stats   || {};
 

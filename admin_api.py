@@ -925,40 +925,14 @@ def cr_values():
         return jsonify({"error": detail, "trace": tb}), 500
 
 
-@app.route("/cr/calculate", methods=["POST"])
-@auth
-def cr_calculate():
-    """
-    Berechnet CR aus RaceNet Time Trial Leaderboards.
-    Body: { route_ids, class_ids, top_pct, min_n, exponent, max_results }
-    """
-    body        = request.json or {}
-    route_ids   = [int(x) for x in body.get("route_ids", [])]
-    class_ids   = [int(x) for x in body.get("class_ids", [])]
-    top_pct     = float(body.get("top_pct",  25))
-    min_n       = int(body.get("min_n",      10))
-    exponent    = float(body.get("exponent", 1.5))
-    max_results = int(body.get("max_results", 99999))
-
-    if not route_ids or not class_ids:
-        return jsonify({"error": "route_ids and class_ids required"}), 400
-
-    client = RacenetClient()
-    combos = [(r, c) for r in route_ids for c in class_ids]
-
-    try:
-        leaderboards = client.get_public_leaderboards_parallel(
-            combos, max_results=max_results, max_workers=8
-        )
-    except Exception as e:
-        return jsonify({"error": f"RaceNet error: {e}"}), 500
-
+def _cr_build_response(leaderboards, client, top_pct, exponent, min_n):
+    """Gemeinsame Auswertung für normalen und Streaming-Modus → (dict, http_status)."""
     results, stats = _compute_cr(leaderboards, top_pct, exponent, min_n)
 
     if not results:
-        return jsonify({"error": f"No valid stages found (min N={min_n} per stage, at least 2 cars per stage required)"}), 404
+        return {"error": f"No valid stages found (min N={min_n} per stage, at least 2 cars per stage required)"}, 404
 
-    return jsonify({
+    return {
         "results": results,
         "stats": {
             "total_entries":  stats["total_entries"],
@@ -971,7 +945,88 @@ def cr_calculate():
             "load_failed":    [{"route_id": f["stage_id"], "class_id": f["class_id"]}
                                for f in client.last_load_failures],
         }
-    })
+    }, 200
+
+
+@app.route("/cr/calculate", methods=["POST"])
+@auth
+def cr_calculate():
+    """
+    Berechnet CR aus RaceNet Time Trial Leaderboards.
+    Body: { route_ids, class_ids, top_pct, min_n, exponent, max_results, stream }
+
+    stream=true → NDJSON-Stream (eine JSON-Zeile pro Ereignis):
+        {"type":"progress","done":n,"total":m}   nach jedem fertigen Leaderboard
+        {"type":"heartbeat"}                     alle 15 s ohne Fortschritt
+        {"type":"result","status":200,"data":{...}}   Endergebnis (wie die normale
+                                                 JSON-Antwort; bei Fehlern status/data
+                                                 mit {"error":...})
+    Grund: Bei vielen Locations läuft die Berechnung mehrere Minuten; ohne
+    laufende Daten kappen Browser/Proxy die Verbindung ("NetworkError").
+    """
+    body        = request.json or {}
+    route_ids   = [int(x) for x in body.get("route_ids", [])]
+    class_ids   = [int(x) for x in body.get("class_ids", [])]
+    top_pct     = float(body.get("top_pct",  25))
+    min_n       = int(body.get("min_n",      10))
+    exponent    = float(body.get("exponent", 1.5))
+    max_results = int(body.get("max_results", 99999))
+    stream      = bool(body.get("stream", False))
+
+    if not route_ids or not class_ids:
+        return jsonify({"error": "route_ids and class_ids required"}), 400
+
+    client = RacenetClient()
+    combos = [(r, c) for r in route_ids for c in class_ids]
+
+    if not stream:
+        try:
+            leaderboards = client.get_public_leaderboards_parallel(
+                combos, max_results=max_results, max_workers=8
+            )
+        except Exception as e:
+            return jsonify({"error": f"RaceNet error: {e}"}), 500
+        data, status = _cr_build_response(leaderboards, client, top_pct, exponent, min_n)
+        return jsonify(data), status
+
+    # ── Streaming-Modus ───────────────────────────────────────────────────────
+    import json as _json, threading as _threading, queue as _queue, time as _time
+    q = _queue.Queue()
+    t0 = _time.time()
+
+    def _worker():
+        try:
+            lbs = client.get_public_leaderboards_parallel(
+                combos, max_results=max_results, max_workers=8,
+                on_progress=lambda done, total, sid, cid:
+                    q.put({"type": "progress", "done": done, "total": total}),
+            )
+            data, status = _cr_build_response(lbs, client, top_pct, exponent, min_n)
+            print(f"  ⏱ CR-Berechnung: {len(combos)} Leaderboards in "
+                  f"{_time.time() - t0:.0f}s, throttle_events={client.throttle_events}, "
+                  f"load_failed={len(client.last_load_failures)}")
+            q.put({"type": "result", "status": status, "data": data})
+        except Exception as e:
+            q.put({"type": "result", "status": 500, "data": {"error": f"RaceNet error: {e}"}})
+
+    _threading.Thread(target=_worker, daemon=True).start()
+
+    def _gen():
+        yield _json.dumps({"type": "progress", "done": 0, "total": len(combos)}) + "\n"
+        while True:
+            try:
+                ev = q.get(timeout=15)
+            except _queue.Empty:
+                yield _json.dumps({"type": "heartbeat"}) + "\n"
+                continue
+            yield _json.dumps(ev) + "\n"
+            if ev["type"] == "result":
+                return
+
+    resp = app.response_class(_gen(), mimetype="application/x-ndjson")
+    resp.headers["Cache-Control"]     = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    return resp
 
 
 @app.route("/cr/save", methods=["POST"])
