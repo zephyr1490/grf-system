@@ -1302,6 +1302,15 @@ def championship_create():
         if mode == "racenet" and champ.get("racenet_id"):
             champ["id"] = champ["racenet_id"]
 
+        # Modus 1 (ohne RaceNet): championships.id ist TEXT ohne Default — ohne
+        # eigene ID lehnt die Datenbank die Zeile ab ("null value in column id
+        # violates not-null constraint", 23502). Deshalb hier eine eigene,
+        # eindeutige ID erzeugen; Präfix "manual-" macht sie als nicht-RaceNet
+        # erkennbar (grf_sync.py upserted nur über echte RaceNet-IDs, kollidiert
+        # also nie damit).
+        if not champ.get("id"):
+            champ["id"] = "manual-" + secrets.token_hex(6)
+
         # Nur bekannte Spalten — racenet_id o.ä. würden Supabase 400 geben
         CHAMP_FIELDS = {"id","club_id","name","narrative","vehicle_class","season_number","start_date","end_date"}
         champ = {k: v for k, v in champ.items() if k in CHAMP_FIELDS}
@@ -2357,6 +2366,15 @@ def elo_update():
 import team_signup
 team_signup.register_routes(app, {
     "sb_get": sb_get, "sb_post": sb_post, "sb_patch": sb_patch, "sb_delete": sb_delete,
+    "auth": auth, "err_detail": _err_detail,
+})
+
+# ── Team-Auslosung (Teamed): Vorschau + Speichern ─────────────────────────────
+# Eigenes Modul team_draw.py (nutzt team_lottery.py + team_signup.py, alle drei muessen
+# neben dieser Datei liegen), s. team_draw.sql fuer die Protokoll-Tabelle.
+import team_draw
+team_draw.register_routes(app, {
+    "sb_get": sb_get, "sb_post": sb_post, "sb_delete": sb_delete,
     "auth": auth, "err_detail": _err_detail,
 })
 

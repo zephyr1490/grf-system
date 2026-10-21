@@ -2583,6 +2583,16 @@ textarea.inp-std { resize:vertical; }
           </div>
           <div id="ts-status" style="font-size:13px;min-height:18px;margin-bottom:12px;"></div>
           <div id="ts-overview"></div>
+          <div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--gray-dark);">
+            <div style="font-size:11px;color:#888;letter-spacing:1px;margin-bottom:6px;">TEAM DRAW</div>
+            <p style="font-size:12px;color:#888;margin:0 0 10px;">Vorschau berechnet nur, nichts wird gespeichert. „Draw again" würfelt mit neuem Seed. „Save teams" schreibt genau die gezeigten Teams (ersetzt bestehende Teams dieser Championship) und protokolliert den Seed.</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+              <button class="ev-btn active" id="td-preview-btn" onclick="adminTdPreview()">Preview draw</button>
+              <button class="ev-btn" id="td-save-btn" onclick="adminTdSave()" disabled>Save teams</button>
+            </div>
+            <div id="td-status" style="font-size:13px;min-height:18px;margin-bottom:10px;"></div>
+            <div id="td-result"></div>
+          </div>
         </div>
       </div>
 
@@ -5322,9 +5332,17 @@ async function _suCall(path, extra = {}) {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ pin: _su.pin, championship_id: _su.champId, ...extra }),
     });
-    data = await res.json();
   } catch (err) {
     throw new Error('Network error, try again.');
+  }
+  try {
+    data = await res.json();
+  } catch (err) {
+    // Antwort ist kein JSON: bei 404 kennt der Server den Endpunkt (noch) nicht —
+    // d.h. das Backend-Update (admin_api.py + team_signup.py) ist noch nicht deployt.
+    throw new Error(res.status === 404
+      ? 'Sign-up is not available on the server yet (backend update missing).'
+      : `Server error (HTTP ${res.status}), try again.`);
   }
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -5357,8 +5375,9 @@ function _suInfoHtml(collapsed) {
     ${open}
     <div>• <b>One wish per player.</b> If two players pick each other, they are set as a team.</div>
     <div>• <b>Chains work too:</b> A picks B, B picks C and C picks A → a team of three. Up to <b>4 players</b> (A→B→C→D→A). Longer chains are not possible and only count as a normal wish.</div>
-    <div>• One-sided wishes are only considered last, if the team balance allows it.</div>
-    <div>• Teams are balanced by expected points (based on ELO). If <b>two very strong players</b> pick each other, they will form a team of two. If a chain of three or four is <b>too strong to balance</b>, the wishes of that group can be dissolved and the draw decides.</div>
+    <div>• <b>Balanced teams come first.</b> Teams are balanced by expected points (based on ELO), with at most about 10 % difference. Wishes are granted wherever that allows it. <b>The more players wish for a partner, the less likely it is that every wish can be granted.</b></div>
+    <div>• One-sided wishes are only considered last.</div>
+    <div>• If <b>two very strong players</b> pick each other, they start as a duo, but further players can still be drawn into their team. If a group is <b>too strong to balance</b>, the wishes of that group can be dissolved and the draw decides.</div>
     <div>• Your wish stays secret until the team reveal.</div>
     ${close}
   </div>`;
@@ -5679,6 +5698,69 @@ function _adminTsRender(d) {
     sect('SOFT WISHES (only considered last)', soft) +
     sect('VOID WISHES (partner / wisher not signed up)', voidW) +
     sect(`SIGNED UP (${(d.signups || []).length})`, signups));
+}
+
+// ── ADMIN: Team-Auslosung (Vorschau + Speichern) ──
+
+let _adminTdPlan = null;
+
+async function adminTdPreview() {
+  const cid = $('ts-champ-select')?.value;
+  if (!cid) return;
+  const btn = $('td-preview-btn'); if (btn) btn.disabled = true;
+  $('td-save-btn') && ($('td-save-btn').disabled = true);
+  setText('td-status', 'Calculating… (kann einige Sekunden dauern)');
+  setHTML('td-result', '');
+  try {
+    const d = await adminFetch('/admin/team-draw/preview', { championship_id: cid });
+    _adminTdPlan = { cid, data: d };
+    _adminTdRender(d);
+    setText('td-status', '');
+    $('td-save-btn').disabled = false;
+  } catch (err) {
+    _adminTdPlan = null;
+    setHTML('td-status', `<span style="color:var(--red);">⚠ ${escapeHtml(err.message)}</span>`);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Draw again'; }
+}
+
+async function adminTdSave() {
+  if (!_adminTdPlan) return;
+  const { cid, data } = _adminTdPlan;
+  if (!confirm('Teams für diese Championship speichern? Bestehende Teams werden ersetzt.')) return;
+  setText('td-status', 'Saving…');
+  try {
+    await adminFetch('/admin/team-draw/save', {
+      championship_id: cid, seed: data.seed, preview: data,
+      teams: data.teams.map(t => ({ name: t.name, color: t.color, members: t.members.map(m => m.name) })),
+    });
+    setHTML('td-status', '<span style="color:var(--green);">✓ Teams saved.</span>');
+    $('td-save-btn').disabled = true;
+  } catch (err) {
+    setHTML('td-status', `<span style="color:var(--red);">⚠ ${escapeHtml(err.message)}</span>`);
+  }
+}
+
+function _adminTdRender(d) {
+  const pct = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + ' %';
+  const ok = d.within_tolerance;
+  const head = `<div style="font-size:13px;color:var(--white);margin-bottom:10px;line-height:1.6;">
+      ${d.players} players · ${d.teams.length} teams (${d.sizes.join('/')}) · seed ${d.seed}<br>
+      Max deviation: <b style="color:${ok ? 'var(--green)' : 'var(--red)'};">${(d.max_dev * 100).toFixed(1)} %</b>${ok ? '' : ' ⚠ over 10 %'}
+      · Soft wishes granted: ${d.soft_ok}/${d.soft_total}
+      · Fixed groups kept: ${d.kept_groups.length}/${d.firm_groups.length}</div>`;
+  const warn = [];
+  if (d.unrated.length) warn.push(`Without rating (default 1500 / σ 350): ${d.unrated.map(escapeHtml).join(', ')}`);
+  if (d.dissolved.length) warn.push(`Dissolved (too strong): ${d.dissolved.map(g => g.map(escapeHtml).join(' + ')).join(' | ')}`);
+  const warnHtml = warn.map(w => `<div style="font-size:12px;color:#e8b923;margin-bottom:4px;">⚠ ${w}</div>`).join('');
+  const kept = d.kept_groups.map(g => JSON.stringify(g));
+  const teams = d.teams.map(t => `<div style="border:1px solid #333;margin-bottom:8px;padding:8px 10px;background:#111;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+        <span style="color:var(--white);"><span style="display:inline-block;width:10px;height:10px;background:${escapeHtml(t.color)};margin-right:6px;border:1px solid #555;"></span>${escapeHtml(t.name)}</span>
+        <span style="color:#aaa;">Σ ${t.sum.toFixed(1)} <span style="color:${Math.abs(t.dev) > 0.1 ? 'var(--red)' : '#888'};">(${pct(t.dev)})</span></span></div>
+      ${t.members.map(m => `<div style="font-size:12px;color:#ccc;display:flex;justify-content:space-between;"><span>${escapeHtml(m.name)}${m.unrated ? ' <span style="color:#e8b923;">(unrated)</span>' : ''}</span><span style="color:#888;">${m.ep.toFixed(1)}</span></div>`).join('')}
+    </div>`).join('');
+  setHTML('td-result', head + warnHtml + teams);
 }
 
 // ── ADMIN: PIN-Verwaltung + Kommentar-Moderation (Session 10) ──
