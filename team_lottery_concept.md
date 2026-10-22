@@ -84,3 +84,20 @@ ein Mitspracherecht geben. Die Auslosung ist zugleich der Team-Reveal (Website-T
 - ELO-Basis: Overall oder klassenspezifisch (AWD/FWD)?
 - Deadline-Regeln, Mindest-/Maximalteilnehmerzahl.
 - Simulation am echten Feld (24 Fahrer) zur Prüfung, ob 10 % realistisch sind.
+
+## Backtest (20.10.2026, 4 S1600-Events, 19–21 Fahrer, ELO overall)
+- `team_lottery.py` gebaut (expected_points + draw). Prognostizierte Abweichung der Teams: 0,3–11 %.
+- Tatsaechliche Abweichung (max. Teamsumme vs. Schnitt) laut echten Ergebnissen: 24–40 %,
+  Zufallsteams: 32–40 %. Rauschgrenze (Modell perfekt, nur Event-Zufall): Median 23–28 %.
+  => Auslosung ist so gut wie moeglich; die 10 %-Toleranz gilt fuer die ERWARTETE Staerke, nicht
+  fuer das Einzelergebnis. Kommunikation: "gleich stark im Erwartungswert, nicht im Ergebnis".
+- Starke Duos sind nicht zwingend 2er-Teams; sie werden aufgefuellt, wenn es dem Ausgleich dient (Owner).
+
+## Reveal-Animation (abgestimmt 21.10.2026, Demo: claude.ai/artifact/4AoM91zgne7otYnHyLCMD6)
+- **Ablauf:** Live durch den Admin gestartet (läuft automatisch im eingestellten Tempo, Pause/Skip), später für alle als Wiederholung abrufbar. Der Server liefert nur so viele Zuordnungen, wie bis jetzt aufgedeckt sind.
+- **Optik:** GRF-/Win98-Stil (VT323, anthrazit, Bevel-Rahmen, Bewegung in harten `steps()`).
+- **Layout:** Ein Bildschirm, nie Seiten-Scroll. 1/3 Pool (alle Namen als Kacheln, gezogene wandern ans Ende und werden grau), 2/3 Teams, die IMMER komplett sichtbar sind (Spalten + Schriftgröße werden aus Teamanzahl und Fläche berechnet). Der Name-Banner schwebt über dem Pool. Menü versteckt hinter Zahnrad, Zähler in der Titelleiste.
+- **Ziehung:** Zufällige Reihenfolge der Spieler. Banner-Trommel -> Name rastet ein -> Rahmen springt ZUFÄLLIG über die Teams (nie zweimal dasselbe Team hintereinander, Start weit vom Ziel, letzte 3 Sprünge langsam als Beinahe-Treffer) -> Name fliegt in Pixelschritten ins Team, Karte wächst. Letzte 3 Ziehungen bewusst langsamer.
+- **Bewusst NICHT:** "Wunsch erfüllt"-Banner (keine Hervorhebung von Gruppen, niemand soll sich als "zuletzt gewählt" fühlen), Live-Emoji-Reaktionen, Sound (höchstens als Schalter), Hash-Veröffentlichung. Plätze leer/ohne Größenangabe: Karten wachsen.
+- **Teambezeichnung zu Beginn:** statt "Team 1, Team 2 ..." heißt jedes Team "Team [Farbe]" (z. B. "Team Pink", "Team Hellblau", "Team Gold"). Dann ist es für Spieler, die ihren Teamnamen nie ändern, trotzdem eindeutig. Genug Farben vorhanden (Hell-/Dunkelblau, Gold, Silber, Weiß, ...) — die Demo nutzt aktuell noch 8 Farben + "Team N" und muss darauf umgestellt werden.
+- **Teamnamen danach:** Button "Show team" (mit PIN), jedes Mitglied kann den Namen ändern (Längenbegrenzung, Zeichenfilter, Admin kann überschreiben). Vorher Struktur der Tabelle `teams` prüfen.

@@ -5615,7 +5615,7 @@ async function adminTsInit() {
     missingCols = rows.length > 0;
   }
   sel.innerHTML = rows.length
-    ? rows.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name || r.id)}${r.season_number ? ' (S' + escapeHtml(r.season_number) + ')' : ''}</option>`).join('')
+    ? rows.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name || r.id)}${r.season_number ? ' (S' + escapeHtml(r.season_number) + ')' : ''}${r.start_date ? ' · ' + escapeHtml(r.start_date) : ''}</option>`).join('')
     : '<option value="">No Teamed championships found</option>';
   if (missingCols) setHTML('ts-status', '<span style="color:var(--red);">⚠ Spalten signup_open/signup_deadline fehlen — zuerst team_signup.sql in Supabase ausführen.</span>');
   else setText('ts-status', '');
@@ -7623,6 +7623,64 @@ async function _buildEloClubList() {
   }
 }
 
+// Gemeinsames Label für die Admin-Championship-Dropdowns.
+// Kompakt (c._solo = pro Club steht nur EINE Championship in der Liste, Standard
+// im Championship Setup und in CR Manual): nur der CLUB-NAME — damit ist die
+// Championship eindeutig, Start/Ende zeigt die Maske nach der Auswahl.
+// Stehen mehrere Championships je Club in der Liste ("show all", Manual Bonuses,
+// Narratives): [Club] S# · Start → Ende. Der Championship-"name" aus der DB wird
+// bewusst NICHT zur Identifikation benutzt (Owner 22.10.2026: bei RaceNet hat
+// nur der Club einen Namen; Namen kommen aus der clubs-Tabelle, wie in der
+// Club Directory).
+function adminChampLabel(c, clubNameById) {
+  const clubName = clubNameById[String(c.club_id)] || `Club ${c.club_id}`;
+  if (c._solo) return clubName;
+  const seasonStr = c.season_number ? `S${c.season_number}` : 'S—';
+  const dateStr   = c.start_date ? `${c.start_date}${c.end_date ? ' → ' + c.end_date : ''}` : '—';
+  return `[${clubName}] ${seasonStr} · ${dateStr}`;
+}
+
+// Lädt Championships + Club-Namen für Admin-Dropdowns.
+//   Standard (ohne Optionen): ALLE Championships (sbAll: Supabase cappt sonst bei ~1000 Zeilen).
+//   relevantOnly: je Club NUR die neueste Championship (nach start_date; Einträge ohne
+//     Datum zuletzt), sortiert nach Club-Name — die komplette Historie im Dropdown war
+//     unnötig und unübersichtlich (Owner-Wunsch 22.10.2026). Fällt auf die volle Liste
+//     zurück, falls die Abfrage nichts liefert (sb() schluckt Fehler und gibt [] zurück).
+//   ensureIds: IDs, die auf jeden Fall in der Liste sein müssen (z.B. aktuelle Auswahl,
+//     frisch angelegte Championship). Gehört eine davon NICHT zur neuesten ihres Clubs,
+//     bekommen die Einträge dieses Clubs wieder das ausführliche Label.
+async function adminLoadChampList(opts = {}) {
+  const { relevantOnly = false, ensureIds = [] } = opts;
+  const SEL = 'select=id,name,club_id,season_number,start_date,end_date';
+  const clubs = await sb('clubs', 'select=club_id,name');
+  const clubNameById = {};
+  clubs.forEach(c => { clubNameById[String(c.club_id)] = c.name; });
+
+  let champs = [];
+  if (relevantOnly) {
+    const safeIds = ensureIds.filter(i => /^[\w-]+$/.test(String(i || '')));
+    const [newestPerClub, ensured] = await Promise.all([
+      Promise.all(clubs.map(c =>
+        sb('championships', `${SEL}&club_id=eq.${encodeURIComponent(c.club_id)}&order=start_date.desc.nullslast&limit=1`))),
+      safeIds.length ? sb('championships', `${SEL}&id=in.(${safeIds.join(',')})`) : Promise.resolve([]),
+    ]);
+    const byId = {};
+    [...newestPerClub.flat(), ...ensured].forEach(c => { if (c && c.id) byId[c.id] = c; });
+    champs = Object.values(byId);
+    const perClub = {};
+    champs.forEach(c => { perClub[c.club_id] = (perClub[c.club_id] || 0) + 1; });
+    champs.forEach(c => { c._solo = perClub[c.club_id] === 1; });
+    champs.sort((a, b) =>
+      (clubNameById[String(a.club_id)] || '').localeCompare(clubNameById[String(b.club_id)] || '')
+      || (b.start_date || '').localeCompare(a.start_date || ''));
+  }
+  if (!champs.length) {
+    // Standardfall ODER Fallback, falls die "relevant"-Abfrage leer blieb
+    champs = await sbAll('championships', `${SEL}&order=start_date.desc`);
+  }
+  return { champs, clubs, clubNameById };
+}
+
 // Loads all championships into all admin dropdowns
 async function adminLoadChampionships() {
   // Bug-Fix (Owner-Meldung): championship.name ist bei fast allen
@@ -7633,12 +7691,7 @@ async function adminLoadChampionships() {
   // sbAll() statt sb() — bei über 1000 Championships (mittlerweile über
   // alle Clubs hinweg realistisch) würde sb() sonst stillschweigend welche
   // weglassen.
-  const [champs, clubs] = await Promise.all([
-    sbAll('championships', 'select=id,name,club_id,season_number,start_date,end_date&order=start_date.desc'),
-    sb('clubs', 'select=club_id,name'),
-  ]);
-  const clubNameById = {};
-  clubs.forEach(c => { clubNameById[String(c.club_id)] = c.name; });
+  const { champs, clubs, clubNameById } = await adminLoadChampList();
 
   // Club-Dropdown für die neue Club-Narrative-Sektion — Clubs sind hier
   // schon geladen (für die Championship-Label-Auflösung oben), keine
@@ -7657,12 +7710,7 @@ async function adminLoadChampionships() {
     if (!el) return;
     const prev = el.value;
     el.innerHTML = '<option value="">— select —</option>' +
-      champs.map(c => {
-        const clubName   = clubNameById[String(c.club_id)] || `Club ${c.club_id}`;
-        const seasonStr  = c.season_number ? `S${c.season_number}` : 'S—';
-        const dateStr    = c.start_date ? `${c.start_date}${c.end_date ? ' → ' + c.end_date : ''}` : '—';
-        return `<option value="${c.id}">[${escapeHtml(clubName)}] ${seasonStr} · ${dateStr}</option>`;
-      }).join('');
+      champs.map(c => `<option value="${c.id}">${escapeHtml(adminChampLabel(c, clubNameById))}</option>`).join('');
     if (prev) el.value = prev;
   });
 }
@@ -8091,18 +8139,33 @@ function eloStartUpdate() {
 
 // ── 11b. ADMIN — CR MANUAL ────────────────────────────────────
 
+let _crmShowAll = false; // true = komplette Historie im Dropdown (s. Option "show all")
+
 async function crManualLoad() {
-  // Populate championship selector
-  const champs = await sb('championships', 'select=id,name,season_number&order=start_date.desc');
+  // Populate championship selector — standardmäßig je Club nur die neueste
+  // (Label = Club-Name, s. adminLoadChampList), "show all" lädt alles.
   const sel = $('crm-champ');
   if (!sel) return;
+  const prev = sel.value;
+  const ensure = (prev && prev !== '__show_all__') ? [prev] : [];
+  const { champs, clubNameById } = await adminLoadChampList({
+    relevantOnly: !_crmShowAll, ensureIds: ensure,
+  });
   sel.innerHTML = '<option value="">— select —</option>' +
-    champs.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    (_crmShowAll ? '' : '<option value="__show_all__">⋯ show all championships (incl. old)</option>') +
+    champs.map(c => `<option value="${c.id}">${escapeHtml(adminChampLabel(c, clubNameById))}</option>`).join('');
+  if (prev && prev !== '__show_all__') sel.value = prev;
 }
 
 async function crManualLoadVehicles() {
   const champId = $('crm-champ')?.value;
   const list    = $('crm-vehicle-list');
+  if (champId === '__show_all__') {
+    _crmShowAll = true;
+    const s = $('crm-champ'); if (s) s.value = '';
+    await crManualLoad();
+    return;
+  }
   if (!champId || !list) return;
   list.innerHTML = '<div style="color:#555;font-size:12px;">Loading…</div>';
 
@@ -8181,21 +8244,35 @@ function csInit() {
 }
 
 // ── Championship-Dropdown befuellen (neueste zuoberst, wie ueberall sonst) ──
-async function csLoadChampDropdown() {
-  const champs = await sb('championships', 'select=id,name,start_date,end_date&order=start_date.desc');
+// Standardmäßig je Club nur die neueste Championship (Label = Club-Name);
+// "show all" lädt die komplette Historie.
+let _csShowAll = false;
+
+async function csLoadChampDropdown(extraId) {
   const sel = $('cs-champ');
   if (!sel) return;
   const prev = sel.value;
+  const ensure = [prev, _csCurrentChampId, extraId].filter(v => v && !String(v).startsWith('__'));
+  const { champs, clubNameById } = await adminLoadChampList({
+    relevantOnly: !_csShowAll, ensureIds: ensure,
+  });
   sel.innerHTML =
     '<option value="">— select —</option>' +
     '<option value="__new_manual__">+ NEW — without RaceNet</option>' +
     '<option value="__new_racenet__">+ NEW — from RaceNet</option>' +
-    champs.map(c => `<option value="${c.id}" data-start="${c.start_date||''}" data-end="${c.end_date||''}">${escapeHtml(c.name)}</option>`).join('');
-  if (prev) sel.value = prev;
+    (_csShowAll ? '' : '<option value="__show_all__">⋯ show all championships (incl. old)</option>') +
+    champs.map(c => `<option value="${c.id}" data-start="${c.start_date||''}" data-end="${c.end_date||''}">${escapeHtml(adminChampLabel(c, clubNameById))}</option>`).join('');
+  if (prev && prev !== '__show_all__') sel.value = prev;
 }
 
 function csChampPicked() {
   const val = $('cs-champ')?.value;
+  if (val === '__show_all__') {
+    _csShowAll = true;
+    $('cs-champ').value = '';
+    csLoadChampDropdown();
+    return;
+  }
   $('cs-new-manual').style.display  = val === '__new_manual__'  ? 'grid' : 'none';
   $('cs-new-racenet').style.display = val === '__new_racenet__' ? 'grid' : 'none';
 
@@ -8231,7 +8308,7 @@ async function csCreateManual() {
       rules: [],
     });
     setText('cs-nm-status', `✓ "${res.name}" created!`);
-    await csLoadChampDropdown();
+    await csLoadChampDropdown(res.id);
     $('cs-champ').value = res.id;
     csChampPicked();
   } catch (e) { setText('cs-nm-status', `❌ ${e.message}`); }
@@ -8304,7 +8381,7 @@ async function csCreateRacenet() {
       ? `⚠ ${res.name} created — ${res.warning}`
       : `✓ "${res.name}" created with ${res.events_imported} events imported!`;
     setText('cs-rn-status', msg);
-    await csLoadChampDropdown();
+    await csLoadChampDropdown(res.id);
     $('cs-champ').value = res.id;
     csChampPicked();
   } catch (e) { setText('cs-rn-status', `❌ ${e.message}`); }

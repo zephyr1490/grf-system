@@ -1,0 +1,7 @@
+Stand: 22.10.2026 - aktuellste Arbeitskopien.
+
+Railway: admin_api.py, team_draw.py, team_lottery.py, team_signup.py (Team-Auslosung, alle vier zusammen)
+         racenet_client.py, cr_export.py (aeltere Aenderungen, nur falls noch nicht deployt)
+Vercel:  index.html
+Supabase (SQL-Editor, idempotent): team_signup.sql (falls noch nicht gelaufen), team_draw.sql (NEU)
+Doku (nicht deployen): team_lottery_concept.md, cr_pool_effect_findings.md, racenet_token_race_fix.md, CLAUDE.md

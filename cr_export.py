@@ -227,6 +227,7 @@ def build_workbook(run, route_meta, class_meta, results, fns):
         ("Top % (Threshold)", top_pct),
         ("Min N pro Auto und Stage", min_n),
         ("Min Referenzrang", min_rank),
+        ("Nur Einträge ohne Assists", "ja" if P.get("no_assists") else "nein"),
         ("Exponent", exponent),
         ("Stages ausgewählt", len(routes_sorted)),
         ("Stages verwendet", sum(1 for i in stage_info.values() if i["used"])),
@@ -347,6 +348,70 @@ def build_workbook(run, route_meta, class_meta, results, fns):
         w.freeze_panes = "C2"
         w.auto_filter.ref = w.dimensions
         _autowidth(w)
+
+    # ── Paarvergleich über gemeinsame Fahrer ──────────────────────────────────
+    # Fahrer (ssid), die auf derselben Stage in zwei Autos eine gültige Zeit
+    # haben: direkter Vergleich ohne Fahrerpool-Effekt. Gleiche-Klasse-Paare
+    # gibt es nicht (ein Fahrer steht pro Klasse nur einmal im Leaderboard).
+    def _is_clean(e):
+        f = e.get("assistFlags")
+        if isinstance(f, str):
+            try:
+                import json as _j
+                f = _j.loads(f)
+            except Exception:
+                return None
+        if not isinstance(f, (list, tuple)):
+            return None
+        return all(int(x) == 0 for x in f)
+
+    per_stage_car = {}   # (rid, car) -> {ssid: (ms, clean)}
+    for rid in routes_sorted:
+        for cid, e in by_route[rid]:
+            ss = e.get("ssid")
+            ms = parse_ms(e.get("time", ""))
+            if not ss or not ms:
+                continue
+            car = e.get("vehicle", "Unknown")
+            per_stage_car.setdefault((rid, car), {})[ss] = (ms, _is_clean(e))
+
+    import statistics as _st
+    pair_rows = []
+    for i, a in enumerate(cars):
+        for b in cars[i + 1:]:
+            diffs, clean, per_stage = [], [], {}
+            for rid in routes_sorted:
+                da, db = per_stage_car.get((rid, a)), per_stage_car.get((rid, b))
+                if not da or not db:
+                    continue
+                common = set(da) & set(db)
+                ds = [(da[x][0] / db[x][0] - 1) * 100 for x in common]
+                per_stage[rid] = ds
+                diffs += ds
+                clean += [(da[x][0] / db[x][0] - 1) * 100 for x in common
+                          if da[x][1] and db[x][1]]
+            if len(diffs) >= 20:
+                pair_rows.append((a, b, len(diffs), _st.median(diffs), _st.mean(diffs),
+                                  len(clean), _st.median(clean) if clean else None,
+                                  {r: (len(v), _st.median(v)) for r, v in per_stage.items() if v}))
+    ws = wb.create_sheet(_safe_sheet_name("Paarvergleich", used_names))
+    ws.append(["Auto A", "Auto B", "Gemeinsame Fahrer (alle Stages)", "Median A gegen B %",
+               "Mittel A gegen B %", "davon ohne Assists (n)", "Median ohne Assists %",
+               "Schneller", "Pro Stage: n / Median %"])
+    for a, b, n, med, mean, nc, medc, ps in sorted(pair_rows, key=lambda r: -r[2]):
+        ws.append([a, b, n, round(med, 3), round(mean, 3), nc,
+                   (round(medc, 3) if medc is not None else None),
+                   (a if med < 0 else b) if abs(med) >= 0.05 else "gleich",
+                   "; ".join(f"{stage_info[r]['stage']}: {c} / {m:.2f}" for r, (c, m) in ps.items())])
+    if len(ws["A"]) == 1:
+        ws.append(["–", "keine Paare mit mind. 20 gemeinsamen Fahrern", None])
+    ws.insert_rows(1)
+    ws["A1"] = ("Direkter Vergleich: Fahrer, die auf derselben Stage in beiden Autos eine Zeit haben. "
+                "Negativ = Auto A ist schneller (Median der Zeit A/B − 1). Gleiche Klasse nie vergleichbar.")
+    ws["A1"].font = Font(bold=True)
+    _style_header(ws, row=2)
+    ws.freeze_panes = "A3"
+    _autowidth(ws, max_w=70)
 
     # ── Übersprungen ──────────────────────────────────────────────────────────
     ws = wb.create_sheet(_safe_sheet_name("Uebersprungen", used_names))
