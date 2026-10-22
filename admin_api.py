@@ -1469,8 +1469,16 @@ def championship_alter():
         return jsonify({"error": "championship_id and fields required"}), 400
     if not valid_id(champ_id):
         return jsonify({"error": "invalid championship_id"}), 400
-    ALLOWED = {"name","vehicle_class","season_number","start_date","end_date","narrative","best_of_events"}
+    ALLOWED = {"name","vehicle_class","season_number","start_date","end_date","narrative","best_of_events",
+               "multiclass_partners","double_starter_rule"}
     fields = {k: v for k, v in fields.items() if k in ALLOWED and v is not None}
+    # Multiclass: Partner-IDs validieren (landen später in PostgREST-Filtern), Regel whitelisten
+    if "multiclass_partners" in fields:
+        mp = fields["multiclass_partners"]
+        if not isinstance(mp, list) or not all(valid_id(x) for x in mp) or champ_id in mp:
+            return jsonify({"error": "invalid multiclass_partners"}), 400
+    if "double_starter_rule" in fields and fields["double_starter_rule"] not in ("worst", "best", "both"):
+        return jsonify({"error": "invalid double_starter_rule"}), 400
     if not fields:
         return jsonify({"error": "no valid fields to update"}), 400
     try:

@@ -2211,6 +2211,29 @@ textarea.inp-std { resize:vertical; }
                 </div>
               </div>
               <div style="font-size:10px;color:#444;margin-top:-6px;">BEST OF leer = alle Events zählen, sonst wird automatisch das schlechteste gestrichen</div>
+              <!-- MULTICLASS: verknüpft Partner-Clubs/-Championships; deren Zeiten werden mit dieser
+                   (Haupt-)Championship zu EINER Wertung zusammengeführt (Sync-Merge, s. grf_sync.py) -->
+              <div style="border:1px solid #2a2a2a; padding:8px 10px; background:#151617;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                  <input type="checkbox" id="cs-e-mc-on" onchange="csMcToggle()">
+                  <span class="inp-lbl" style="margin:0;">MULTICLASS</span>
+                  <span style="color:#555; font-size:10px;">— Partner-Championships werden zu einer gemeinsamen Wertung zusammengeführt</span>
+                </label>
+                <div id="cs-e-mc-box" style="display:none; margin-top:10px;">
+                  <label class="inp-lbl">PARTNER-CHAMPIONSHIPS</label>
+                  <div id="cs-e-mc-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+                  <button type="button" class="btn-gray" onclick="csMcAddRow('')" style="margin-top:6px;">+ ADD PARTNER</button>
+                  <div style="margin-top:10px;">
+                    <label class="inp-lbl">DOPPELSTARTER-REGEL <span style="color:#555;font-weight:normal;">— Fahrer, die in mehreren Klassen starten</span></label>
+                    <select id="cs-e-mc-rule" class="inp-std">
+                      <option value="worst">Schlechteste Wertung zählt (Standard)</option>
+                      <option value="best">Beste Wertung zählt</option>
+                      <option value="both">Alle Wertungen zählen (Summe)</option>
+                    </select>
+                  </div>
+                  <div style="font-size:10px;color:#444;margin-top:6px;">Partner erscheinen auf der Website nicht eigenständig; alle Ergebnisse laufen unter dieser Championship.</div>
+                </div>
+              </div>
               <div>
                 <label class="inp-lbl">KLASSE</label>
                 <select id="cs-e-class" onchange="csClassChanged()" class="inp-std">
@@ -8404,6 +8427,7 @@ async function csLoadExistingChampionship(champId) {
   $('cs-e-season').value    = c.season_number || '';
   $('cs-e-narrative').value = c.narrative || '';
   $('cs-e-bestof').value    = c.best_of_events || '';
+  await csMcLoad(c);
   setText('cs-status-badge', '');
   $('cs-status-badge').innerHTML = csComputeStatusBadge(c.start_date, c.end_date);
 
@@ -8641,6 +8665,63 @@ function csDriverPick(el, name) {
 }
 
 // ── SAVE ALL — Championship-Felder + CR + Regeln + Narrative + Teams ────
+// ── MULTICLASS (Partner-Championships + Doppelstarter-Regel) ──────────────
+let _csMcChoices = [];   // [{id,label}] — Partner-Kandidaten (neueste Championship je Club)
+
+async function csMcLoadChoices(ensureIds) {
+  const { champs, clubNameById } = await adminLoadChampList({ relevantOnly: true, ensureIds });
+  const own = _csCurrentChampId;
+  _csMcChoices = champs
+    .filter(c => c.id !== own)
+    .map(c => ({ id: c.id, label: adminChampLabel(c, clubNameById) }));
+}
+
+function csMcAddRow(selectedId) {
+  const list = $('cs-e-mc-list'); if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'cs-mc-row';
+  row.style.cssText = 'display:flex; gap:6px;';
+  const sel = document.createElement('select');
+  sel.className = 'inp-std'; sel.dataset.mcPartner = '1'; sel.style.flex = '1';
+  sel.innerHTML = '<option value="">— select club —</option>' +
+    _csMcChoices.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join('');
+  if (selectedId) sel.value = selectedId;
+  const rm = document.createElement('button');
+  rm.type = 'button'; rm.className = "btn-gray"; rm.textContent = '✕';
+  rm.onclick = () => row.remove();
+  row.append(sel, rm);
+  list.appendChild(row);
+}
+
+async function csMcLoad(c) {
+  const partners = Array.isArray(c.multiclass_partners) ? c.multiclass_partners : [];
+  $('cs-e-mc-on').checked = partners.length > 0;
+  $('cs-e-mc-rule').value = c.double_starter_rule || 'worst';
+  $('cs-e-mc-list').innerHTML = '';
+  $('cs-e-mc-box').style.display = partners.length ? 'block' : 'none';
+  if (partners.length) {
+    await csMcLoadChoices(partners);
+    partners.forEach(id => csMcAddRow(id));
+  }
+}
+
+async function csMcToggle() {
+  const on = $('cs-e-mc-on').checked;
+  $('cs-e-mc-box').style.display = on ? 'block' : 'none';
+  if (on && !$('cs-e-mc-list').children.length) {
+    await csMcLoadChoices([]);
+    csMcAddRow('');
+  }
+}
+
+function csMcCollect() {
+  const on = $('cs-e-mc-on')?.checked;
+  const ids = on
+    ? [...new Set([...document.querySelectorAll('[data-mc-partner]')].map(s => s.value).filter(Boolean))]
+    : [];
+  return { multiclass_partners: ids, double_starter_rule: $('cs-e-mc-rule')?.value || 'worst' };
+}
+
 async function csSaveAll() {
   if (!_csCurrentChampId) return;
   const champId = _csCurrentChampId;
@@ -8659,6 +8740,7 @@ async function csSaveAll() {
         season_number: $('cs-e-season')?.value ? parseInt($('cs-e-season').value) : null,
         narrative:     $('cs-e-narrative')?.value.trim(),
         best_of_events: $('cs-e-bestof')?.value ? parseInt($('cs-e-bestof').value) : null,
+        ...csMcCollect(),
       }
     });
   } catch (e) { errors.push(`Championship: ${e.message}`); }
