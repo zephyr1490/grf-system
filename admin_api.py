@@ -1808,7 +1808,14 @@ def cr_vehicles():
         # nicht gestartete Championships unsichtbar werden, obwohl sie korrekt
         # in car_ratings gespeichert sind — das war der eigentliche Bug hinter
         # "Assign Set tut nichts, Werte bleiben leer/Platzhalter".
-        sr_rows = sb_get("stage_results", f"championship_id=eq.{champ}&select=vehicle")
+        # Multiclass: Fahrzeuge der verknüpften Partner-Championships gehören mit in
+        # DIESELBE CR-Liste (ein gemeinsames CR-Set für alle Klassen). Ihre
+        # stage_results tragen noch die eigene championship_id (Rohdaten).
+        mc_rows = sb_get("championships", f"id=eq.{champ}&select=multiclass_partners")
+        partners = [p for p in ((mc_rows[0].get("multiclass_partners") if mc_rows else None) or []) if valid_id(p)]
+        ids = ",".join([champ] + partners)
+        sr_rows = sb_get_all("stage_results", f"championship_id=in.({ids})&select=vehicle&order=id.asc") if partners \
+                  else sb_get("stage_results", f"championship_id=eq.{champ}&select=vehicle")
         cr_rows = sb_get("car_ratings",   f"championship_id=eq.{champ}&select=vehicle,cr_value")
         cr_map  = {r["vehicle"]: r["cr_value"] for r in cr_rows}
         vehicles = sorted({r["vehicle"] for r in sr_rows if r.get("vehicle")} | set(cr_map.keys()))

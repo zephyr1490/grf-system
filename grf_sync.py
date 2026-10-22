@@ -45,6 +45,8 @@ Usage:
                                            bekommen haben (z.B. weil
                                            sync_championship_standings() erst nachträglich
                                            eingebaut wurde, s. Session 10).
+  python grf_sync.py --remerge          — Multiclass: ALLE verknüpften Events neu zusammenführen
+                                           (sonst nur laufende / noch nie gemergte)
   python grf_sync.py --test             — test connections, no writes
 ════════════════════════════════════════════════════════════════════════════════
 """
@@ -1096,6 +1098,331 @@ def sync_championship(db: SupabaseClient, client,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  MULTICLASS-MERGE
+#
+#  Eine Haupt-Championship (Themed) kann im Admin (Championship Setup) mit
+#  1..n Partner-Championships anderer Clubs verknüpft werden
+#  (championships.multiclass_partners). Alle Zeiten aller verknüpften
+#  Championships kommen in EINE gemeinsame Tabelle; erst danach wird sortiert
+#  und werden Punkte vergeben (Punkte x CR der Haupt-Championship — ein
+#  gemeinsames CR-Set für alle Klassen). Alles landet unter der Haupt-
+#  Championship (stage_results/event_results mit src_championship_id =
+#  Herkunfts-Championship des Partners; NULL = eigene Fahrer der Haupt-
+#  Championship). Partner-Championships laufen nur im Hintergrund: ihre
+#  event_results werden nach dem Merge entfernt, damit ELO, Club-Stats und
+#  Fahrer-Statistiken nichts doppelt zählen (ihre stage_results bleiben als
+#  Rohdaten erhalten).
+#
+#  Events werden über die Rundennummer gepaart (Rd.N der Haupt-Championship
+#  = Rd.N jedes Partners), Stages über die Stage-Nummer im Event.
+#
+#  Doppelstarter-Regel (championships.double_starter_rule), wenn ein Fahrer in
+#  mehreren Klassen desselben Events startet:
+#    worst = nur die Wertung mit den WENIGER Punkten zählt (Standard)
+#    best  = nur die Wertung mit den MEHR Punkten zählt
+#    both  = alle Wertungen zählen (Summe)
+#  Die Punkte werden vorher aus der gemeinsamen Tabelle vergeben; die Regel
+#  entscheidet nur, welche der Wertungen eines Fahrers in event_results bleiben.
+#
+#  Voraussetzung (SQL, einmalig): claude/multiclass_schema_2.sql
+#    (Spalte src_championship_id auf stage_results + event_results).
+# ─────────────────────────────────────────────────────────────────────────────
+
+MC_STAGE_COLS = ("stage_id,event_id,championship_id,driver_name,driver_id,vehicle,"
+                 "time_ms,time_str,stage_position,is_dnf,platform")
+
+
+def _mc_pick_rule_rows(rows: list, rule: str) -> list:
+    """Wendet die Doppelstarter-Regel auf die event_results-Zeilen EINES Events an."""
+    if rule == "both":
+        return rows
+    by_driver: dict = {}
+    for r in rows:
+        by_driver.setdefault(r["driver_name"], []).append(r)
+    kept = []
+    for name, lst in by_driver.items():
+        if len(lst) == 1:
+            kept.append(lst[0])
+            continue
+        key = lambda r: (r["total_points"], -r["position"] if r["position"] else -9999)
+        kept.append(max(lst, key=key) if rule == "best" else min(lst, key=key))
+    return kept
+
+
+def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
+                    partner_evs: list, car_ratings: dict, rule: str, test: bool) -> bool:
+    """Führt ein Event der Haupt-Championship mit den gepaarten Partner-Events zusammen."""
+    champ_id = main["id"]
+    ev_id    = main_ev["id"]
+    ev_status = main_ev.get("status", 0)
+
+    # Stages der Haupt-Championship (Ziel) nach Stage-Nummer
+    main_stages = db.select_all("stages", f"event_id=eq.{ev_id}&select=id,stage_number&order=stage_number.asc")
+    if not main_stages:
+        return False
+    stage_id_by_no = {s["stage_number"]: s["id"] for s in main_stages}
+
+    # Zeilen je (stage_nummer, Herkunft)
+    # Herkunft None = Haupt-Championship, sonst Partner-Championship-ID.
+    entries_by_stage: dict = {no: [] for no in stage_id_by_no}   # no -> [row, ...]
+
+    # Eigene Zeilen — nur die mit src NULL (Partner-Zeilen früherer Merge-Läufe werden neu erzeugt)
+    own = db.select_all("stage_results",
+                        f"event_id=eq.{ev_id}&src_championship_id=is.null&select={MC_STAGE_COLS}")
+    no_by_stage = {sid: no for no, sid in stage_id_by_no.items()}
+    for r in own:
+        no = no_by_stage.get(r.get("stage_id"))
+        if no is not None:
+            entries_by_stage[no].append({**r, "_src": None})
+
+    partner_event_ids = []
+    for pev in partner_evs:
+        partner_event_ids.append(pev["id"])
+        p_stages = db.select_all("stages", f"event_id=eq.{pev['id']}&select=id,stage_number")
+        p_no_by_sid = {s["id"]: s["stage_number"] for s in p_stages}
+        prows = db.select_all("stage_results",
+                              f"event_id=eq.{pev['id']}&src_championship_id=is.null&select={MC_STAGE_COLS}")
+        for r in prows:
+            no = p_no_by_sid.get(r.get("stage_id"))
+            if no in entries_by_stage:
+                entries_by_stage[no].append({**r, "_src": pev["championship_id"]})
+
+    # Pro Stage: gemeinsam nach Zeit sortieren → neue Stage-Positionen
+    stage_rows_out = []
+    stage_data = []   # [(stage_no, [rows sortiert])]
+    for no in sorted(entries_by_stage):
+        rows = entries_by_stage[no]
+        if not rows:
+            continue
+        rows.sort(key=lambda r: (r.get("time_ms") is None, r.get("time_ms") or 0))
+        stage_data.append((no, rows))
+        for rank, r in enumerate(rows, start=1):
+            stage_rows_out.append({
+                "stage_id":        stage_id_by_no[no],
+                "event_id":        ev_id,
+                "championship_id": champ_id,
+                "driver_name":     r["driver_name"],
+                "driver_id":       r.get("driver_id", ""),
+                "vehicle":         r.get("vehicle", ""),
+                "time_ms":         r.get("time_ms"),
+                "time_str":        r.get("time_str", ""),
+                "stage_position":  rank,
+                "is_dnf":          r.get("is_dnf", False),
+                "platform":        r.get("platform", ""),
+                "src_championship_id": r["_src"],
+            })
+
+    if not stage_data:
+        return False
+
+    # Event-Ergebnis je (Fahrer, Herkunft) — gleiche Logik wie sync_event():
+    # alle Stage-Zeiten summieren, Finisher/DNF allein nach der LETZTEN Stage mit Daten.
+    info: dict = {}      # (name, src) -> {driver_id, vehicle, platform}
+    total: dict = {}
+    done:  dict = {}
+    for _no, rows in stage_data:
+        for r in rows:
+            k = (r["driver_name"], r["_src"])
+            info.setdefault(k, {"driver_id": r.get("driver_id", ""), "vehicle": r.get("vehicle", ""),
+                                "platform": r.get("platform", "")})
+            if r.get("time_ms") is not None:
+                total[k] = total.get(k, 0) + r["time_ms"]
+                done[k]  = done.get(k, 0) + 1
+    is_dnf = {k: True for k in info}
+    for r in stage_data[-1][1]:
+        k = (r["driver_name"], r["_src"])
+        if r.get("time_ms") is not None and not is_dnf_ms(r["time_ms"]):
+            is_dnf[k] = False
+
+    # Stage-Siege (nur relevant für CUSTOM_SCORING)
+    wins: dict = {}
+    for _no, rows in stage_data:
+        first = rows[0]
+        if first.get("time_ms") is not None and not is_dnf_ms(first["time_ms"]):
+            k = (first["driver_name"], first["_src"])
+            wins[k] = wins.get(k, 0) + 1
+    bonus_per_win = get_stage_bonus_points_for(champ_id)
+
+    finishers = sorted([k for k in info if not is_dnf[k]], key=lambda k: total.get(k, 0))
+    dnfs      = [k for k in info if is_dnf[k]]
+
+    def _row(k, pos, dnf):
+        i     = info[k]
+        base  = get_base_points_for(pos, dnf, champ_id)
+        cr    = car_ratings.get(i["vehicle"], 1.0)
+        crpts = round(base * cr, 2)
+        bonus = wins.get(k, 0) * bonus_per_win
+        return {
+            "event_id": ev_id, "championship_id": champ_id,
+            "driver_name": k[0], "driver_id": i["driver_id"],
+            "position": 0 if dnf else pos, "vehicle": i["vehicle"], "platform": i["platform"],
+            "total_time_ms": None if dnf else total[k],
+            "time": "DNF" if dnf else ms_to_display(total[k]),
+            "stages_completed": done.get(k, 0), "is_dnf": dnf,
+            "base_points": base, "cr_multiplier": cr, "cr_points": crpts,
+            "bonus_points": bonus, "total_points": round(crpts + bonus, 2),
+            "src_championship_id": k[1],
+        }
+
+    event_rows = [_row(k, p, False) for p, k in enumerate(finishers, start=1)] + \
+                 [_row(k, 0, True) for k in dnfs]
+
+    n_before = len(event_rows)
+    event_rows = _mc_pick_rule_rows(event_rows, rule)
+
+    # Positionen nach Anwendung der Regel lückenlos neu vergeben (Punkte bleiben
+    # wie aus der gemeinsamen Tabelle vergeben).
+    fin = sorted([r for r in event_rows if not r["is_dnf"]], key=lambda r: r["position"])
+    for p, r in enumerate(fin, start=1):
+        r["position"] = p
+
+    log(f"      🔀 Multiclass Rd.{main_ev.get('round_number')}: "
+        f"{len(stage_data)} Stage(s), {n_before} Wertung(en) → {len(event_rows)} nach Regel '{rule}' "
+        f"(Partner-Events: {len(partner_evs)})")
+
+    if test:
+        return True
+
+    # Schreiben: erst alles berechnet, dann ersetzen
+    stage_ids = list(stage_id_by_no.values())
+    db.delete("stage_results", f"event_id=eq.{ev_id}")
+    for i in range(0, len(stage_rows_out), 50):
+        db.upsert("stage_results", stage_rows_out[i:i+50], on_conflict="id")
+        time.sleep(0.05)
+    db.delete("event_results", f"event_id=eq.{ev_id}")
+    for i in range(0, len(event_rows), 50):
+        db.upsert("event_results", event_rows[i:i+50], on_conflict="id")
+        time.sleep(0.05)
+
+    # Partner-Ergebnisse entfernen (nur event_results — Rohdaten in stage_results bleiben)
+    for pid in partner_event_ids:
+        try:
+            db.delete("event_results", f"event_id=eq.{pid}")
+        except Exception as ex:
+            log(f"      ⚠ Could not clear partner event_results {pid}: {ex}")
+
+    # starts/wins neu zählen (nur für abgeschlossene Events, wie in sync_event Schritt 6)
+    if ev_status == 2:
+        try:
+            names = sorted({r["driver_name"] for r in event_rows})
+            their = db.select_all("event_results",
+                                  f"driver_name=in.({pg_in_list(names)})&select=driver_name,position,is_dnf")
+            stats: dict = {}
+            for r in their:
+                s = stats.setdefault(r["driver_name"], {"starts": 0, "wins": 0})
+                if not r.get("is_dnf", False):
+                    s["starts"] += 1
+                    if r.get("position") == 1:
+                        s["wins"] += 1
+            existing = {r["name"] for r in db.select_all("drivers", f"name=in.({pg_in_list(names)})&select=name")}
+            new_d = [{"name": n, "elo": 1000, "wins": 0, "starts": 0, "country": ""}
+                     for n in names if n not in existing]
+            if new_d:
+                db.insert_ignore("drivers", new_d, on_conflict="name")
+                existing |= {d["name"] for d in new_d}
+            db.upsert_all("drivers",
+                          [{"name": n, "starts": s["starts"], "wins": s["wins"]}
+                           for n, s in stats.items() if n in existing], on_conflict="name")
+        except Exception as ex:
+            log(f"      ⚠ Multiclass stats update failed: {ex}")
+    return True
+
+
+def _mc_rebuild_standings(db: "SupabaseClient", champ_id: str):
+    """
+    championship_standings der Haupt-Championship aus den zusammengeführten
+    event_results neu aufbauen (RaceNets eigener Punktestand kennt nur die
+    Fahrer des Haupt-Clubs). Summe total_points je Fahrer; best_of_events
+    (schlechteste Events streichen) wird berücksichtigt.
+    """
+    meta = db.select("championships", f"id=eq.{champ_id}&select=best_of_events")
+    best_of = (meta[0].get("best_of_events") if meta else None) or None
+    rows = db.select_all("event_results",
+                         f"championship_id=eq.{champ_id}&select=driver_name,event_id,total_points")
+    per_driver: dict = {}
+    for r in rows:
+        per_driver.setdefault(r["driver_name"], []).append(float(r.get("total_points") or 0))
+    totals = {}
+    for name, pts in per_driver.items():
+        pts = sorted(pts, reverse=True)
+        if best_of:
+            pts = pts[:best_of]
+        totals[name] = round(sum(pts), 2)
+    ranked = sorted(totals.items(), key=lambda kv: -kv[1])
+    out = [{"championship_id": champ_id, "driver_name": n, "rank": i,
+            "points_accumulated": p} for i, (n, p) in enumerate(ranked, start=1)]
+    if out:
+        db.delete("championship_standings", f"championship_id=eq.{champ_id}")
+        db.upsert_all("championship_standings", out, on_conflict="championship_id,driver_name")
+        log(f"    🏆 Multiclass standings rebuilt: {len(out)} driver(s)")
+
+
+def sync_multiclass(db: "SupabaseClient", test: bool = False, remerge_all: bool = False):
+    """
+    Läuft nach dem normalen Club-Sync. Findet Haupt-Championships mit
+    Partner-Verknüpfung und führt deren Events zusammen. Fehler hier brechen
+    den restlichen Sync nie ab (Aufrufer fängt Exceptions).
+    """
+    from datetime import date, timedelta
+    cutoff = (date.today() - timedelta(days=14)).isoformat()
+    filt = "select=id,club_id,multiclass_partners,double_starter_rule,best_of_events"
+    if not remerge_all:
+        filt += f"&end_date=gte.{cutoff}"
+    mains = [c for c in db.select_all("championships", filt)
+             if isinstance(c.get("multiclass_partners"), list) and c["multiclass_partners"]]
+    if not mains:
+        return
+
+    for main in mains:
+        partners = main["multiclass_partners"]
+        rule = main.get("double_starter_rule") or "worst"
+        log(f"\n🔀 Multiclass: {main['id']} + {len(partners)} Partner ({', '.join(partners)}), Regel={rule}")
+
+        ev_cols = "select=id,championship_id,round_number,status,location,start_date"
+        main_evs = db.select_all("events", f"championship_id=eq.{main['id']}&{ev_cols}&order=round_number.asc")
+        partner_evs_by_champ = {
+            pid: {e["round_number"]: e for e in
+                  db.select_all("events", f"championship_id=eq.{pid}&{ev_cols}&order=round_number.asc")}
+            for pid in partners
+        }
+        car_ratings = db.get_car_ratings(main["id"])
+
+        changed = False
+        for ev in main_evs:
+            rn = ev.get("round_number")
+            pevs = [partner_evs_by_champ[pid][rn] for pid in partners if rn in partner_evs_by_champ[pid]]
+            if not pevs:
+                continue
+            for pev in pevs:
+                if (pev.get("location") or "") != (ev.get("location") or ""):
+                    log(f"      ⚠ Rd.{rn}: Location weicht ab ('{ev.get('location')}' vs "
+                        f"'{pev.get('location')}' in {pev['championship_id']}) — Pairing nach Rundennummer prüfen!")
+
+            statuses = [ev.get("status", 0)] + [p.get("status", 0) for p in pevs]
+            if not any(s in (1, 2) for s in statuses):
+                continue   # noch nichts gefahren
+
+            # Aktive Events (status 1) bei jedem Lauf; abgeschlossene nur, wenn noch nie gemergt
+            live = 1 in statuses
+            if not live and not remerge_all:
+                already = db.exists("stage_results",
+                                    f"event_id=eq.{ev['id']}&src_championship_id=not.is.null")
+                if already:
+                    continue
+            try:
+                if _mc_merge_event(db, main, ev, pevs, car_ratings, rule, test):
+                    changed = True
+            except Exception as ex:
+                log(f"      ❌ Multiclass merge Rd.{rn} failed: {ex}")
+
+        if changed and not test:
+            try:
+                _mc_rebuild_standings(db, main["id"])
+            except Exception as ex:
+                log(f"    ⚠ Multiclass standings failed: {ex}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1269,6 +1596,14 @@ def main():
                 _fill_season_numbers(db, club_id, log)
             except Exception as ex:
                 log(f"  ⚠ Could not fill season numbers: {ex}")
+
+    # Multiclass: verknüpfte Championships (Partner-Clubs) zu einer Wertung
+    # zusammenführen — NACH dem Sync aller Clubs, damit Haupt- und Partner-
+    # Daten frisch sind (siehe sync_multiclass()).
+    try:
+        sync_multiclass(db, test=test_mode, remerge_all="--remerge" in sys.argv)
+    except Exception as ex:
+        log(f"  ⚠ Multiclass merge failed: {ex}")
 
     print()
     print("=" * 60)
