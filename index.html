@@ -3337,31 +3337,10 @@ function computeClubStatus(events, today) {
   return 'idle';
 }
 
-/**
- * Multiclass: Clubs, die als Partner mit einer Haupt-Championship verknüpft
- * sind, laufen nur im Hintergrund — ihre Ergebnisse stehen zusammengeführt
- * unter der Haupt-Championship (Themed). Solche Clubs werden im
- * Club-Verzeichnis und in der Status-Leiste dauerhaft ausgeblendet, sobald
- * sie in irgendeiner Championship als Partner eingetragen sind (auch in
- * beendeten). Fehlt die Spalte/schlägt die Abfrage fehl, wird nichts
- * ausgeblendet (sb() liefert dann []).
- */
-let _hiddenClubIdsPromise = null;
-function getHiddenClubIds() {
-  if (!_hiddenClubIdsPromise) {
-    _hiddenClubIdsPromise = (async () => {
-      try {
-        const mains = (await sb('championships', 'select=id,multiclass_partners&multiclass_partners=neq.%7B%7D'))
-          .filter(c => Array.isArray(c.multiclass_partners) && c.multiclass_partners.length);
-        const ids = [...new Set(mains.flatMap(c => c.multiclass_partners))].filter(i => /^[\w-]+$/.test(i));
-        if (!ids.length) return new Set();
-        const rows = await sb('championships', `select=club_id&id=in.(${ids.join(',')})`);
-        return new Set(rows.map(r => String(r.club_id)));
-      } catch (e) { return new Set(); }
-    })();
-  }
-  return _hiddenClubIdsPromise;
-}
+// Partner-Club für Multiclass (läuft nur im Hintergrund) — nie anzeigen.
+// 23834 = "GRF Themed nr2" (Club-ID ist fix, der Name ändert sich).
+const HIDDEN_CLUB_IDS = ['23834'];
+const isHiddenClub = c => HIDDEN_CLUB_IDS.includes(String(c.club_id));
 
 /**
  * Globale Fußleisten-Statuskacheln (Session 10, Nachfolger der vier
@@ -3380,9 +3359,8 @@ async function loadStatusBar() {
         sbAll('clubs',  'select=club_id,name&order=name.asc'),
         sbAll('events', 'select=club_id,status,start_date'),
       ]);
-      const hidden = await getHiddenClubIds();
       const eventsByClub = groupEventsByClub(events);
-      clubs = clubRows.filter(c => !hidden.has(String(c.club_id))).map(c => {
+      clubs = clubRows.filter(c => !isHiddenClub(c)).map(c => {
         const cid = String(c.club_id);
         return { club_id: cid, name: c.name || `Club ${cid}`, status: computeClubStatus(eventsByClub[cid] || [], today) };
       });
@@ -3482,9 +3460,8 @@ async function loadClubDirectory() {
       sbAll('events', 'select=club_id,status,start_date'),
     ]);
 
-    const hidden = await getHiddenClubIds();
     const eventsByClub = groupEventsByClub(events);
-    _clubDirectory = clubs.filter(c => !hidden.has(String(c.club_id))).map(c => {
+    _clubDirectory = clubs.filter(c => !isHiddenClub(c)).map(c => {
       const cid = String(c.club_id);
       return {
         club_id: cid,
