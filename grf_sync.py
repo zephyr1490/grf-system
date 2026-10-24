@@ -1313,6 +1313,15 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
     if test:
         return True
 
+    # PostgREST verlangt bei Bulk-Inserts identische Schlüssel in allen Zeilen
+    # (sonst 400 PGRST102 "All object keys must match") — normale und ungültige
+    # Zeilen haben unterschiedliche Felder (hyp_*), daher auffüllen.
+    def _same_keys(rows):
+        keys = set().union(*(r.keys() for r in rows)) if rows else set()
+        return [{k: r.get(k) for k in keys} for r in rows]
+    event_rows      = _same_keys(event_rows)
+    stage_rows_out  = _same_keys(stage_rows_out)
+
     # Schreiben: erst alles berechnet, dann ersetzen
     stage_ids = list(stage_id_by_no.values())
     db.delete("stage_results", f"event_id=eq.{ev_id}")
