@@ -827,7 +827,7 @@ textarea.inp-std { resize:vertical; }
 
   <!-- TITLE BAR -->
   <div class="titlebar">
-    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.6</span></span>
+    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.7</span></span>
   </div>
 
   <!-- MENU BAR — GRF Themed/Teamed haben seit Session 10 bewusst KEINEN
@@ -2710,6 +2710,18 @@ textarea.inp-std { resize:vertical; }
 // Code-Eintrag reicht). Neueste ZUERST in der Liste.
 const CHANGELOG = [
   {
+    version: '1.7',
+    date:    '2026-10-24',
+    label:   'Multiclass',
+    notes: [
+      'GRF Themed can now run as a multiclass championship: two RaceNet clubs run in parallel, but you only see one combined result. All times from both clubs go into one table, are sorted together, and points are handed out once \u2014 using the same Car Rating for everyone.',
+      'Live Results, Standings and Stats show the combined result under GRF Themed. The partner club works silently in the background and no longer shows up in the Clubs tab or the status bar.',
+      'Started in both classes? Only one run counts \u2014 by default the worse one. The other run stays in the list, greyed out, with the place and points it would have been in brackets, e.g. (2). It doesn\u2019t count for standings or wins and doesn\u2019t take any places or points away from other drivers.',
+      'Loyalty bonus with two cars: only the car whose run counts can earn it, and it has to be the same car at every event. If both runs of the first event end in a DNF, the choice stays open and is decided at the next event.',
+      'Admin: the Championship Setup now has a Multiclass section (partner championships, rule for double starters). Championship dropdowns show the club name and only the newest championship per club, with a \u201Cshow all\u201D option.',
+    ],
+  },
+  {
     version: '1.6',
     date:    '2026-08-21',
     label:   'Stats, Standings & Stage Interviews',
@@ -3326,12 +3338,12 @@ function computeClubStatus(events, today) {
 }
 
 /**
- * Multiclass: Clubs, die als Partner mit einer (aktuellen) Haupt-Championship
- * verknüpft sind, laufen nur im Hintergrund — ihre Ergebnisse stehen
- * zusammengeführt unter der Haupt-Championship (Themed). Solche Clubs werden
- * im Club-Verzeichnis und in der Status-Leiste ausgeblendet. Gilt nur, solange
- * die Verknüpfung auf einer aktuellen Championship (Ende vor max. 30 Tagen
- * oder offen) liegt. Fehlt die Spalte/schlägt die Abfrage fehl, wird nichts
+ * Multiclass: Clubs, die als Partner mit einer Haupt-Championship verknüpft
+ * sind, laufen nur im Hintergrund — ihre Ergebnisse stehen zusammengeführt
+ * unter der Haupt-Championship (Themed). Solche Clubs werden im
+ * Club-Verzeichnis und in der Status-Leiste dauerhaft ausgeblendet, sobald
+ * sie in irgendeiner Championship als Partner eingetragen sind (auch in
+ * beendeten). Fehlt die Spalte/schlägt die Abfrage fehl, wird nichts
  * ausgeblendet (sb() liefert dann []).
  */
 let _hiddenClubIdsPromise = null;
@@ -3339,10 +3351,8 @@ function getHiddenClubIds() {
   if (!_hiddenClubIdsPromise) {
     _hiddenClubIdsPromise = (async () => {
       try {
-        const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
-        const mains = (await sb('championships', 'select=id,end_date,multiclass_partners&multiclass_partners=neq.%7B%7D'))
-          .filter(c => Array.isArray(c.multiclass_partners) && c.multiclass_partners.length
-                       && (!c.end_date || c.end_date >= cutoff));
+        const mains = (await sb('championships', 'select=id,multiclass_partners&multiclass_partners=neq.%7B%7D'))
+          .filter(c => Array.isArray(c.multiclass_partners) && c.multiclass_partners.length);
         const ids = [...new Set(mains.flatMap(c => c.multiclass_partners))].filter(i => /^[\w-]+$/.test(i));
         if (!ids.length) return new Set();
         const rows = await sb('championships', `select=club_id&id=in.(${ids.join(',')})`);
