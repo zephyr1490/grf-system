@@ -3326,6 +3326,34 @@ function computeClubStatus(events, today) {
 }
 
 /**
+ * Multiclass: Clubs, die als Partner mit einer (aktuellen) Haupt-Championship
+ * verknüpft sind, laufen nur im Hintergrund — ihre Ergebnisse stehen
+ * zusammengeführt unter der Haupt-Championship (Themed). Solche Clubs werden
+ * im Club-Verzeichnis und in der Status-Leiste ausgeblendet. Gilt nur, solange
+ * die Verknüpfung auf einer aktuellen Championship (Ende vor max. 30 Tagen
+ * oder offen) liegt. Fehlt die Spalte/schlägt die Abfrage fehl, wird nichts
+ * ausgeblendet (sb() liefert dann []).
+ */
+let _hiddenClubIdsPromise = null;
+function getHiddenClubIds() {
+  if (!_hiddenClubIdsPromise) {
+    _hiddenClubIdsPromise = (async () => {
+      try {
+        const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+        const mains = (await sb('championships', 'select=id,end_date,multiclass_partners&multiclass_partners=neq.%7B%7D'))
+          .filter(c => Array.isArray(c.multiclass_partners) && c.multiclass_partners.length
+                       && (!c.end_date || c.end_date >= cutoff));
+        const ids = [...new Set(mains.flatMap(c => c.multiclass_partners))].filter(i => /^[\w-]+$/.test(i));
+        if (!ids.length) return new Set();
+        const rows = await sb('championships', `select=club_id&id=in.(${ids.join(',')})`);
+        return new Set(rows.map(r => String(r.club_id)));
+      } catch (e) { return new Set(); }
+    })();
+  }
+  return _hiddenClubIdsPromise;
+}
+
+/**
  * Globale Fußleisten-Statuskacheln (Session 10, Nachfolger der vier
  * funktionslosen Deko-Kacheln "Supabase/RaceNet/Event Active/Entries
  * Open"): "X clubs live now" + "Last synced". Läuft auf JEDER Seite (die
@@ -3342,8 +3370,9 @@ async function loadStatusBar() {
         sbAll('clubs',  'select=club_id,name&order=name.asc'),
         sbAll('events', 'select=club_id,status,start_date'),
       ]);
+      const hidden = await getHiddenClubIds();
       const eventsByClub = groupEventsByClub(events);
-      clubs = clubRows.map(c => {
+      clubs = clubRows.filter(c => !hidden.has(String(c.club_id))).map(c => {
         const cid = String(c.club_id);
         return { club_id: cid, name: c.name || `Club ${cid}`, status: computeClubStatus(eventsByClub[cid] || [], today) };
       });
@@ -3443,8 +3472,9 @@ async function loadClubDirectory() {
       sbAll('events', 'select=club_id,status,start_date'),
     ]);
 
+    const hidden = await getHiddenClubIds();
     const eventsByClub = groupEventsByClub(events);
-    _clubDirectory = clubs.map(c => {
+    _clubDirectory = clubs.filter(c => !hidden.has(String(c.club_id))).map(c => {
       const cid = String(c.club_id);
       return {
         club_id: cid,
@@ -4152,7 +4182,7 @@ async function loadScoredClubStandings(clubId, scoring) {
     const tbody = $('cd-standings-scored-tbody');
     if (tbody) {
       tbody.innerHTML = sorted.map((d, i) => {
-        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : `${d.vehicles.size} cars`;
+        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : d.loyaltyOpen ? [...d.vehicles].join(' / ') : `${d.vehicles.size} cars`;
         const roundCells = evOrder.map(evId => {
           const rd  = evs.find(e => e.id === evId);
           const lbl = `R${rd?.round_number ?? '?'}`;
@@ -4175,7 +4205,7 @@ async function loadScoredClubStandings(clubId, scoring) {
     const slimTbody = $('cd-standings-scored-slim-tbody');
     if (slimTbody) {
       slimTbody.innerHTML = sorted.map((d, i) => {
-        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : `${d.vehicles.size} cars`;
+        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : d.loyaltyOpen ? [...d.vehicles].join(' / ') : `${d.vehicles.size} cars`;
         const rowId  = `cd-standings-scored-slim-${i}`;
         const roundBadges = evOrder.map(evId => {
           const rd  = evs.find(e => e.id === evId);
@@ -4838,11 +4868,25 @@ async function _fetchAndRenderResults(eventId) {
     const [results, stages, stageResults] = await Promise.all([
       sb('event_results',  `select=*&event_id=eq.${eventId}&order=is_dnf.asc,position.asc`),
       sb('stages',         `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`),
-      sb('stage_results',  `select=driver_name,stage_id,time_str,stage_position,is_dnf&event_id=eq.${eventId}`),
+      sb('stage_results',  `select=driver_name,stage_id,time_str,stage_position,is_dnf,src_championship_id&event_id=eq.${eventId}`),
     ]);
 
+    // Multiclass: nicht zählende Doppelstarter-Läufe (is_invalid) direkt unter dem zählenden Lauf desselben Fahrers einsortieren
+    (function arrange() {
+      const inv = results.filter(r => r.is_invalid);
+      if (!inv.length) return;
+      const rest = results.filter(r => !r.is_invalid);
+      const out = [];
+      rest.forEach(r => {
+        out.push(r);
+        inv.filter(x => x.driver_name === r.driver_name).forEach(x => out.push(x));
+      });
+      inv.filter(x => !rest.some(r => r.driver_name === x.driver_name)).forEach(x => out.push(x));
+      results.length = 0; results.push(...out);
+    })();
+
     // Event-Info: Entries
-    setText('ev-info-entries', results.length || '—');
+    setText('ev-info-entries', results.filter(r => !r.is_invalid).length || '—');
 
     const tbody = $('themed-results-tbody');
     if (!tbody) return;
@@ -4858,21 +4902,22 @@ async function _fetchAndRenderResults(eventId) {
     const stageIdx = {};
     stageResults.forEach(r => {
       if (!stageIdx[r.stage_id]) stageIdx[r.stage_id] = {};
-      stageIdx[r.stage_id][r.driver_name] = r;
+      stageIdx[r.stage_id][r.driver_name + '|' + (r.src_championship_id || '')] = r;
     });
     _cacheEventStages(eventId, stages);
 
     tbody.innerHTML = results.map((r, i) => {
       const dnf       = r.is_dnf;
-      const posStr    = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
+      const inval     = !!r.is_invalid;
+      const posStr    = inval ? (r.hyp_position ? `(${String(r.hyp_position).padStart(2, '0')})` : (r.time === 'DNF' ? '(DNF)' : '—')) : dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
       const crStr     = r.cr_multiplier != null ? Number(r.cr_multiplier).toFixed(2) : '—';
-      const rowId     = `stages-row-${r.driver_id || i}`;
+      const rowId     = `stages-row-${r.driver_id || ''}-${i}`;
 
       // Stage-Zeiten Zeile (versteckt, wird bei Klick togglet)
       let stageRow = '';
       if (stages.length) {
         const cells = stages.map(st => {
-          const sr = stageIdx[st.id]?.[r.driver_name];
+          const sr = stageIdx[st.id]?.[r.driver_name + '|' + (r.src_championship_id || '')];
           if (!sr) return `<td style="color:#555;">—</td>`;
           const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
           return `<td ${cls}>${fmtStageTime(sr.time_str) || '—'}</td>`;
@@ -4893,14 +4938,14 @@ async function _fetchAndRenderResults(eventId) {
       }
 
       return `
-        <tr${dnf ? ' style="opacity:.55"' : ''} style="cursor:pointer;" onclick="toggleStageRow('${rowId}')">
-          <td class="${rankClass(i)}" data-label="#">${posStr}</td>
+        <tr style="cursor:pointer;${inval ? 'opacity:.4;font-style:italic;' : dnf ? 'opacity:.55;' : ''}"${inval ? ' title="Second run — not counted (shown: placement and points it would have had)"' : ''} onclick="toggleStageRow('${rowId}')">
+          <td class="${inval ? '' : rankClass((r.position || i + 1) - 1)}" data-label="#">${posStr}</td>
           <td data-label="DRIVER">${escapeHtml(r.driver_name) || '—'}</td>
           <td style="font-size:12px;color:#aaa;" data-label="VEHICLE">${escapeHtml(r.vehicle) || '—'}</td>
           <td data-label="TIME">${fmtStageTime(r.time) || '—'}</td>
-          <td data-label="BASE">${r.base_points ?? '—'}</td>
-          <td class="ev" data-label="×CR">${crStr}</td>
-          <td class="ev" style="color:var(--green);" data-label="TOTAL">${fmtPts(r.total_points)}</td>
+          <td data-label="BASE">${inval ? '—' : (r.base_points ?? '—')}</td>
+          <td class="ev" data-label="×CR">${inval ? '—' : crStr}</td>
+          <td class="ev" style="color:var(--green);" data-label="TOTAL">${inval ? `(${r.hyp_points != null ? fmtPts(r.hyp_points) : '—'})` : fmtPts(r.total_points)}</td>
         </tr>${stageRow}`;
     }).join('');
 
@@ -4910,22 +4955,23 @@ async function _fetchAndRenderResults(eventId) {
     if (slimTbody) {
       slimTbody.innerHTML = results.map((r, i) => {
         const dnf    = r.is_dnf;
-        const posStr = dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
+        const inval  = !!r.is_invalid;
+        const posStr = inval ? (r.hyp_position ? `(${String(r.hyp_position).padStart(2, '0')})` : (r.time === 'DNF' ? '(DNF)' : '—')) : dnf ? 'DNF' : String(r.position || i + 1).padStart(2, '0');
         const crStr  = r.cr_multiplier != null ? Number(r.cr_multiplier).toFixed(2) : '—';
         const rowId  = `results-slim-${i}`;
 
         const stageBadges = stages.map(st => {
-          const sr   = stageIdx[st.id]?.[r.driver_name];
+          const sr   = stageIdx[st.id]?.[r.driver_name + '|' + (r.src_championship_id || '')];
           const best = sr?.stage_position === 1;
           return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || '—'}</div></div>`;
         }).join('');
 
         return `
-          <tr${dnf ? ' style="opacity:.55"' : ''} onclick="toggleSlimDetail('${rowId}')">
-            <td class="${rankClass(i)}">${posStr}</td>
+          <tr${inval ? ' style="opacity:.4;font-style:italic;"' : dnf ? ' style="opacity:.55"' : ''} onclick="toggleSlimDetail('${rowId}')">
+            <td class="${inval ? '' : rankClass((r.position || i + 1) - 1)}">${posStr}</td>
             <td>${escapeHtml(r.driver_name) || '—'}</td>
             <td style="font-size:12px;color:#aaa;">${escapeHtml(r.vehicle) || '—'}</td>
-            <td class="ev" style="color:var(--green);">${fmtPts(r.total_points)}</td>
+            <td class="ev" style="color:var(--green);">${inval ? `(${r.hyp_points != null ? fmtPts(r.hyp_points) : '—'})` : fmtPts(r.total_points)}</td>
           </tr>
           <tr class="slim-detail-row" id="${rowId}">
             <td colspan="4">
@@ -4941,7 +4987,7 @@ async function _fetchAndRenderResults(eventId) {
     }
 
     // Header aktualisieren
-    const finishers = results.filter(r => !r.is_dnf).length;
+    const finishers = results.filter(r => !r.is_dnf && !r.is_invalid).length;
     const dnfs      = results.filter(r => r.is_dnf).length;
     const statusStr = ev.status === 1 ? ' ● LIVE' : ev.status === 2 ? ' ✓ FINISHED' : '';
     setText('themed-results-hdr',
@@ -5999,7 +6045,7 @@ async function loadStandings() {
     // Alle Event-Results dieser Championship
     const results = await sb(
       'event_results',
-      `select=driver_name,vehicle,total_points,event_id,is_dnf&championship_id=eq.${_themedChampId}&order=event_id.asc`
+      `select=driver_name,vehicle,total_points,event_id,is_dnf,is_invalid&championship_id=eq.${_themedChampId}&order=event_id.asc`
     );
 
     if (!results.length) {
@@ -6021,10 +6067,38 @@ async function loadStandings() {
       if (!driverMap[name]) {
         driverMap[name] = { name, vehicles: new Set(), roundPts: {}, total: 0 };
       }
-      if (r.vehicle) driverMap[name].vehicles.add(r.vehicle);
+      if (r.vehicle && !r.is_invalid) driverMap[name].vehicles.add(r.vehicle);
       const pts = r.total_points ?? 0;
       driverMap[name].roundPts[r.event_id] = (driverMap[name].roundPts[r.event_id] || 0) + pts;
     });
+
+    // Loyalty-Auto (Multiclass-Doppelstarter): pro Event die Menge möglicher Autos.
+    //  - normal: das Auto des zählenden Laufs (nicht zählende Läufe, is_invalid, ignorieren)
+    //  - beide Läufe DNF: noch NICHT festgelegt, welches Auto "das gewählte" ist — beide
+    //    Autos bleiben im Rennen, die Entscheidung fällt mit dem nächsten Event
+    // Loyalty gilt, wenn über alle Events mindestens ein Auto in JEDER Menge vorkommt.
+    (function resolveLoyaltyCars() {
+      const byDriverEv = {};
+      results.forEach(r => {
+        if (!r.driver_name || !r.vehicle) return;
+        const k = r.driver_name + '\u0001' + r.event_id;
+        (byDriverEv[k] = byDriverEv[k] || { name: r.driver_name, count: [], inv: [] })[r.is_invalid ? 'inv' : 'count'].push(r);
+      });
+      const perDriver = {};
+      Object.values(byDriverEv).forEach(g => {
+        const set = new Set(g.count.map(r => r.vehicle));
+        if (g.count.length && g.count.every(r => r.is_dnf)) {
+          g.inv.filter(r => r.time === 'DNF').forEach(r => set.add(r.vehicle));   // beide DNF → offen
+        }
+        if (set.size) (perDriver[g.name] = perDriver[g.name] || []).push(set);
+      });
+      Object.entries(perDriver).forEach(([name, sets]) => {
+        const d = driverMap[name]; if (!d) return;
+        let inter = new Set(sets[0]);
+        sets.slice(1).forEach(st => { inter = new Set([...inter].filter(v => st.has(v))); });
+        if (inter.size) { d.vehicles = inter; d.loyaltyOpen = inter.size > 1; }
+      });
+    })();
 
     // Jede Runden-Punktzahl auf die angezeigte (gerundete) Zahl fixieren —
     // ab hier wird nur noch mit den sichtbaren, gerundeten Werten gerechnet,
@@ -6087,9 +6161,9 @@ async function loadStandings() {
     if (tbody) {
       tbody.innerHTML = sorted.map((d, i) => {
         // Fahrzeug-Anzeige: wenn nur eines → zeigen, sonst mehrere
-        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : `${d.vehicles.size} cars`;
+        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : d.loyaltyOpen ? [...d.vehicles].join(' / ') : `${d.vehicles.size} cars`;
         // Loyalty-Check: genau ein Fahrzeug die ganze Saison
-        const loyal  = d.vehicles.size === 1 ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+        const loyal  = d.vehicles.size === 1 ? '<span style="color:var(--green);">✓ +50</span>' : d.loyaltyOpen ? '<span style="color:#888;" title="Car not fixed yet — decided with the next event">open</span>' : '—';
 
         const roundCells = evOrder.map(evId => {
           const rd  = evs.find(e => e.id === evId);
@@ -6120,8 +6194,8 @@ async function loadStandings() {
     const slimTbody = $('standings-slim-tbody');
     if (slimTbody) {
       slimTbody.innerHTML = sorted.map((d, i) => {
-        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : `${d.vehicles.size} cars`;
-        const loyal  = d.vehicles.size === 1 ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+        const carStr = d.vehicles.size === 1 ? [...d.vehicles][0] : d.loyaltyOpen ? [...d.vehicles].join(' / ') : `${d.vehicles.size} cars`;
+        const loyal  = d.vehicles.size === 1 ? '<span style="color:var(--green);">✓ +50</span>' : d.loyaltyOpen ? '<span style="color:#888;" title="Car not fixed yet — decided with the next event">open</span>' : '—';
         const rowId  = `standings-slim-${i}`;
 
         const roundBadges = evOrder.map(evId => {

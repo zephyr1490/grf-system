@@ -1923,14 +1923,14 @@ def _maybe_refresh_driver_stats_summary(log):
         return
 
     log("Refreshing driver stats summary (once-daily, full history scan)...")
-    all_results = sb_get_all("event_results", "select=driver_name,event_id,position,is_dnf")
+    all_results = sb_get_all("event_results", "select=driver_name,event_id,position,is_dnf,is_invalid")
     all_events  = sb_get_all("events", "select=id,club_id")
     event_club  = {e["id"]: e.get("club_id") for e in all_events}
 
     stats = {}
     for r in all_results:
         name = r.get("driver_name")
-        if not name:
+        if not name or r.get("is_invalid"):   # Multiclass: nicht zählender Doppelstarter-Lauf
             continue
         s = stats.setdefault(name, {"best": None, "dnf": 0, "total": 0, "clubs": set()})
         s["total"] += 1

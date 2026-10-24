@@ -1118,11 +1118,13 @@ def sync_championship(db: SupabaseClient, client,
 #
 #  Doppelstarter-Regel (championships.double_starter_rule), wenn ein Fahrer in
 #  mehreren Klassen desselben Events startet:
-#    worst = nur die Wertung mit den WENIGER Punkten zählt (Standard)
-#    best  = nur die Wertung mit den MEHR Punkten zählt
-#    both  = alle Wertungen zählen (Summe)
-#  Die Punkte werden vorher aus der gemeinsamen Tabelle vergeben; die Regel
-#  entscheidet nur, welche der Wertungen eines Fahrers in event_results bleiben.
+#    worst = nur der schlechtere Lauf zählt (Standard)
+#    best  = nur der bessere Lauf zählt
+#    both  = alle Läufe zählen (Summe)
+#  Die Regel wird VOR der Platzierung angewendet: nicht zählende Läufe stehen
+#  weiter in event_results (is_invalid=true, ausgegraut, position NULL, total_points 0;
+#  hyp_position/hyp_points zeigen, was der Lauf im Feld wert gewesen wäre), nehmen aber
+#  keinem anderen Fahrer Platz oder Punkte weg und zählen nirgends.
 #
 #  Voraussetzung (SQL, einmalig): claude/multiclass_schema_2.sql
 #    (Spalte src_championship_id auf stage_results + event_results).
@@ -1130,23 +1132,6 @@ def sync_championship(db: SupabaseClient, client,
 
 MC_STAGE_COLS = ("stage_id,event_id,championship_id,driver_name,driver_id,vehicle,"
                  "time_ms,time_str,stage_position,is_dnf,platform")
-
-
-def _mc_pick_rule_rows(rows: list, rule: str) -> list:
-    """Wendet die Doppelstarter-Regel auf die event_results-Zeilen EINES Events an."""
-    if rule == "both":
-        return rows
-    by_driver: dict = {}
-    for r in rows:
-        by_driver.setdefault(r["driver_name"], []).append(r)
-    kept = []
-    for name, lst in by_driver.items():
-        if len(lst) == 1:
-            kept.append(lst[0])
-            continue
-        key = lambda r: (r["total_points"], -r["position"] if r["position"] else -9999)
-        kept.append(max(lst, key=key) if rule == "best" else min(lst, key=key))
-    return kept
 
 
 def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
@@ -1187,8 +1172,7 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
             if no in entries_by_stage:
                 entries_by_stage[no].append({**r, "_src": pev["championship_id"]})
 
-    # Pro Stage: gemeinsam nach Zeit sortieren → neue Stage-Positionen
-    stage_rows_out = []
+    # Pro Stage: gemeinsam nach Zeit sortieren
     stage_data = []   # [(stage_no, [rows sortiert])]
     for no in sorted(entries_by_stage):
         rows = entries_by_stage[no]
@@ -1196,21 +1180,6 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
             continue
         rows.sort(key=lambda r: (r.get("time_ms") is None, r.get("time_ms") or 0))
         stage_data.append((no, rows))
-        for rank, r in enumerate(rows, start=1):
-            stage_rows_out.append({
-                "stage_id":        stage_id_by_no[no],
-                "event_id":        ev_id,
-                "championship_id": champ_id,
-                "driver_name":     r["driver_name"],
-                "driver_id":       r.get("driver_id", ""),
-                "vehicle":         r.get("vehicle", ""),
-                "time_ms":         r.get("time_ms"),
-                "time_str":        r.get("time_str", ""),
-                "stage_position":  rank,
-                "is_dnf":          r.get("is_dnf", False),
-                "platform":        r.get("platform", ""),
-                "src_championship_id": r["_src"],
-            })
 
     if not stage_data:
         return False
@@ -1234,17 +1203,59 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
         if r.get("time_ms") is not None and not is_dnf_ms(r["time_ms"]):
             is_dnf[k] = False
 
-    # Stage-Siege (nur relevant für CUSTOM_SCORING)
+    # Doppelstarter-Regel ZUERST, vor jeder Platzierung: pro Fahrer wird festgelegt,
+    # welche Wertung(en) zählen. Nicht zählende Läufe ("ungültig") bekommen weder
+    # Platz noch Punkte und nehmen anderen Fahrern keinen Platz/keine Punkte weg —
+    # gerankt wird nur unter den zählenden Wertungen. Schlechter/besser = DNF vor
+    # Finisher, dann nach Gesamtzeit.
+    keys_by_driver: dict = {}
+    for k in info:
+        keys_by_driver.setdefault(k[0], []).append(k)
+    invalid: set = set()
+    if rule in ("worst", "best"):
+        for name, ks in keys_by_driver.items():
+            if len(ks) < 2:
+                continue
+            # DNF ist immer "schlechter" als ein Finish. Sind BEIDE Läufe DNF, entscheiden die
+            # DNF-Punkte (hängen am CR des Autos): worst = weniger Punkte, best = mehr Punkte.
+            badness = lambda k: (is_dnf[k],
+                                 -get_base_points_for(0, True, champ_id) * car_ratings.get(info[k]["vehicle"], 1.0)
+                                 if is_dnf[k] else total.get(k, 0))
+            keep = max(ks, key=badness) if rule == "worst" else min(ks, key=badness)
+            invalid.update(k for k in ks if k != keep)
+
+    # Stage-Positionen/-Siege nur unter den zählenden Wertungen
+    stage_rows_out = []
     wins: dict = {}
-    for _no, rows in stage_data:
-        first = rows[0]
-        if first.get("time_ms") is not None and not is_dnf_ms(first["time_ms"]):
-            k = (first["driver_name"], first["_src"])
-            wins[k] = wins.get(k, 0) + 1
+    for no, rows in stage_data:
+        rank = 0
+        for r in rows:
+            k = (r["driver_name"], r["_src"])
+            if k in invalid:
+                pos = 0
+            else:
+                rank += 1
+                pos = rank
+                if rank == 1 and r.get("time_ms") is not None and not is_dnf_ms(r["time_ms"]):
+                    wins[k] = wins.get(k, 0) + 1
+            stage_rows_out.append({
+                "stage_id":        stage_id_by_no[no],
+                "event_id":        ev_id,
+                "championship_id": champ_id,
+                "driver_name":     r["driver_name"],
+                "driver_id":       r.get("driver_id", ""),
+                "vehicle":         r.get("vehicle", ""),
+                "time_ms":         r.get("time_ms"),
+                "time_str":        r.get("time_str", ""),
+                "stage_position":  pos,
+                "is_dnf":          r.get("is_dnf", False),
+                "platform":        r.get("platform", ""),
+                "src_championship_id": r["_src"],
+            })
     bonus_per_win = get_stage_bonus_points_for(champ_id)
 
-    finishers = sorted([k for k in info if not is_dnf[k]], key=lambda k: total.get(k, 0))
-    dnfs      = [k for k in info if is_dnf[k]]
+    finishers = sorted([k for k in info if not is_dnf[k] and k not in invalid], key=lambda k: total.get(k, 0))
+    dnfs      = [k for k in info if is_dnf[k] and k not in invalid]
 
     def _row(k, pos, dnf):
         i     = info[k]
@@ -1261,23 +1272,42 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
             "stages_completed": done.get(k, 0), "is_dnf": dnf,
             "base_points": base, "cr_multiplier": cr, "cr_points": crpts,
             "bonus_points": bonus, "total_points": round(crpts + bonus, 2),
-            "src_championship_id": k[1],
+            "src_championship_id": k[1], "is_invalid": False,
+        }
+
+    def _invalid_row(k):
+        # Nicht zählender Lauf: zählt nirgends (position NULL, total_points 0), zeigt aber
+        # die hypothetische Platzierung/Punkte, die er im Feld der zählenden Läufe hätte
+        # (andere Fahrer werden dadurch NICHT verdrängt).
+        i = info[k]
+        dnf = is_dnf[k]
+        cr  = car_ratings.get(i["vehicle"], 1.0)
+        if dnf:
+            hyp_pos = None
+            hyp_pts = round(get_base_points_for(0, True, champ_id) * cr, 2)
+        else:
+            hyp_pos = 1 + sum(1 for f in finishers if total.get(f, 0) < total.get(k, 0))
+            hyp_pts = round(get_base_points_for(hyp_pos, False, champ_id) * cr, 2)
+        return {
+            "event_id": ev_id, "championship_id": champ_id,
+            "driver_name": k[0], "driver_id": i["driver_id"],
+            "position": None, "vehicle": i["vehicle"], "platform": i["platform"],
+            "total_time_ms": None if dnf else total.get(k),
+            "time": "DNF" if dnf else ms_to_display(total.get(k)),
+            "stages_completed": done.get(k, 0), "is_dnf": False,   # kein DNF: Zeile soll nirgends als Ausfall zählen
+            "base_points": 0, "cr_multiplier": cr,
+            "cr_points": 0, "bonus_points": 0, "total_points": 0,
+            "src_championship_id": k[1], "is_invalid": True,
+            "hyp_position": hyp_pos, "hyp_points": hyp_pts,
         }
 
     event_rows = [_row(k, p, False) for p, k in enumerate(finishers, start=1)] + \
-                 [_row(k, 0, True) for k in dnfs]
-
-    n_before = len(event_rows)
-    event_rows = _mc_pick_rule_rows(event_rows, rule)
-
-    # Positionen nach Anwendung der Regel lückenlos neu vergeben (Punkte bleiben
-    # wie aus der gemeinsamen Tabelle vergeben).
-    fin = sorted([r for r in event_rows if not r["is_dnf"]], key=lambda r: r["position"])
-    for p, r in enumerate(fin, start=1):
-        r["position"] = p
+                 [_row(k, 0, True) for k in dnfs] + \
+                 [_invalid_row(k) for k in sorted(invalid)]
+    n_before = len(info)
 
     log(f"      🔀 Multiclass Rd.{main_ev.get('round_number')}: "
-        f"{len(stage_data)} Stage(s), {n_before} Wertung(en) → {len(event_rows)} nach Regel '{rule}' "
+        f"{len(stage_data)} Stage(s), {n_before} Wertung(en), {len(invalid)} ungültig nach Regel '{rule}' "
         f"(Partner-Events: {len(partner_evs)})")
 
     if test:
@@ -1306,9 +1336,11 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
         try:
             names = sorted({r["driver_name"] for r in event_rows})
             their = db.select_all("event_results",
-                                  f"driver_name=in.({pg_in_list(names)})&select=driver_name,position,is_dnf")
+                                  f"driver_name=in.({pg_in_list(names)})&select=driver_name,position,is_dnf,is_invalid")
             stats: dict = {}
             for r in their:
+                if r.get("is_invalid"):
+                    continue
                 s = stats.setdefault(r["driver_name"], {"starts": 0, "wins": 0})
                 if not r.get("is_dnf", False):
                     s["starts"] += 1
@@ -1338,7 +1370,7 @@ def _mc_rebuild_standings(db: "SupabaseClient", champ_id: str):
     meta = db.select("championships", f"id=eq.{champ_id}&select=best_of_events")
     best_of = (meta[0].get("best_of_events") if meta else None) or None
     rows = db.select_all("event_results",
-                         f"championship_id=eq.{champ_id}&select=driver_name,event_id,total_points")
+                         f"championship_id=eq.{champ_id}&is_invalid=eq.false&select=driver_name,event_id,total_points")
     per_driver: dict = {}
     for r in rows:
         per_driver.setdefault(r["driver_name"], []).append(float(r.get("total_points") or 0))
