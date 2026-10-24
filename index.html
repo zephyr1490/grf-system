@@ -4781,7 +4781,7 @@ async function loadThemedResults() {
     // fast alle, war nicht aussagekräftig, Owner-Meldung Session 10).
     let heroName = 'GRF Themed';
     try {
-      const cl    = await sbAll('clubs', 'select=club_id,name');
+      const cl    = await sbAll('clubs', 'select=club_id,name&order=name.asc');
       const names = new Map(cl.map(r => [String(r.club_id), r.name]));
       heroName    = names.get('23799') || heroName;
       const pn    = await getPartnerClubNames(champ.multiclass_partners, names);
