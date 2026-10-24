@@ -2608,8 +2608,14 @@ textarea.inp-std { resize:vertical; }
           <div id="ts-overview"></div>
           <div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--gray-dark);">
             <div style="font-size:11px;color:#888;letter-spacing:1px;margin-bottom:6px;">TEAM DRAW</div>
-            <p style="font-size:12px;color:#888;margin:0 0 10px;">Vorschau berechnet nur, nichts wird gespeichert. „Draw again" würfelt mit neuem Seed. „Save teams" schreibt genau die gezeigten Teams (ersetzt bestehende Teams dieser Championship) und protokolliert den Seed.</p>
+            <p style="font-size:12px;color:#888;margin:0 0 10px;">Vorschau berechnet nur, nichts wird gespeichert. Es werden „Runs" Läufe mit verschiedenen Seeds gerechnet und der beste gezeigt (innerhalb 10 %, dann wenigste aufgelöste Gruppen, dann meiste erfüllte Wünsche, dann kleinste Abweichung). Runs = 1 ergibt eine einzelne Berechnung; mit einem Seed lässt sich ein früheres Ergebnis exakt wiederholen. „Save teams" schreibt genau die gezeigten Teams (ersetzt bestehende Teams dieser Championship) und protokolliert den Seed.</p>
             <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+              <label style="font-size:12px;color:#aaa;display:flex;align-items:center;gap:6px;">Runs
+                <input type="number" id="td-runs-input" value="10" min="1" max="100"
+                  style="width:60px;padding:6px 8px;background:#111;border:1px solid #333;color:var(--white);font-size:13px;"></label>
+              <label style="font-size:12px;color:#aaa;display:flex;align-items:center;gap:6px;">Seed
+                <input type="text" id="td-seed-input" placeholder="random" inputmode="numeric"
+                  style="width:100px;padding:6px 8px;background:#111;border:1px solid #333;color:var(--white);font-size:13px;"></label>
               <button class="ev-btn active" id="td-preview-btn" onclick="adminTdPreview()">Preview draw</button>
               <button class="ev-btn" id="td-save-btn" onclick="adminTdSave()" disabled>Save teams</button>
             </div>
@@ -5763,21 +5769,36 @@ let _adminTdPlan = null;
 async function adminTdPreview() {
   const cid = $('ts-champ-select')?.value;
   if (!cid) return;
+  const total = Math.max(1, Math.min(100, parseInt($('td-runs-input')?.value, 10) || 1));
+  const seedTxt = ($('td-seed-input')?.value || '').trim();
+  const base = /^\d+$/.test(seedTxt) ? parseInt(seedTxt, 10) : 1 + Math.floor(Math.random() * 1e9);
+  const key = r => [r.max_dev > 0.10 ? 1 : 0, r.dissolved.length, -r.soft_ok, r.max_dev];
+  const better = (a, b) => { const ka = key(a), kb = key(b); for (let i = 0; i < ka.length; i++) { if (ka[i] !== kb[i]) return ka[i] < kb[i]; } return false; };
   const btn = $('td-preview-btn'); if (btn) btn.disabled = true;
   $('td-save-btn') && ($('td-save-btn').disabled = true);
-  setText('td-status', 'Calculating… (kann einige Sekunden dauern)');
   setHTML('td-result', '');
+  let best = null, done = 0;
+  const all = [];
   try {
-    const d = await adminFetch('/admin/team-draw/preview', { championship_id: cid });
-    _adminTdPlan = { cid, data: d };
-    _adminTdRender(d);
+    while (done < total) {
+      const n = Math.min(6, total - done);
+      setText('td-status', `Calculating… run ${Math.min(done + n, total)}/${total}`);
+      const d = await adminFetch('/admin/team-draw/preview', { championship_id: cid, seed: base + done, runs: n });
+      all.push(...(d.runs_summary || []));
+      if (!best || better(d, best)) best = d;
+      done += n;
+    }
+    best.runs_summary = all;
+    best.runs = total;
+    _adminTdPlan = { cid, data: best };
+    _adminTdRender(best);
     setText('td-status', '');
     $('td-save-btn').disabled = false;
   } catch (err) {
     _adminTdPlan = null;
     setHTML('td-status', `<span style="color:var(--red);">⚠ ${escapeHtml(err.message)}</span>`);
   }
-  if (btn) { btn.disabled = false; btn.textContent = 'Draw again'; }
+  if (btn) btn.disabled = false;
 }
 
 async function adminTdSave() {
@@ -5797,11 +5818,20 @@ async function adminTdSave() {
   }
 }
 
+function _adminTdRunsLine(d) {
+  const r = d.runs_summary || [];
+  if (r.length < 2) return '';
+  const devs = r.map(x => x.max_dev), wish = r.map(x => x.soft_ok);
+  const f = x => (x * 100).toFixed(1) + ' %';
+  return `<span style="color:#888;">Best of ${r.length} runs · deviation ${f(Math.min(...devs))}–${f(Math.max(...devs))} · wishes ${Math.min(...wish)}–${Math.max(...wish)}/${d.soft_total}</span><br>`;
+}
+
 function _adminTdRender(d) {
   const pct = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + ' %';
   const ok = d.within_tolerance;
   const head = `<div style="font-size:13px;color:var(--white);margin-bottom:10px;line-height:1.6;">
       ${d.players} players · ${d.teams.length} teams (${d.sizes.join('/')}) · seed ${d.seed}<br>
+      ${_adminTdRunsLine(d)}
       Max deviation: <b style="color:${ok ? 'var(--green)' : 'var(--red)'};">${(d.max_dev * 100).toFixed(1)} %</b>${ok ? '' : ' ⚠ over 10 %'}
       · Soft wishes granted: ${d.soft_ok}/${d.soft_total}
       · Fixed groups kept: ${d.kept_groups.length}/${d.firm_groups.length}</div>`;

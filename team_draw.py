@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import random
 import re
+import time
 from urllib.parse import quote
 
 from flask import jsonify, request
@@ -38,18 +39,36 @@ COLORS = [
 ]
 
 
+_ELO_CACHE = {"t": 0.0, "data": None}
+ELO_CACHE_SECONDS = 120   # elo_state ist ~1,5 MB: bei Best-of-N-Laeufen nicht bei jedem Teil-Aufruf neu laden (Egress)
+EP_SEED = 1               # Seed der Punkte-Simulation: fest, damit ein Seed immer dieselben Teams ergibt
+MAX_RUNS_PER_CALL = 6     # Laeufe pro HTTP-Aufruf (Timeout-Schutz); das Frontend ruft mehrfach auf
+
+
 def _load_overall(sb_get):
+    now = time.time()
+    if _ELO_CACHE["data"] is not None and now - _ELO_CACHE["t"] < ELO_CACHE_SECONDS:
+        return _ELO_CACHE["data"]
     rows = sb_get("elo_state", "select=state_json&limit=1")
     if not rows:
         return {}
     sj = rows[0]["state_json"]
     if isinstance(sj, str):
         sj = json.loads(sj)
-    return (sj.get("ratings") or {}).get("overall") or {}
+    data = (sj.get("ratings") or {}).get("overall") or {}
+    _ELO_CACHE.update(t=now, data=data)
+    return data
 
 
-def compute_plan(sb_get, cid, seed):
-    """Komplette Berechnung fuer eine Championship. Rueckgabe (dict, None) oder (None, (fehlertext, status))."""
+def _rank_key(res):
+    """Besser = kleiner. Erst Toleranz (<= 10 %), dann moeglichst wenige aufgeloeste Gruppen,
+    dann moeglichst viele erfuellte Wuensche, dann kleinste Abweichung."""
+    return (res["max_dev"] > 0.10, len(res["dissolved"]), -res["soft_ok"], res["max_dev"])
+
+
+def compute_plan(sb_get, cid, seed, runs=1):
+    """Berechnung fuer eine Championship: `runs` Laeufe mit den Seeds seed, seed+1, ... und der beste
+    wird zurueckgegeben (s. _rank_key). Rueckgabe (dict, None) oder (None, (fehlertext, status))."""
     q = lambda v: quote(str(v), safe="")
     signups = [r["driver_name"] for r in sb_get("team_signups", f"championship_id=eq.{q(cid)}&select=driver_name&order=signed_up_at.asc")]
     n = len(signups)
@@ -70,10 +89,18 @@ def compute_plan(sb_get, cid, seed):
             rating[nm] = (DEFAULT_MU, DEFAULT_SIGMA)
             unrated.append(nm)
 
-    ep = TL.expected_points(rating, sims=4000, seed=seed)
-    plan = TL.plan_teams(ep, signups, wishes, seed=seed, iters=15000, restarts=3)
-
-    info, teams = plan["info"], plan["teams"]
+    ep = TL.expected_points(rating, sims=4000, seed=EP_SEED)
+    runs = max(1, min(int(runs), MAX_RUNS_PER_CALL))
+    cand = []
+    for i in range(runs):
+        s = seed + i
+        plan = TL.plan_teams(ep, signups, wishes, seed=s, iters=12000, restarts=2)
+        info = plan["info"]
+        cand.append({"seed": s, "plan": plan, "max_dev": info["max_dev"], "soft_ok": info["soft_ok"],
+                     "soft_total": info["soft_total"], "dissolved": plan["dissolved"]})
+    best = min(cand, key=_rank_key)
+    seed, plan, info = best["seed"], best["plan"], best["plan"]["info"]
+    teams = plan["teams"]
     sums = [sum(ep[m] for m in t) for t in teams]
     mean = sum(sums) / len(sums)
     order = list(range(len(teams)))
@@ -101,6 +128,9 @@ def compute_plan(sb_get, cid, seed):
         "kept_groups": [list(g) for g in plan["kept_groups"]],
         "dissolved": [list(g) for g in plan["dissolved"]],
         "void_wishes": plan["analysis"]["void_wishes"],
+        "runs": runs,
+        "runs_summary": [{"seed": c["seed"], "max_dev": round(c["max_dev"], 4), "soft_ok": c["soft_ok"],
+                          "dissolved": len(c["dissolved"])} for c in cand],
     }, None
 
 
@@ -125,7 +155,7 @@ def register_routes(app, h):
             seed = body.get("seed")
             seed = int(seed) if isinstance(seed, (int, float, str)) and str(seed).lstrip("-").isdigit() \
                 else random.SystemRandom().randrange(1, 10**9)
-            res, err = compute_plan(sb_get, cid, seed)
+            res, err = compute_plan(sb_get, cid, seed, runs=body.get("runs") or 1)
             if err:
                 return jsonify({"error": err[0]}), err[1]
             return jsonify(res)
