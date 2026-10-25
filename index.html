@@ -1175,7 +1175,7 @@ textarea.inp-std { resize:vertical; }
         —
       </div>
       <div class="themed-meta">
-        <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val">GRF Themed</div></div>
+        <div class="themed-meta-item"><div class="tm-lbl">Club</div><div class="tm-val" id="champ-club-val">GRF Themed</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Season</div><div class="tm-val" id="champ-season-val">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl">Rounds</div><div class="tm-val" id="champ-rounds">—</div></div>
         <div class="themed-meta-item"><div class="tm-lbl" id="champ-round-lbl">Current Round</div><div class="tm-val" id="champ-current-round">—</div></div>
@@ -3349,6 +3349,55 @@ const HIDDEN_CLUB_IDS = ['23834'];
 const isHiddenClub = c => HIDDEN_CLUB_IDS.includes(String(c.club_id));
 
 /**
+ * Multiclass-Anzeigename: Hauptclub + Partnerclubs, gemeinsamer Namensanfang
+ * der Partner wird weggelassen ("GRF Themed s1600" + "GRF Themed s2000"
+ * -> "GRF Themed s1600 + s2000"). Reine Funktion.
+ */
+function mcJoinNames(main, partners) {
+  const mw = String(main || '').split(' ');
+  const parts = (partners || []).map(n => {
+    const w = String(n || '').split(' ');
+    let i = 0;
+    while (i < w.length - 1 && i < mw.length && w[i] === mw[i]) i++;
+    return w.slice(i).join(' ');
+  }).filter(Boolean);
+  return [main, ...parts].join(' + ');
+}
+
+/** Namen der Partnerclubs für eine Liste von Partner-Championship-IDs. */
+async function getPartnerClubNames(partnerChampIds, names) {
+  const ids = (partnerChampIds || []).filter(i => /^[\w-]+$/.test(i));
+  if (!ids.length) return [];
+  const rows = await sb('championships', `select=id,club_id&id=in.(${ids.join(',')})`);
+  return rows.map(r => names.get(String(r.club_id))).filter(Boolean);
+}
+
+/**
+ * club_id -> Anzeigename ("GRF Themed s1600 + s2000") für Hauptclubs mit
+ * aktueller Multiclass-Championship (Ende offen oder max. 30 Tage her).
+ * Bei Fehler/fehlender Spalte: leere Map -> normale Club-Namen.
+ */
+async function getMulticlassLabelMap(clubRows) {
+  const out = new Map();
+  try {
+    const names = new Map(clubRows.map(r => [String(r.club_id), r.name]));
+    const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    const mains = (await sb('championships', 'select=club_id,start_date,end_date,multiclass_partners&multiclass_partners=neq.%7B%7D&order=start_date.desc'))
+      .filter(c => Array.isArray(c.multiclass_partners) && c.multiclass_partners.length
+                   && (!c.end_date || c.end_date >= cutoff));
+    const seen = new Set();
+    for (const c of mains) {
+      const cid = String(c.club_id);
+      if (seen.has(cid)) continue;
+      seen.add(cid);
+      const pn = await getPartnerClubNames(c.multiclass_partners, names);
+      if (pn.length) out.set(cid, mcJoinNames(names.get(cid) || `Club ${cid}`, pn));
+    }
+  } catch (e) { /* normale Namen */ }
+  return out;
+}
+
+/**
  * Globale Fußleisten-Statuskacheln (Session 10, Nachfolger der vier
  * funktionslosen Deko-Kacheln "Supabase/RaceNet/Event Active/Entries
  * Open"): "X clubs live now" + "Last synced". Läuft auf JEDER Seite (die
@@ -3467,11 +3516,12 @@ async function loadClubDirectory() {
     ]);
 
     const eventsByClub = groupEventsByClub(events);
+    const mcLabels = await getMulticlassLabelMap(clubs);
     _clubDirectory = clubs.filter(c => !isHiddenClub(c)).map(c => {
       const cid = String(c.club_id);
       return {
         club_id: cid,
-        name:    c.name || `Club ${cid}`,
+        name:    mcLabels.get(cid) || c.name || `Club ${cid}`,
         status:  computeClubStatus(eventsByClub[cid] || [], today),
       };
     });
@@ -4735,7 +4785,16 @@ async function loadThemedResults() {
     // 2. Championship Hero befüllen — Titel zeigt jetzt den Club-Namen
     // statt dem generischen RaceNet-Championship-Namen ("Championship" für
     // fast alle, war nicht aussagekräftig, Owner-Meldung Session 10).
-    setText('champ-name',     'GRF THEMED');
+    let heroName = 'GRF Themed';
+    try {
+      const cl    = await sbAll('clubs', 'select=club_id,name&order=name.asc');
+      const names = new Map(cl.map(r => [String(r.club_id), r.name]));
+      heroName    = names.get('23799') || heroName;
+      const pn    = await getPartnerClubNames(champ.multiclass_partners, names);
+      if (pn.length) heroName = mcJoinNames(heroName, pn);
+    } catch (e) { /* bleibt "GRF Themed" */ }
+    setText('champ-name',     heroName.toUpperCase());
+    setText('champ-club-val', heroName);
     setText('champ-season-val', champ.season_number || '—');
     // Narrative: Championship-eigenes hat Vorrang, fällt sonst auf das
     // dauerhafte Club-Narrative zurück (Session 10, Owner-Wunsch).
