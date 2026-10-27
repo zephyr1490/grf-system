@@ -1398,21 +1398,48 @@ def _mc_rebuild_standings(db: "SupabaseClient", champ_id: str):
         log(f"    🏆 Multiclass standings rebuilt: {len(out)} driver(s)")
 
 
-def sync_multiclass(db: "SupabaseClient", test: bool = False, remerge_all: bool = False):
+def _mc_club_roles(db: "SupabaseClient"):
+    """(Haupt-Club-IDs, Partner-Club-IDs) aller aktuellen Multiclass-Championships."""
+    from datetime import date, timedelta
+    cutoff = (date.today() - timedelta(days=14)).isoformat()
+    mains = [c for c in db.select_all("championships",
+                                      "select=id,club_id,end_date,multiclass_partners&multiclass_partners=neq.%7B%7D")
+             if isinstance(c.get("multiclass_partners"), list) and c["multiclass_partners"]
+             and (not c.get("end_date") or c["end_date"] >= cutoff)]
+    main_clubs = {str(c["club_id"]) for c in mains if c.get("club_id")}
+    partner_ids = sorted({pid for c in mains for pid in c["multiclass_partners"]})
+    partner_clubs = set()
+    if partner_ids:
+        for r in db.select_all("championships", f"select=id,club_id&id=in.({','.join(partner_ids)})"):
+            if r.get("club_id"):
+                partner_clubs.add(str(r["club_id"]))
+    return main_clubs, partner_clubs
+
+
+def sync_multiclass(db: "SupabaseClient", test: bool = False, remerge_all: bool = False,
+                    only_club=None, merged_clubs=None):
     """
-    Läuft nach dem normalen Club-Sync. Findet Haupt-Championships mit
-    Partner-Verknüpfung und führt deren Events zusammen. Fehler hier brechen
-    den restlichen Sync nie ab (Aufrufer fängt Exceptions).
+    Führt Haupt-Championships mit Partner-Verknüpfung zusammen. Wird direkt nach
+    dem Sync des Haupt-Clubs aufgerufen (only_club=<club_id>), damit die
+    kombinierte Wertung nicht minutenlang durch die rohe Einzel-Club-Wertung
+    ersetzt ist, und am Ende des Laufs für alle noch nicht gemergten Haupt-Clubs
+    (merged_clubs). Fehler hier brechen den restlichen Sync nie ab (Aufrufer
+    fängt Exceptions).
     """
     from datetime import date, timedelta
     cutoff = (date.today() - timedelta(days=14)).isoformat()
-    filt = "select=id,club_id,multiclass_partners,double_starter_rule,best_of_events"
-    if not remerge_all:
-        filt += f"&end_date=gte.{cutoff}"
+    filt = "select=id,club_id,end_date,multiclass_partners,double_starter_rule,best_of_events&multiclass_partners=neq.%7B%7D"
     mains = [c for c in db.select_all("championships", filt)
-             if isinstance(c.get("multiclass_partners"), list) and c["multiclass_partners"]]
+             if isinstance(c.get("multiclass_partners"), list) and c["multiclass_partners"]
+             and (remerge_all or not c.get("end_date") or c["end_date"] >= cutoff)]
+    if only_club is not None:
+        mains = [c for c in mains if str(c.get("club_id")) == str(only_club)]
+    elif merged_clubs:
+        mains = [c for c in mains if str(c.get("club_id")) not in merged_clubs]
     if not mains:
         return
+    if merged_clubs is not None:
+        merged_clubs.update(str(c.get("club_id")) for c in mains)
 
     for main in mains:
         partners = main["multiclass_partners"]
@@ -1570,6 +1597,16 @@ def main():
         log(f"\n✅ Standings-only sync complete in {elapsed:.1f}s")
         return
 
+    # Multiclass: Partner-Clubs zuerst, Haupt-Club direkt danach mergen (s. unten)
+    mc_main_clubs, mc_partner_clubs = set(), set()
+    try:
+        mc_main_clubs, mc_partner_clubs = _mc_club_roles(db)
+    except Exception as ex:
+        log(f"  ⚠ Multiclass roles failed: {ex}")
+    club_ids = ([c for c in club_ids if c in mc_partner_clubs] +
+                [c for c in club_ids if c not in mc_partner_clubs])
+    mc_merged = set()
+
     for club_id in club_ids:
         log(f"\n🏁 Club {club_id}...")
         try:
@@ -1638,11 +1675,21 @@ def main():
             except Exception as ex:
                 log(f"  ⚠ Could not fill season numbers: {ex}")
 
+        # Haupt-Club eines Multiclass-Paars: sofort mergen (Partner sind schon
+        # synchronisiert), sonst zeigt die Website bis zum Ende des Gesamtlaufs
+        # nur die Einzel-Club-Wertung.
+        if club_id in mc_main_clubs and not test_mode:
+            try:
+                sync_multiclass(db, test=test_mode, only_club=club_id, merged_clubs=mc_merged)
+            except Exception as ex:
+                log(f"  ⚠ Multiclass merge failed: {ex}")
+
     # Multiclass: verknüpfte Championships (Partner-Clubs) zu einer Wertung
     # zusammenführen — NACH dem Sync aller Clubs, damit Haupt- und Partner-
     # Daten frisch sind (siehe sync_multiclass()).
     try:
-        sync_multiclass(db, test=test_mode, remerge_all="--remerge" in sys.argv)
+        sync_multiclass(db, test=test_mode, remerge_all="--remerge" in sys.argv,
+                        merged_clubs=mc_merged if not test_mode else None)
     except Exception as ex:
         log(f"  ⚠ Multiclass merge failed: {ex}")
 
