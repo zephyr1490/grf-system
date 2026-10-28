@@ -176,14 +176,48 @@ def get_base_points(position: int, is_dnf: bool) -> int:
 #  — beide Stellen müssen bei Änderungen synchron gehalten werden.
 # ─────────────────────────────────────────────────────────────────────────────
 
-CUSTOM_SCORING = {
-    # Club 14317, upcoming championship (Session 10)
-    "2pBfWYxRdRTDb1tCP": {
-        "position_points":    [20, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2, 1, 0],
-        "dnf_points":         0,
-        "stage_bonus_points": 1,  # pro gewonnener Stage, AUCH bei DNF (falls vor dem Ausfall gewonnen)
+# Eigene Punktesysteme pro CLUB: gilt für die angegebene Championship UND jede
+# spätere (start_date >= deren start_date) dieses Clubs. Frühere Championships
+# bleiben unberührt. Die Zahlen müssen mit CLUB_SCORING_INFO in index.html
+# übereinstimmen (kein Admin-UI, bewusste Owner-Entscheidung).
+CUSTOM_SCORING_CLUBS = {
+    # Club 14317, ab Championship "2pBfWYxRdRTDb1tCP" (Session 10 Test, ab 28.10.2026 dauerhaft)
+    "14317": {
+        "since_championship_id": "2pBfWYxRdRTDb1tCP",
+        "position_points":       [20, 16, 14, 12, 10, 8, 6, 5, 4, 3, 2, 1, 0],
+        "dnf_points":            0,
+        "stage_bonus_points":    1,  # pro gewonnener Stage, AUCH bei DNF (falls vor dem Ausfall gewonnen)
     },
 }
+
+# championship_id -> Scoring-Konfiguration; wird pro Lauf in sync_championship()
+# über _register_custom_scoring() befüllt (alle get_*_for()-Funktionen lesen hier).
+CUSTOM_SCORING: dict = {}
+_SCORING_SINCE_START: dict = {}
+
+
+def _register_custom_scoring(db, club_id, champ_id, start_date) -> bool:
+    """Trägt champ_id in CUSTOM_SCORING ein, falls ihr Club ein eigenes Punktesystem
+    hat und die Championship nicht vor der konfigurierten Start-Championship liegt."""
+    cfg = CUSTOM_SCORING_CLUBS.get(str(club_id))
+    if not cfg or not champ_id:
+        return False
+    if champ_id in CUSTOM_SCORING:
+        return True
+    since_id = cfg["since_championship_id"]
+    ok = champ_id == since_id
+    if not ok:
+        if since_id not in _SCORING_SINCE_START:
+            try:
+                rows = db.select("championships", f"select=start_date&id=eq.{since_id}&limit=1")
+                _SCORING_SINCE_START[since_id] = (rows[0].get("start_date") if rows else None)
+            except Exception:
+                _SCORING_SINCE_START[since_id] = None
+        first = _SCORING_SINCE_START[since_id]
+        ok = bool(first and start_date and str(start_date)[:10] >= str(first)[:10])
+    if ok:
+        CUSTOM_SCORING[champ_id] = {k: cfg[k] for k in ("position_points", "dnf_points", "stage_bonus_points")}
+    return ok
 
 
 def get_base_points_for(position: int, is_dnf: bool, championship_id: str) -> int:
@@ -1006,6 +1040,9 @@ def sync_championship(db: SupabaseClient, client,
         log(f"    📅 Championship dates: {start} → {end or '?'}")
 
     log(f"  📋 {champ_name} ({champ_id})")
+
+    if _register_custom_scoring(db, club_id, champ_id, start):
+        log("    🎯 Eigenes Punktesystem dieses Clubs aktiv")
 
     if not test:
         db.upsert("championships", {
