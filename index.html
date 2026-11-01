@@ -1188,9 +1188,9 @@ textarea.inp-std { resize:vertical; }
       <div class="sub-tab active" data-tab="results" onclick="showSubTab('results',this)">Live Results</div>
       <div class="sub-tab" data-tab="standings" onclick="showSubTab('standings',this)">Championship Standings</div>
       <div class="sub-tab" data-tab="carratings" onclick="showSubTab('carratings',this)">Car Ratings</div>
-      <div class="sub-tab" data-tab="challenges" onclick="showSubTab('challenges',this)">Challenges</div>
+      <div class="sub-tab" data-tab="challenges" onclick="showSubTab('challenges',this)">Challenges &amp; Rules</div>
       <div class="sub-tab" data-tab="stats" onclick="showSubTab('stats',this)">Stats</div>
-      <div class="sub-tab" data-tab="rules" onclick="showSubTab('rules',this)">Rules</div>
+      <div class="sub-tab" data-tab="rules" onclick="showSubTab('rules',this)">Ruleset</div>
     </div>
 
     <!-- TAB: LIVE RESULTS -->
@@ -1322,7 +1322,12 @@ textarea.inp-std { resize:vertical; }
 
     <!-- TAB: CHALLENGES -->
     <div class="themed-tab" id="tab-challenges">
-      <div class="challenge-box" id="challenges-box">
+      <!-- Championship-Regeln (dynamisch, pro Championship): Multiclass + Doppelstarter-Regel -->
+      <div class="challenge-box" id="champ-rules-box">
+        <div class="col-hdr" style="margin-bottom:10px;">CHAMPIONSHIP RULES</div>
+        <div id="champ-rules-list"><div class="empty"><div class="empty-title">LOADING…</div></div></div>
+      </div>
+      <div class="challenge-box" id="challenges-box" style="margin-top:6px;">
         <div class="col-hdr" style="margin-bottom:10px;" id="challenges-hdr">ACTIVE CHALLENGES — LOADING…</div>
         <div id="challenges-list"></div>
       </div>
@@ -1422,10 +1427,25 @@ textarea.inp-std { resize:vertical; }
       </div>
 
       <div class="club-directory-wrap" style="margin-top:6px;">
-        <div class="col-hdr" style="border-bottom:none;">WHAT ABOUT MULTI-CLUB AND MULTICLASS EVENTS?</div>
+        <div class="col-hdr" style="border-bottom:none;">WHAT IF I DRIVE IN TWO CLASSES? (MULTICLASS)</div>
         <div style="padding:12px;font-size:13px;color:#999;line-height:1.65;">
-          <p style="margin:0 0 10px 0;">Some championships feature <b style="color:var(--gray-light);">double club</b> or <b style="color:var(--gray-light);">multiclass</b> events, where two clubs/classes run simultaneously. Drivers can choose freely which one to participate in, and are generally allowed to run in both — with points rewarded respectively.</p>
-          <p style="margin:0;">How exactly the two results interact can differ from championship to championship — sometimes only the worse of the two counts, sometimes both count fully, sometimes something else entirely. This is announced for the specific championship it applies to, same as with challenges.</p>
+          <p style="margin:0 0 10px 0;">Some championships run <b style="color:var(--gray-light);">two classes at the same time</b> (two clubs). All drivers are in <b style="color:var(--gray-light);">one shared result list</b>. You can drive one class or both. Which rule is active is shown in the tab <b style="color:var(--gray-light);">Challenges &amp; Rules</b>.</p>
+          <p style="margin:0 0 6px 0;"><b style="color:var(--gray-light);">If you drive both classes, only one run counts per event.</b></p>
+          <ul style="margin:0 0 10px 18px;padding:0;">
+            <li><b style="color:var(--gray-light);">WORSE RUN COUNTS:</b> your slower run counts.</li>
+            <li><b style="color:var(--gray-light);">BETTER RUN COUNTS:</b> your faster run counts.</li>
+            <li><b style="color:var(--gray-light);">BOTH RUNS COUNT:</b> both runs score points.</li>
+          </ul>
+          <p style="margin:0 0 10px 0;">A DNF is always the worse run. The run that does not count stays in the list in grey. The place and points in brackets show what it would have been. It does not count and does not take places or points from other drivers.</p>
+          <p style="margin:0 0 6px 0;"><b style="color:var(--gray-light);">Your loyalty car is set at your first event.</b></p>
+          <ul style="margin:0 0 10px 18px;padding:0;">
+            <li>At your first event, the rule (worse or better run) decides which of your two runs counts. The car of that run is your <b style="color:var(--gray-light);">loyalty car</b>.</li>
+            <li>From the second event on, the rule is <b style="color:var(--gray-light);">not used any more</b>. The run with your loyalty car <b style="color:var(--gray-light);">always counts</b> &mdash; even if your other car was faster.</li>
+            <li>Driving the other car is free. It cannot cost you points, but it does not give you points either.</li>
+            <li>If you do not drive your loyalty car at an event, your other run counts. Then you lose the <b style="color:var(--gray-light);">Loyalty Bonus</b>.</li>
+            <li>If both runs of your first event are a DNF, your loyalty car is not set yet. It is set at the next event.</li>
+          </ul>
+          <p style="color:#666;font-style:italic;margin:0;">Example (rule: worse run counts): Event 1 &mdash; Skoda 3rd, Citroën 9th. The Citroën run is worse, so it counts and the Citroën is your loyalty car. Event 2 &mdash; Skoda 1st, Citroën 6th. Your Citroën run counts (6th place). The Skoda run is shown in grey.</p>
         </div>
       </div>
 
@@ -2718,6 +2738,7 @@ const CHANGELOG = [
       'Live Results, Standings and Stats show the combined result under GRF Themed. The partner club works silently in the background and no longer shows up in the Clubs tab or the status bar.',
       'Started in both classes? Only one run counts \u2014 by default the worse one. The other run stays in the list, greyed out, with the place and points it would have been in brackets, e.g. (2). It doesn\u2019t count for standings or wins and doesn\u2019t take any places or points away from other drivers.',
       'Loyalty bonus with two cars: your first event sets your loyalty car \u2014 the car of the run that counts (worse or better run, depending on the championship rule). From then on the run with that car always counts, the other one is shown greyed out for information. Only if you don\u2019t drive your loyalty car at an event, your other run counts \u2014 and the bonus is gone. If both runs of the first event end in a DNF, the choice stays open and is decided at the next event.',
+      'GRF Themed tabs: \u201CRules\u201D is now \u201CRuleset\u201D (the permanent rules) and \u201CChallenges\u201D is now \u201CChallenges & Rules\u201D. The new Championship Rules box there shows whether Multiclass is on and which rule applies when you drive both classes.',
       'Admin: the Championship Setup now has a Multiclass section (partner championships, rule for double starters). Championship dropdowns show the club name and only the newest championship per club, with a \u201Cshow all\u201D option.',
     ],
   },
@@ -6517,6 +6538,42 @@ const CHALLENGE_INFO = {
   },
 };
 
+/**
+ * "Championship Rules"-Box im Tab "Challenges & Rules": zeigt, ob Multiclass
+ * aktiv ist und welche Doppelstarter-Regel gilt (liest championships.
+ * multiclass_partners / double_starter_rule — dieselben Werte wie im Setup).
+ */
+function renderChampionshipRules(champ) {
+  const box = $('champ-rules-list');
+  if (!box) return;
+  const active = !!(champ && Array.isArray(champ.multiclass_partners) && champ.multiclass_partners.length);
+  if (!active) {
+    box.innerHTML = `
+      <div class="challenge-item inactive">
+        <div class="ch-name">Multiclass <span class="ch-badge ch-manual">OFF</span></div>
+        <div class="ch-desc">Not active in this championship. There is only one class.</div>
+      </div>`;
+    return;
+  }
+  const RULES = {
+    worst: { label: 'WORSE RUN COUNTS',  desc: 'If you drive in both classes at your first event, your slower run counts. A DNF is always the worse run.' },
+    best:  { label: 'BETTER RUN COUNTS', desc: 'If you drive in both classes at your first event, your faster run counts. A DNF is always the worse run.' },
+    both:  { label: 'BOTH RUNS COUNT',   desc: 'If you drive in both classes, both of your runs count and both score points.' },
+  };
+  const key  = champ.double_starter_rule in RULES ? champ.double_starter_rule : 'worst';
+  const info = RULES[key];
+  box.innerHTML = `
+    <div class="challenge-item">
+      <div class="ch-name">Multiclass <span class="ch-badge ch-auto">ON</span></div>
+      <div class="ch-desc">Two classes run at the same time. All times go into one shared result list. You can drive one class or both.</div>
+    </div>
+    <div class="challenge-item">
+      <div class="ch-name">Driving both classes <span class="ch-badge ch-auto">${escapeHtml(key.toUpperCase())}</span></div>
+      <div class="ch-desc"><b style="color:var(--gray-light);">${info.label}.</b> ${info.desc}</div>
+      ${key === 'both' ? '' : `<div class="ch-desc" style="margin-top:4px;">After your first event, the car of your counting run is your <b style="color:var(--gray-light);">loyalty car</b>. From then on, the run with that car always counts. See the Ruleset tab for details.</div>`}
+    </div>`;
+}
+
 async function loadChallenges() {
   const hdr  = $('challenges-hdr');
   const list = $('challenges-list');
@@ -6529,9 +6586,10 @@ async function loadChallenges() {
     const byType = {};
     rules.forEach(r => { byType[r.rule_type] = r; });
 
-    const champs    = await sb('championships', `select=name&id=eq.${_themedChampId}&limit=1`);
+    const champs    = await sb('championships', `select=name,multiclass_partners,double_starter_rule&id=eq.${_themedChampId}&limit=1`);
     const champName = champs[0]?.name || 'CHAMPIONSHIP';
     setText('challenges-hdr', `${champName} — ACTIVE CHALLENGES`);
+    renderChampionshipRules(champs[0]);
 
     const items = [];
 
