@@ -1171,6 +1171,46 @@ MC_STAGE_COLS = ("stage_id,event_id,championship_id,driver_name,driver_id,vehicl
                  "time_ms,time_str,stage_position,is_dnf,platform")
 
 
+def _mc_loyalty_refs(db: "SupabaseClient", champ_id: str, round_number) -> dict:
+    """
+    Referenz-Auto je Fahrer aus FRÜHEREN Events der Haupt-Championship: das Auto
+    des zählenden Laufs im ersten Event, in dem es feststeht. Nicht festgelegt
+    ("offen") ist es, wenn beide Läufe eines Events DNF waren. Ein Event mit nur
+    einem Start legt das Auto fest. Leeres Dict, wenn es kein früheres Event gibt.
+    """
+    if round_number is None:
+        return {}
+    try:
+        evs = db.select_all("events", f"championship_id=eq.{champ_id}&round_number=lt.{round_number}"
+                                      f"&select=id,round_number&order=round_number.asc")
+        if not evs:
+            return {}
+        order = {e["id"]: i for i, e in enumerate(evs)}
+        ids = ",".join(e["id"] for e in evs)
+        rows = db.select_all("event_results",
+                             f"event_id=in.({ids})&select=event_id,driver_name,vehicle,is_invalid,is_dnf,time")
+    except Exception as ex:
+        log(f"      ⚠ Loyalty-Referenz nicht ladbar ({ex}) — Regel gilt ohne festes Auto")
+        return {}
+    grouped: dict = {}
+    for r in rows:
+        grouped.setdefault((r["driver_name"], r["event_id"]), []).append(r)
+    refs: dict = {}
+    for (name, eid), rs in sorted(grouped.items(), key=lambda x: order.get(x[0][1], 0)):
+        if name in refs:
+            continue
+        counting = [r for r in rs if not r.get("is_invalid")]
+        inv      = [r for r in rs if r.get("is_invalid")]
+        if not counting:
+            continue
+        if all(r.get("is_dnf") for r in counting) and any(r.get("time") == "DNF" for r in inv):
+            continue                                  # beide Läufe DNF → offen, nächstes Event entscheidet
+        vehicles = {r.get("vehicle") for r in counting if r.get("vehicle")}
+        if len(vehicles) == 1:
+            refs[name] = next(iter(vehicles))
+    return refs
+
+
 def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
                     partner_evs: list, car_ratings: dict, rule: str, test: bool) -> bool:
     """Führt ein Event der Haupt-Championship mit den gepaarten Partner-Events zusammen."""
@@ -1249,17 +1289,30 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
     for k in info:
         keys_by_driver.setdefault(k[0], []).append(k)
     invalid: set = set()
+    # Auto fest nach dem ersten Event: hat der Fahrer schon ein Loyalty-Auto und fährt es
+    # in diesem Event, zählt IMMER dessen Lauf (worst/best gilt nur für das erste Event
+    # bzw. solange das Auto noch offen ist). Ohne Lauf mit diesem Auto (Fahrer hat sich
+    # umentschieden) entscheidet die Regel wie gewohnt.
+    loyalty_refs = _mc_loyalty_refs(db, champ_id, main_ev.get("round_number")) if rule in ("worst", "best") else {}
     if rule in ("worst", "best"):
         for name, ks in keys_by_driver.items():
             if len(ks) < 2:
                 continue
+            ref = loyalty_refs.get(name)
+            same = [k for k in ks if ref and info[k]["vehicle"] == ref]
+            if len(same) == 1:
+                invalid.update(k for k in ks if k != same[0])
+                continue
+            all_ks = ks
+            if len(same) > 1:
+                ks = same          # mehrere Läufe mit dem Loyalty-Auto: Regel nur unter diesen
             # DNF ist immer "schlechter" als ein Finish. Sind BEIDE Läufe DNF, entscheiden die
             # DNF-Punkte (hängen am CR des Autos): worst = weniger Punkte, best = mehr Punkte.
             badness = lambda k: (is_dnf[k],
                                  -get_base_points_for(0, True, champ_id) * car_ratings.get(info[k]["vehicle"], 1.0)
                                  if is_dnf[k] else total.get(k, 0))
             keep = max(ks, key=badness) if rule == "worst" else min(ks, key=badness)
-            invalid.update(k for k in ks if k != keep)
+            invalid.update(k for k in (all_ks if len(same) > 1 else ks) if k != keep)
 
     # Stage-Positionen/-Siege nur unter den zählenden Wertungen
     stage_rows_out = []

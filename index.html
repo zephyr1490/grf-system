@@ -2717,7 +2717,7 @@ const CHANGELOG = [
       'GRF Themed can now run as a multiclass championship: two RaceNet clubs run in parallel, but you only see one combined result. All times from both clubs go into one table, are sorted together, and points are handed out once \u2014 using the same Car Rating for everyone.',
       'Live Results, Standings and Stats show the combined result under GRF Themed. The partner club works silently in the background and no longer shows up in the Clubs tab or the status bar.',
       'Started in both classes? Only one run counts \u2014 by default the worse one. The other run stays in the list, greyed out, with the place and points it would have been in brackets, e.g. (2). It doesn\u2019t count for standings or wins and doesn\u2019t take any places or points away from other drivers.',
-      'Loyalty bonus with two cars: only the car whose run counts can earn it, and it has to be the same car at every event. If both runs of the first event end in a DNF, the choice stays open and is decided at the next event.',
+      'Loyalty bonus with two cars: your first event sets your loyalty car \u2014 the car of the run that counts (worse or better run, depending on the championship rule). From then on the run with that car always counts, the other one is shown greyed out for information. Only if you don\u2019t drive your loyalty car at an event, your other run counts \u2014 and the bonus is gone. If both runs of the first event end in a DNF, the choice stays open and is decided at the next event.',
       'Admin: the Championship Setup now has a Multiclass section (partner championships, rule for double starters). Championship dropdowns show the club name and only the newest championship per club, with a \u201Cshow all\u201D option.',
     ],
   },
@@ -6148,31 +6148,40 @@ async function loadStandings() {
       driverMap[name].roundPts[r.event_id] = (driverMap[name].roundPts[r.event_id] || 0) + pts;
     });
 
-    // Loyalty-Auto (Multiclass-Doppelstarter): pro Event die Menge möglicher Autos.
-    //  - normal: das Auto des zählenden Laufs (nicht zählende Läufe, is_invalid, ignorieren)
-    //  - beide Läufe DNF: noch NICHT festgelegt, welches Auto "das gewählte" ist — beide
-    //    Autos bleiben im Rennen, die Entscheidung fällt mit dem nächsten Event
-    // Loyalty gilt, wenn über alle Events mindestens ein Auto in JEDER Menge vorkommt.
+    // Loyalty-Auto (Multiclass-Doppelstarter), unabhängig von der worst/best-Regel:
+    //  - Das ERSTE Event legt das Auto fest: das Auto des zählenden Laufs.
+    //  - Danach zählt nur noch, ob dieses Auto in dem Event GEFAHREN wurde
+    //    (egal ob der Lauf zählt oder nicht).
+    //  - Beide Läufe des Events DNF (nichts zählt): Auto noch NICHT festgelegt,
+    //    beide bleiben im Rennen; das zählende Auto des nächsten Events entscheidet.
+    //  - Kein Auto bleibt übrig: kein Bonus (Anzeige "N cars").
     (function resolveLoyaltyCars() {
       const byDriverEv = {};
       results.forEach(r => {
         if (!r.driver_name || !r.vehicle) return;
         const k = r.driver_name + '\u0001' + r.event_id;
-        (byDriverEv[k] = byDriverEv[k] || { name: r.driver_name, count: [], inv: [] })[r.is_invalid ? 'inv' : 'count'].push(r);
+        (byDriverEv[k] = byDriverEv[k] || { name: r.driver_name, ev: r.event_id, count: [], inv: [] })[r.is_invalid ? 'inv' : 'count'].push(r);
       });
       const perDriver = {};
       Object.values(byDriverEv).forEach(g => {
-        const set = new Set(g.count.map(r => r.vehicle));
+        const counting = new Set(g.count.map(r => r.vehicle));      // Autos der zählenden Läufe
         if (g.count.length && g.count.every(r => r.is_dnf)) {
-          g.inv.filter(r => r.time === 'DNF').forEach(r => set.add(r.vehicle));   // beide DNF → offen
+          g.inv.filter(r => r.time === 'DNF').forEach(r => counting.add(r.vehicle));   // beide DNF → offen
         }
-        if (set.size) (perDriver[g.name] = perDriver[g.name] || []).push(set);
+        const driven = new Set([...g.count, ...g.inv].map(r => r.vehicle));          // alle gefahrenen Autos
+        (perDriver[g.name] = perDriver[g.name] || []).push({ ev: g.ev, counting, driven });
       });
-      Object.entries(perDriver).forEach(([name, sets]) => {
+      Object.entries(perDriver).forEach(([name, evsOfDriver]) => {
         const d = driverMap[name]; if (!d) return;
-        let inter = new Set(sets[0]);
-        sets.slice(1).forEach(st => { inter = new Set([...inter].filter(v => st.has(v))); });
-        if (inter.size) { d.vehicles = inter; d.loyaltyOpen = inter.size > 1; }
+        evsOfDriver.sort((x, y) => evOrder.indexOf(x.ev) - evOrder.indexOf(y.ev));
+        let cand = null;                                    // null = noch nichts festgelegt
+        for (const e of evsOfDriver) {
+          if (!e.counting.size) continue;                   // kein zählender Lauf → Event legt nichts fest
+          if (cand === null) cand = new Set(e.counting);
+          else if (cand.size > 1) cand = new Set([...cand].filter(v => e.counting.has(v)));   // noch offen: zählendes Auto entscheidet
+          else cand = new Set([...cand].filter(v => e.driven.has(v)));                       // festgelegt: nur "gefahren?"
+        }
+        if (cand && cand.size) { d.vehicles = cand; d.loyaltyOpen = cand.size > 1; }
       });
     })();
 
