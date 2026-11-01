@@ -5281,7 +5281,7 @@ function _renderInterviewStep() {
       <span class="col-hdr-right" style="cursor:pointer;" onclick="closeInterviewModal()">✕</span>
     </div>
     <p style="font-size:12px;color:var(--gray-light);margin-bottom:8px;">Interview as <strong style="color:var(--white);">${escapeHtml(_interview.driverName)}</strong> — <span style="color:var(--red);cursor:pointer;text-decoration:underline;" onclick="_interviewStep(-${_interview.stepIndex + 1})">not you?</span></p>
-    <p style="font-size:11px;color:#888;margin-bottom:6px;">Step ${_interview.stepIndex + 1} of ${_interview.stages.length} — leave blank to skip this stage.</p>
+    <p style="font-size:11px;color:#888;margin-bottom:6px;">Step ${_interview.stepIndex + 1} of ${_interview.stages.length} — leave blank to skip this stage (clear the text to delete an existing comment).</p>
     <textarea id="interview-comment-input" rows="4" placeholder="How did that stage go?"
       style="width:100%;padding:10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;margin-bottom:10px;resize:vertical;box-sizing:border-box;">${escapeHtml(existingText)}</textarea>
     <div id="interview-status" style="margin-bottom:8px;font-size:12px;color:var(--red);"></div>
@@ -5353,8 +5353,10 @@ async function _interviewStep(direction) {
   const text  = input ? input.value.trim() : '';
   const stage = _interview.stages[_interview.stepIndex];
 
-  if (direction > 0 && text) {
-    setText('interview-status', 'Saving…');
+  // Leeres Feld + schon gespeicherter Kommentar = bewusst gelöscht (das Feld
+  // ist mit dem alten Text vorbelegt) → Server löscht ihn.
+  if (direction > 0 && (text || _interview.comments[stage.id])) {
+    setText('interview-status', text ? 'Saving…' : 'Deleting…');
     try {
       const res = await fetch(`${ADMIN_API_URL}/comments/submit`, {
         method: 'POST',
@@ -5372,7 +5374,8 @@ async function _interviewStep(direction) {
         setText('interview-status', '⚠ ' + (data.error || 'Could not save — check your PIN.'));
         return; // bei Fehler NICHT weiterspringen, PIN evtl. falsch
       }
-      _interview.comments[stage.id] = text;
+      if (text) _interview.comments[stage.id] = text;
+      else delete _interview.comments[stage.id];
     } catch (err) {
       setText('interview-status', '⚠ Network error, try again.');
       return;

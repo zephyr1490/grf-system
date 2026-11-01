@@ -382,7 +382,8 @@ def comments_submit():
         stage_id     = (body.get("stage_id") or "").strip()
         comment_text = (body.get("comment_text") or "").strip()
 
-        if not all([driver_name, pin, event_id, stage_id, comment_text]):
+        # comment_text darf leer sein = Kommentar dieser Stage löschen
+        if not all([driver_name, pin, event_id, stage_id]):
             return jsonify({"error": "Missing required field"}), 400
         if len(comment_text) > 2000:
             return jsonify({"error": "Comment too long (max 2000 characters)"}), 400
@@ -390,6 +391,12 @@ def comments_submit():
         if not canonical_name:
             return jsonify({"error": "Invalid PIN"}), 401
         driver_name = canonical_name  # kanonische Schreibweise, nicht die getippte
+
+        if not comment_text:
+            sb_delete("stage_comments",
+                      f"event_id=eq.{requests.utils.quote(event_id, safe='')}&stage_id=eq.{requests.utils.quote(stage_id, safe='')}"
+                      f"&driver_name=eq.{requests.utils.quote(driver_name, safe='')}")
+            return jsonify({"ok": True, "deleted": True})
 
         r = requests.post(
             f"{SUPABASE_URL}/rest/v1/stage_comments?on_conflict=event_id,stage_id,driver_name",
