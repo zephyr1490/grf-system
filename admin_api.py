@@ -382,8 +382,9 @@ def comments_submit():
         stage_id     = (body.get("stage_id") or "").strip()
         comment_text = (body.get("comment_text") or "").strip()
 
-        # comment_text darf leer sein = Kommentar dieser Stage löschen
-        if not all([driver_name, pin, event_id, stage_id]):
+        is_final     = bool(body.get("final"))   # "Rally Summary" = pro Event statt pro Stage
+        # comment_text darf leer sein = Kommentar löschen
+        if not all([driver_name, pin, event_id]) or (not is_final and not stage_id):
             return jsonify({"error": "Missing required field"}), 400
         if len(comment_text) > 2000:
             return jsonify({"error": "Comment too long (max 2000 characters)"}), 400
@@ -391,6 +392,25 @@ def comments_submit():
         if not canonical_name:
             return jsonify({"error": "Invalid PIN"}), 401
         driver_name = canonical_name  # kanonische Schreibweise, nicht die getippte
+
+        if is_final:
+            if not comment_text:
+                sb_delete("event_comments",
+                          f"event_id=eq.{requests.utils.quote(event_id, safe='')}"
+                          f"&driver_name=eq.{requests.utils.quote(driver_name, safe='')}")
+                return jsonify({"ok": True, "deleted": True})
+            r = requests.post(
+                f"{SUPABASE_URL}/rest/v1/event_comments?on_conflict=event_id,driver_name",
+                headers={**SB, "Prefer": "resolution=merge-duplicates,return=minimal"},
+                json={"event_id": event_id, "driver_name": driver_name,
+                      "comment_text": comment_text,
+                      "updated_at": datetime.now(timezone.utc).isoformat()},
+                timeout=10,
+            )
+            if not r.ok:
+                print(f"[comments_submit final ERROR] HTTP {r.status_code}: {r.text}")
+            r.raise_for_status()
+            return jsonify({"ok": True})
 
         if not comment_text:
             sb_delete("stage_comments",
@@ -454,7 +474,17 @@ def comments_discord_post():
             f"&driver_name=eq.{requests.utils.quote(driver_name)}"
             f"&select=stage_id,comment_text"
         )
-        if not comments:
+        try:
+            final_rows = sb_get(
+                "event_comments",
+                f"event_id=eq.{requests.utils.quote(event_id)}"
+                f"&driver_name=eq.{requests.utils.quote(driver_name)}"
+                f"&select=comment_text&limit=1")
+        except Exception as fe:   # Tabelle evtl. noch nicht angelegt
+            print(f"[discord-post] event_comments nicht lesbar: {fe}")
+            final_rows = []
+        final_text = final_rows[0]["comment_text"] if final_rows else ""
+        if not comments and not final_text:
             return jsonify({"error": "No comments found for this driver/event"}), 400
 
         stage_ids   = [c["stage_id"] for c in comments if c.get("stage_id")]
@@ -470,6 +500,10 @@ def comments_discord_post():
             stage = stage_lookup.get(c["stage_id"], {})
             stage_label = stage.get("name") or f"SS{stage.get('stage_number', '?')}"
             lines.append(f"**{stage_label}:** {c['comment_text']}")
+        if final_text:
+            if comments:
+                lines.append("")
+            lines.append(f"**Rally Summary:** {final_text}")
         message = "\n".join(lines)
 
         r = requests.post(webhook_url, json={"content": message}, timeout=10)

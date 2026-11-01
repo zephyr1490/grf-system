@@ -5246,7 +5246,12 @@ function _renderInterviewStep() {
   }
 
   // Letzter Schritt: Zusammenfassung
-  if (_interview.stepIndex >= _interview.stages.length) {
+  if (_interview.stepIndex >= _interview.stages.length + 1) {
+    const finalBlock = _interview.finalText ? `
+        <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #222;">
+          <strong style="color:var(--red);">RALLY SUMMARY</strong><br>
+          <span style="color:var(--gray-light);font-size:13px;">${escapeHtml(_interview.finalText)}</span>
+        </div>` : '';
     const lines = _interview.stages
       .filter(st => _interview.comments[st.id])
       .map(st => `
@@ -5254,7 +5259,7 @@ function _renderInterviewStep() {
           <strong style="color:var(--red);">SS${st.stage_number}${st.name ? ' — ' + escapeHtml(st.name) : ''}</strong><br>
           <span style="color:var(--gray-light);font-size:13px;">${escapeHtml(_interview.comments[st.id])}</span>
         </div>`)
-      .join('') || '<p style="color:#666;font-size:13px;">No comments yet — go back to add some, or just close.</p>';
+      .join('') + finalBlock || '<p style="color:#666;font-size:13px;">No comments yet — go back to add some, or just close.</p>';
 
     content.innerHTML = `
       <div class="col-hdr" style="margin:-16px -16px 12px -16px;">🎙️ INTERVIEW SUMMARY
@@ -5272,16 +5277,37 @@ function _renderInterviewStep() {
     return;
   }
 
+  // Letzter Eingabeschritt: "Rally Summary" (gilt fürs ganze Event, nicht für eine Stage)
+  if (_interview.stepIndex === _interview.stages.length) {
+    content.innerHTML = `
+      <div class="col-hdr" style="margin:-16px -16px 12px -16px;">🎙️ YOUR RALLY SUMMARY
+        <span class="col-hdr-right" style="cursor:pointer;" onclick="closeInterviewModal()">✕</span>
+      </div>
+      <p style="font-size:12px;color:var(--gray-light);margin-bottom:8px;">Interview as <strong style="color:var(--white);">${escapeHtml(_interview.driverName)}</strong></p>
+      <p style="font-size:11px;color:#888;margin-bottom:6px;">Your summary of the whole rally — not tied to one stage. Leave blank to skip (clear the text to delete an existing one).</p>
+      <textarea id="interview-comment-input" rows="5" placeholder="Your summary of the whole rally…"
+        style="width:100%;padding:10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;margin-bottom:10px;resize:vertical;box-sizing:border-box;">${escapeHtml(_interview.finalText || '')}</textarea>
+      <div id="interview-status" style="margin-bottom:8px;font-size:12px;color:var(--red);"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="ev-btn" onclick="_interviewStep(-1)">← Back</button>
+        <button class="ev-btn active" style="flex:1;" onclick="_interviewStep(1)">Finish →</button>
+      </div>
+    `;
+    const fi = $('interview-comment-input');
+    if (fi) { fi.focus(); fi.setSelectionRange(fi.value.length, fi.value.length); }
+    return;
+  }
+
   // Normale Schritte: ein Textfeld pro Stage
   const stage = _interview.stages[_interview.stepIndex];
   const existingText = _interview.comments[stage.id] || '';
-  const isLast = _interview.stepIndex === _interview.stages.length - 1;
+  const isLast = false; // danach folgt noch "Rally Summary"
   content.innerHTML = `
     <div class="col-hdr" style="margin:-16px -16px 12px -16px;">🎙️ SS${stage.stage_number}${stage.name ? ' — ' + escapeHtml(stage.name) : ''}
       <span class="col-hdr-right" style="cursor:pointer;" onclick="closeInterviewModal()">✕</span>
     </div>
     <p style="font-size:12px;color:var(--gray-light);margin-bottom:8px;">Interview as <strong style="color:var(--white);">${escapeHtml(_interview.driverName)}</strong> — <span style="color:var(--red);cursor:pointer;text-decoration:underline;" onclick="_interviewStep(-${_interview.stepIndex + 1})">not you?</span></p>
-    <p style="font-size:11px;color:#888;margin-bottom:6px;">Step ${_interview.stepIndex + 1} of ${_interview.stages.length} — leave blank to skip this stage (clear the text to delete an existing comment).</p>
+    <p style="font-size:11px;color:#888;margin-bottom:6px;">Step ${_interview.stepIndex + 1} of ${_interview.stages.length + 1} — leave blank to skip this stage (clear the text to delete an existing comment).</p>
     <textarea id="interview-comment-input" rows="4" placeholder="How did that stage go?"
       style="width:100%;padding:10px;background:#111;border:1px solid #333;color:var(--white);font-size:14px;margin-bottom:10px;resize:vertical;box-sizing:border-box;">${escapeHtml(existingText)}</textarea>
     <div id="interview-status" style="margin-bottom:8px;font-size:12px;color:var(--red);"></div>
@@ -5338,6 +5364,12 @@ async function _interviewSubmitPin() {
   // eine ANDERE Identität eingetippt, aber nicht gespeichert wurde, darf
   // der hier nicht vermischt weiterleben.
   _interview.comments = {};
+  _interview.finalText = '';
+  try {
+    const fin = await sbAll('event_comments',
+      `select=comment_text&event_id=eq.${_interview.eventId}&driver_name=eq.${encodeURIComponent(_interview.driverName)}&order=id.asc`);
+    if (fin.length) _interview.finalText = fin[0].comment_text;
+  } catch (err) { /* Tabelle evtl. noch nicht da */ }
   try {
     const existing = await sbAll('stage_comments',
       `select=stage_id,comment_text&event_id=eq.${_interview.eventId}&driver_name=eq.${encodeURIComponent(_interview.driverName)}`);
@@ -5351,11 +5383,13 @@ async function _interviewSubmitPin() {
 async function _interviewStep(direction) {
   const input = $('interview-comment-input');
   const text  = input ? input.value.trim() : '';
-  const stage = _interview.stages[_interview.stepIndex];
+  const isFinal = _interview.stepIndex === _interview.stages.length;
+  const stage = isFinal ? null : _interview.stages[_interview.stepIndex];
+  const before = isFinal ? _interview.finalText : _interview.comments[stage.id];
 
   // Leeres Feld + schon gespeicherter Kommentar = bewusst gelöscht (das Feld
   // ist mit dem alten Text vorbelegt) → Server löscht ihn.
-  if (direction > 0 && (text || _interview.comments[stage.id])) {
+  if (direction > 0 && (text || before)) {
     setText('interview-status', text ? 'Saving…' : 'Deleting…');
     try {
       const res = await fetch(`${ADMIN_API_URL}/comments/submit`, {
@@ -5365,7 +5399,8 @@ async function _interviewStep(direction) {
           driver_name:  _interview.driverName,
           pin:          _interview.pin,
           event_id:     _interview.eventId,
-          stage_id:     stage.id,
+          stage_id:     isFinal ? '' : stage.id,
+          final:        isFinal,
           comment_text: text,
         }),
       });
@@ -5374,17 +5409,14 @@ async function _interviewStep(direction) {
         setText('interview-status', '⚠ ' + (data.error || 'Could not save — check your PIN.'));
         return; // bei Fehler NICHT weiterspringen, PIN evtl. falsch
       }
-      if (text) _interview.comments[stage.id] = text;
+      if (isFinal) _interview.finalText = text;
+      else if (text) _interview.comments[stage.id] = text;
       else delete _interview.comments[stage.id];
     } catch (err) {
       setText('interview-status', '⚠ Network error, try again.');
       return;
     }
   }
-  // Leer gelassen (direction>0 && !text): einfach überspringen, ohne zu
-  // speichern — ein evtl. vorher schon gespeicherter Kommentar bleibt dabei
-  // unangetastet auf dem Server (kein versehentliches Löschen durch simples
-  // Weiterklicken).
 
   _interview.stepIndex += direction;
   _renderInterviewStep();
@@ -5395,7 +5427,8 @@ function _interviewCopy() {
     .filter(st => _interview.comments[st.id])
     .map(st => `SS${st.stage_number}${st.name ? ' - ' + st.name : ''}: ${_interview.comments[st.id]}`)
     .join('\n');
-  const text = `Stage Interview — ${_interview.driverName}\n\n${lines}`;
+  const text = `Stage Interview — ${_interview.driverName}\n\n${lines}` +
+    (_interview.finalText ? `${lines ? '\n\n' : ''}Rally summary: ${_interview.finalText}` : '');
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text)
