@@ -2622,6 +2622,10 @@ textarea.inp-std { resize:vertical; }
               <input type="datetime-local" id="ts-deadline-input"
                 style="margin-left:6px;padding:6px 8px;background:#111;border:1px solid #333;color:var(--white);font-size:13px;">
             </label>
+            <label style="font-size:13px;color:#aaa;" title="Normal sind Wunschgröße −1 bis +1 erlaubt, ±2 nur im äußersten Notfall. Die Teamanzahl ergibt sich aus der Teilnehmerzahl.">Preferred team size
+              <input type="number" id="ts-size-input" min="2" max="8" value="3"
+                style="margin-left:6px;width:56px;padding:6px 8px;background:#111;border:1px solid #333;color:var(--white);font-size:13px;">
+            </label>
             <button class="ev-btn active" onclick="adminTsSave()">Save</button>
           </div>
           <div id="ts-status" style="font-size:13px;min-height:18px;margin-bottom:12px;"></div>
@@ -5567,7 +5571,14 @@ function _suHeader(title) {
 }
 
 /** Erklärung zu Wünschen/Ketten + Konsequenzen — steht vor jeder Wunsch-Eingabe. */
+function _teamedSizePref() {
+  const v = parseInt(_teamedChamp && _teamedChamp.team_size_pref, 10);
+  return v >= 2 && v <= 8 ? v : 3;
+}
+
 function _suInfoHtml(collapsed) {
+  const pref = _teamedSizePref(), maxG = pref + 1, minS = Math.max(2, pref - 1);
+  const chain = Array.from({ length: maxG }, (_, i) => String.fromCharCode(65 + i)).join('→') + '→A';
   // collapsed: in der Suchansicht eingeklappt, damit das Eingabefeld auch bei offener
   // Handy-Tastatur sichtbar bleibt (in der Hauptansicht vor dem Button komplett offen).
   const title = '<div style="color:var(--white);font-weight:bold;margin-bottom:4px;">How team wishes work</div>';
@@ -5576,7 +5587,8 @@ function _suInfoHtml(collapsed) {
   return `<div style="font-size:12px;color:#aaa;line-height:1.5;border-left:3px solid var(--red-dark);background:rgba(139,0,0,0.08);padding:8px 10px;margin-bottom:12px;">
     ${open}
     <div>• <b>One wish per player.</b> If two players pick each other, they are set as a team.</div>
-    <div>• <b>Chains work too:</b> A picks B, B picks C and C picks A → a team of three. Up to <b>4 players</b> (A→B→C→D→A). Longer chains are not possible and only count as a normal wish.</div>
+    <div>• <b>Chains work too:</b> A picks B, B picks C and C picks A → a team of three. Up to <b>${maxG} players</b> (${chain}). Longer chains are not possible and only count as a normal wish.</div>
+    <div>• <b>Team size:</b> we aim for teams of <b>${pref}</b> (${minS}–${maxG} possible). The number of teams depends on how many players sign up.</div>
     <div>• <b>Balanced teams come first.</b> Teams are balanced by expected points (based on ELO), with at most about 10 % difference. Wishes are granted wherever that allows it. <b>The more players wish for a partner, the less likely it is that every wish can be granted.</b></div>
     <div>• One-sided wishes are only considered last.</div>
     <div>• If <b>two very strong players</b> pick each other, they start as a duo, but further players can still be drawn into their team. If a group is <b>too strong to balance</b>, the wishes of that group can be dissolved and the draw decides.</div>
@@ -5842,6 +5854,7 @@ async function adminTsLoad() {
     _adminTsOverview = data;
     const chk = $('ts-open-check'); if (chk) chk.checked = !!data.signup_open;
     const dl  = $('ts-deadline-input'); if (dl) dl.value = _adminTsLocalInput(data.signup_deadline);
+    const sz  = $('ts-size-input'); if (sz) sz.value = data.team_size_pref || 3;
     _adminTsRender(data);
   } catch (err) {
     setHTML('ts-overview', `<div style="color:var(--red);font-size:13px;">⚠ ${escapeHtml(err.message)}</div>`);
@@ -5858,6 +5871,7 @@ async function adminTsSave() {
       championship_id: cid,
       signup_open: !!$('ts-open-check')?.checked,
       signup_deadline: dlv ? new Date(dlv).toISOString() : null,
+      team_size_pref: Math.max(2, Math.min(8, parseInt($('ts-size-input')?.value, 10) || 3)),
     });
     setHTML('ts-status', '<span style="color:var(--green);">✓ Saved. Reload the Teamed page to see the Sign up button.</span>');
     adminTsLoad();
@@ -5896,7 +5910,7 @@ function _adminTsRender(d) {
   setHTML('ts-overview',
     `<div style="font-size:13px;color:var(--white);margin-bottom:12px;">${d.open_now ? '<span style="color:var(--green);">● open now</span>' : '<span style="color:#999;">● closed</span>'}
        · ${(d.signups || []).length} signed up · ${(d.wishes || []).length} wishes</div>` +
-    sect('FIXED GROUPS (from mutual wishes / chains of 2–4)', firm) +
+    sect(`FIXED GROUPS (from mutual wishes / chains of 2–${d.max_group || 4})`, firm) +
     sect('SOFT WISHES (only considered last)', soft) +
     sect('VOID WISHES (partner / wisher not signed up)', voidW) +
     sect(`SIGNED UP (${(d.signups || []).length})`, signups));
@@ -5914,7 +5928,8 @@ async function adminTdPreview() {
   setText('td-status', 'Calculating… (kann einige Sekunden dauern)');
   setHTML('td-result', '');
   try {
-    const d = await adminFetch('/admin/team-draw/preview', { championship_id: cid });
+    const d = await adminFetch('/admin/team-draw/preview', { championship_id: cid,
+      team_size_pref: Math.max(2, Math.min(8, parseInt($('ts-size-input')?.value, 10) || 3)) });
     _adminTdPlan = { cid, data: d };
     _adminTdRender(d);
     setText('td-status', '');
@@ -5947,11 +5962,12 @@ function _adminTdRender(d) {
   const pct = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + ' %';
   const ok = d.within_tolerance;
   const head = `<div style="font-size:13px;color:var(--white);margin-bottom:10px;line-height:1.6;">
-      ${d.players} players · ${d.teams.length} teams (${d.sizes.join('/')}) · seed ${d.seed}<br>
+      ${d.players} players · ${d.teams.length} teams (${d.sizes.join('/')}) · preferred size ${d.team_size_pref || 3} · seed ${d.seed}<br>
       Max deviation: <b style="color:${ok ? 'var(--green)' : 'var(--red)'};">${(d.max_dev * 100).toFixed(1)} %</b>${ok ? '' : ' ⚠ over 10 %'}
       · Soft wishes granted: ${d.soft_ok}/${d.soft_total}
       · Fixed groups kept: ${d.kept_groups.length}/${d.firm_groups.length}</div>`;
   const warn = [];
+  if (d.emergency_teams) warn.push(`${d.emergency_teams} team(s) are ±2 from the preferred size (${d.team_size_pref}) — emergency sizes`);
   if (d.unrated.length) warn.push(`Without rating (default 1500 / σ 350): ${d.unrated.map(escapeHtml).join(', ')}`);
   if (d.dissolved.length) warn.push(`Dissolved (too strong): ${d.dissolved.map(g => g.map(escapeHtml).join(' + ')).join(' | ')}`);
   const warnHtml = warn.map(w => `<div style="font-size:12px;color:#e8b923;margin-bottom:4px;">⚠ ${w}</div>`).join('');

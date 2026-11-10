@@ -1,7 +1,7 @@
 """
 Team-Auslosung (Teamed-Club): Admin-Endpunkte.
 
-  POST /admin/team-draw/preview  {championship_id, seed?}  -> berechnet nur, schreibt NICHTS
+  POST /admin/team-draw/preview  {championship_id, seed?, runs?, team_size_pref?}  -> berechnet nur, schreibt NICHTS
   POST /admin/team-draw/save     {championship_id, seed, teams:[{name,color,members:[..]}]}
                                   -> schreibt teams/team_members (wie /teams/save) + Protokoll in team_draw_runs
 
@@ -9,6 +9,10 @@ Rechenlogik: team_lottery.py (liegt daneben). Ablauf, Regeln und Hintergruende:
 claude/team_lottery_concept.md. ELO-Basis ist Overall (elo_state.state_json.ratings.overall).
 Wer noch kein Rating hat (z. B. neuer Fahrer ohne Event in einem anderen Club), bekommt das
 Standard-Rating (1500 / sigma 350) und wird in der Vorschau als "unrated" markiert.
+
+Teamanzahl und -groessen ergeben sich aus der Teilnehmerzahl und der vom Admin gewaehlten
+Wunsch-Teamgroesse (championships.team_size_pref, Standard 3): normal Wunschgroesse +-1,
++-2 nur im aeussersten Notfall. Keine feste Obergrenze fuer die Teamanzahl.
 """
 from __future__ import annotations
 
@@ -21,13 +25,14 @@ from urllib.parse import quote
 from flask import jsonify, request
 
 import team_lottery as TL
-from team_signup import analyze_wishes
+from team_signup import analyze_wishes, clamp_team_size
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
-MIN_PLAYERS, MAX_PLAYERS = 4, 100
+MAX_PLAYERS = 100          # Rechenzeit-Schutz (Simulation + Balancing), keine fachliche Grenze
 DEFAULT_MU, DEFAULT_SIGMA = 1500.0, 350.0
 
-# Platzhalter-Teamnamen "Team [Farbe]" (Anzeigename, Hex fuer teams.color). 25 Stueck reichen fuer 100 Spieler.
+# Platzhalter-Teamnamen "Team [Farbe]" (Anzeigename, Hex fuer teams.color).
+# Reicht die Liste nicht (mehr Teams als Farben), bekommen weitere Runden eine Nummer: "Team Pink 2".
 COLORS = [
     ("Pink", "#FF4FA3"), ("Hellblau", "#5BC8F5"), ("Gold", "#E8B923"), ("Rot", "#D93636"),
     ("Dunkelblau", "#1F3FA8"), ("Silber", "#C0C4C8"), ("Grün", "#2FB14E"), ("Orange", "#F28C28"),
@@ -37,6 +42,13 @@ COLORS = [
     ("Koralle", "#FF6F61"), ("Indigo", "#3F3FA0"), ("Bronze", "#B0713A"), ("Limette", "#B5E61D"),
     ("Flieder", "#BFA2DB"),
 ]
+
+
+def team_label(k):
+    """k-tes Team (0-basiert) -> (Name, Farbe). Nach einer vollen Farb-Runde: 'Pink 2', 'Pink 3', ..."""
+    name, color = COLORS[k % len(COLORS)]
+    rnd = k // len(COLORS)
+    return (f"Team {name}" if rnd == 0 else f"Team {name} {rnd + 1}"), color
 
 
 _ELO_CACHE = {"t": 0.0, "data": None}
@@ -60,20 +72,33 @@ def _load_overall(sb_get):
     return data
 
 
+def _team_size_pref(sb_get, cid, override=None):
+    """Wunsch-Teamgroesse: Override aus der Anfrage, sonst championships.team_size_pref, sonst 3."""
+    if override not in (None, ""):
+        return clamp_team_size(override)
+    try:
+        rows = sb_get("championships", f"id=eq.{quote(str(cid), safe='')}&select=team_size_pref&limit=1")
+        return clamp_team_size(rows[0].get("team_size_pref")) if rows else TL.DEFAULT_PREF
+    except Exception:   # Spalte fehlt (team_size.sql noch nicht gelaufen)
+        return TL.DEFAULT_PREF
+
+
 def _rank_key(res):
     """Besser = kleiner. Erst Toleranz (<= 10 %), dann moeglichst wenige aufgeloeste Gruppen,
     dann moeglichst viele erfuellte Wuensche, dann kleinste Abweichung."""
     return (res["max_dev"] > 0.10, len(res["dissolved"]), -res["soft_ok"], res["max_dev"])
 
 
-def compute_plan(sb_get, cid, seed, runs=1):
+def compute_plan(sb_get, cid, seed, runs=1, pref=None):
     """Berechnung fuer eine Championship: `runs` Laeufe mit den Seeds seed, seed+1, ... und der beste
     wird zurueckgegeben (s. _rank_key). Rueckgabe (dict, None) oder (None, (fehlertext, status))."""
     q = lambda v: quote(str(v), safe="")
+    pref = _team_size_pref(sb_get, cid, pref)
+    min_n = TL.min_players(pref)
     signups = [r["driver_name"] for r in sb_get("team_signups", f"championship_id=eq.{q(cid)}&select=driver_name&order=signed_up_at.asc")]
     n = len(signups)
-    if n < MIN_PLAYERS:
-        return None, (f"Mindestens {MIN_PLAYERS} Anmeldungen noetig (aktuell {n})", 400)
+    if n < min_n:
+        return None, (f"Bei Wunsch-Teamgroesse {pref} braucht es mindestens {min_n} Anmeldungen (aktuell {n})", 400)
     if n > MAX_PLAYERS:
         return None, (f"Hoechstens {MAX_PLAYERS} Anmeldungen moeglich (aktuell {n})", 400)
     wishes = {w["driver_name"]: w["partner_name"]
@@ -94,7 +119,10 @@ def compute_plan(sb_get, cid, seed, runs=1):
     cand = []
     for i in range(runs):
         s = seed + i
-        plan = TL.plan_teams(ep, signups, wishes, seed=s, iters=12000, restarts=2)
+        try:
+            plan = TL.plan_teams(ep, signups, wishes, seed=s, iters=12000, restarts=2, pref=pref)
+        except ValueError as e:
+            return None, (str(e), 400)
         info = plan["info"]
         cand.append({"seed": s, "plan": plan, "max_dev": info["max_dev"], "soft_ok": info["soft_ok"],
                      "soft_total": info["soft_total"], "dissolved": plan["dissolved"]})
@@ -107,10 +135,10 @@ def compute_plan(sb_get, cid, seed, runs=1):
     random.Random(seed).shuffle(order)          # Farb-Zuordnung zufaellig, aber mit dem Seed reproduzierbar
     out_teams = []
     for k, i in enumerate(order):
-        name, color = COLORS[k % len(COLORS)]
+        name, color = team_label(k)
         members = sorted(teams[i], key=lambda m: -ep[m])
         out_teams.append({
-            "name": f"Team {name}", "color": color,
+            "name": name, "color": color,
             "members": [{"name": m, "ep": round(ep[m], 2), "mu": round(rating[m][0], 1),
                          "sigma": round(rating[m][1], 1), "unrated": m in unrated} for m in members],
             "sum": round(sums[i], 2), "dev": round((sums[i] - mean) / mean, 4),
@@ -118,8 +146,10 @@ def compute_plan(sb_get, cid, seed, runs=1):
     out_teams.sort(key=lambda t: -t["sum"])
     return {
         "seed": seed, "players": n, "unrated": unrated,
+        "team_size_pref": pref,
         "teams": out_teams,
         "sizes": sorted(len(t["members"]) for t in out_teams),
+        "emergency_teams": info["emergency_teams"],   # Teams mit Wunschgroesse +-2
         "mean_sum": round(mean, 2),
         "max_dev": round(info["max_dev"], 4),
         "within_tolerance": info["max_dev"] <= 0.10,
@@ -155,7 +185,7 @@ def register_routes(app, h):
             seed = body.get("seed")
             seed = int(seed) if isinstance(seed, (int, float, str)) and str(seed).lstrip("-").isdigit() \
                 else random.SystemRandom().randrange(1, 10**9)
-            res, err = compute_plan(sb_get, cid, seed, runs=body.get("runs") or 1)
+            res, err = compute_plan(sb_get, cid, seed, runs=body.get("runs") or 1, pref=body.get("team_size_pref"))
             if err:
                 return jsonify({"error": err[0]}), err[1]
             return jsonify(res)

@@ -9,7 +9,8 @@ Identität läuft wie bei der Stage-Interview-Funktion ausschließlich über den
 vom Admin vergebenen Fahrer-PIN (driver_pins), kein Login.
 
 Tabellen: team_signups (öffentlich lesbar), team_wishes (geheim, nur service_role),
-championships.signup_open / signup_deadline (s. team_signup.sql).
+championships.signup_open / signup_deadline (s. team_signup.sql),
+championships.team_size_pref = vom Admin gewählte Wunsch-Teamgröße (s. team_size.sql).
 """
 
 from __future__ import annotations
@@ -22,25 +23,37 @@ from urllib.parse import quote
 
 from flask import jsonify, request
 
-MAX_GROUP_SIZE = 4      # Kreise der Länge 2..4 sind feste Gruppen, ab 5 nur weiche Wünsche
+DEFAULT_TEAM_SIZE = 3   # Wunsch-Teamgröße, falls nichts gesetzt ist
+MIN_TEAM_SIZE, MAX_TEAM_SIZE = 2, 8
+MAX_GROUP_SIZE = DEFAULT_TEAM_SIZE + 1   # Standardwert für analyze_wishes; die Auslosung übergibt pref + 1
 MIN_GROUP_SIZE = 2
+
+
+def clamp_team_size(value):
+    """Wunsch-Teamgröße auf 2..8 begrenzen; ungültig/leer -> Standard (3)."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_TEAM_SIZE
+    return max(MIN_TEAM_SIZE, min(MAX_TEAM_SIZE, v))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  GRUPPENERKENNUNG (rein, ohne Flask/DB)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def analyze_wishes(signups, wishes):
+def analyze_wishes(signups, wishes, max_group=MAX_GROUP_SIZE):
     """
     signups: Iterable[str]            — angemeldete Fahrer (kanonische Namen)
     wishes:  dict[str, str]           — Fahrer -> Wunschpartner (genau EIN Wunsch)
+    max_group: größte feste Gruppe (= Wunsch-Teamgröße + 1)
 
     Jeder Fahrer hat höchstens eine ausgehende Verbindung → jede Komponente ist
     entweder ein Baum, der in einen Kreis oder ins Leere läuft. Daraus folgt:
 
-      firm_groups  — Kreise der Länge 2..4 (A↔B, A→B→C→A, ...): feste Gruppen
+      firm_groups  — Kreise der Länge 2..max_group (A↔B, A→B→C→A, ...): feste Gruppen
       soft_wishes  — alle anderen Wünsche zwischen Angemeldeten (einseitig, Teil
-                     einer Kette, die in keinen Kreis mündet, oder Kreis > 4)
+                     einer Kette, die in keinen Kreis mündet, oder Kreis > max_group)
       void_wishes  — Wunsch von/auf einen NICHT angemeldeten Fahrer (zählt nicht)
 
     Wünsche auf nicht angemeldete Fahrer werden hier bewusst nicht gelöscht: meldet
@@ -83,7 +96,7 @@ def analyze_wishes(signups, wishes):
         # kanonische Reihenfolge: beim alphabetisch kleinsten Namen beginnen
         i = min(range(len(cyc)), key=lambda k: cyc[k].lower())
         cyc = cyc[i:] + cyc[:i]
-        if MIN_GROUP_SIZE <= len(cyc) <= MAX_GROUP_SIZE:
+        if MIN_GROUP_SIZE <= len(cyc) <= max_group:
             firm.append(cyc)
             in_firm.update(cyc)
         else:
@@ -95,7 +108,7 @@ def analyze_wishes(signups, wishes):
     for a, b in sorted(edges.items()):
         if a in in_firm:
             continue
-        reason = "cycle longer than %d" % MAX_GROUP_SIZE if a in long_nodes else (
+        reason = "cycle longer than %d" % max_group if a in long_nodes else (
             "partner already in a fixed group" if b in in_firm else "not reciprocated")
         soft.append({"from": a, "to": b, "reason": reason})
 
@@ -299,7 +312,7 @@ def register_routes(app, h):
     @app.route("/admin/team-signup/config", methods=["POST"])
     @auth
     def admin_team_signup_config():
-        """Body: {championship_id, signup_open: bool, signup_deadline: ISO-String|null}"""
+        """Body: {championship_id, signup_open: bool, signup_deadline: ISO-String|null, team_size_pref?: 2..8}"""
         try:
             body = request.json or {}
             cid = body.get("championship_id")
@@ -310,9 +323,11 @@ def register_routes(app, h):
                 deadline = None
             elif _parse_ts(deadline) is None:
                 return jsonify({"error": "invalid signup_deadline"}), 400
-            sb_patch("championships", f"id=eq.{q(cid)}",
-                     {"signup_open": bool(body.get("signup_open")), "signup_deadline": deadline})
-            return jsonify({"ok": True})
+            patch = {"signup_open": bool(body.get("signup_open")), "signup_deadline": deadline}
+            if body.get("team_size_pref") not in (None, ""):
+                patch["team_size_pref"] = clamp_team_size(body.get("team_size_pref"))
+            sb_patch("championships", f"id=eq.{q(cid)}", patch)
+            return jsonify({"ok": True, "team_size_pref": patch.get("team_size_pref")})
         except Exception as e:
             return jsonify({"error": err_detail(e)}), 500
 
@@ -323,17 +338,24 @@ def register_routes(app, h):
             cid = request.args.get("championship_id", "")
             if not _ID_RE.match(cid):
                 return jsonify({"error": "invalid championship_id"}), 400
-            champ = sb_get("championships", f"id=eq.{q(cid)}&select=id,signup_open,signup_deadline&limit=1")
+            try:
+                champ = sb_get("championships", f"id=eq.{q(cid)}&select=id,signup_open,signup_deadline,team_size_pref&limit=1")
+            except Exception:   # team_size.sql noch nicht gelaufen -> ohne die neue Spalte
+                champ = sb_get("championships", f"id=eq.{q(cid)}&select=id,signup_open,signup_deadline&limit=1")
             if not champ:
                 return jsonify({"error": "championship not found"}), 404
+            pref = clamp_team_size(champ[0].get("team_size_pref"))
             signups = sb_get("team_signups", f"championship_id=eq.{q(cid)}&select=driver_name,signed_up_at&order=signed_up_at.asc")
             wishes = sb_get("team_wishes", f"championship_id=eq.{q(cid)}&select=driver_name,partner_name")
             analysis = analyze_wishes([s["driver_name"] for s in signups],
-                                      {w["driver_name"]: w["partner_name"] for w in wishes})
+                                      {w["driver_name"]: w["partner_name"] for w in wishes},
+                                      max_group=pref + 1)
             return jsonify({
                 "signup_open": bool(champ[0].get("signup_open")),
                 "signup_deadline": champ[0].get("signup_deadline"),
                 "open_now": signup_is_open(champ[0]),
+                "team_size_pref": pref,
+                "max_group": pref + 1,
                 "signups": signups,
                 "wishes": wishes,
                 "analysis": analysis,
