@@ -230,3 +230,12 @@ def register_routes(app, h):
             return jsonify({"ok": True, "teams": created})
         except Exception as e:
             return jsonify({"error": err_detail(e)}), 500
+
+    # Placement-Event: Stage-Aufloesung (placement_resolve.py, liegt daneben). Hier mit eingehaengt,
+    # damit admin_api.py unveraendert bleibt. Fehlt die Datei, laeuft der Rest trotzdem.
+    try:
+        import placement_resolve
+    except ImportError:
+        print("[team_draw] placement_resolve.py nicht gefunden - /admin/placement/resolve nicht aktiv")
+    else:
+        placement_resolve.register_routes(app, h)
