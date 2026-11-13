@@ -165,6 +165,40 @@ def signup_is_open(champ_row, now=None):
 #  ROUTEN
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ── Teamnamen ändern ("Show team") ───────────────────────────────────────────
+TEAM_NAME_MIN, TEAM_NAME_MAX = 2, 24
+TEAM_NAME_ADMIN_MAX = 40
+_TEAM_NAME_RE = re.compile(r"[\w .'\-!&]+")
+_RESERVED_TEAM_NAMES = {"unassigned"}      # so heisst der Sammel-Eintrag in den Standings
+
+
+def clean_team_name(raw, max_len=TEAM_NAME_MAX):
+    """Rueckgabe (name, None) oder (None, Fehlertext). Leerraum wird zusammengezogen."""
+    name = re.sub(r"\s+", " ", str(raw or "")).strip()
+    if len(name) < TEAM_NAME_MIN:
+        return None, f"Team name must be at least {TEAM_NAME_MIN} characters."
+    if len(name) > max_len:
+        return None, f"Team name can be at most {max_len} characters."
+    if not _TEAM_NAME_RE.fullmatch(name) or not any(c.isalnum() for c in name):
+        return None, "Team name may only contain letters, numbers, spaces and . ' - ! &"
+    if name.lower() in _RESERVED_TEAM_NAMES:
+        return None, "This name is not available."
+    return name, None
+
+
+def rename_lock(events, now=None):
+    """Umbenennen ist bis zum Start des ersten Events moeglich. events: Zeilen mit start_at/status.
+    Rueckgabe None (offen) oder Text, warum gesperrt."""
+    now = now or datetime.now(timezone.utc)
+    for e in events or []:
+        if e.get("status") in (1, 2):
+            return "The first event has started."
+        t = _parse_ts(e.get("start_at"))
+        if t is not None and t <= now:
+            return "The first event has started."
+    return None
+
+
 def register_routes(app, h):
     """
     h: dict mit den Helfern aus admin_api.py:
@@ -334,6 +368,96 @@ def register_routes(app, h):
             return jsonify({"error": err_detail(e)}), 500
 
     # ── Admin ────────────────────────────────────────────────────────────────
+
+
+    # ── Teamnamen: "Show team" (PIN) + Umbenennen bis zum ersten Event ──────────
+    def _my_team(cid, name):
+        mem = sb_get("team_members", f"championship_id=eq.{q(cid)}&driver_name=eq.{q(name)}&select=team_id&limit=1")
+        if not mem:
+            return None
+        tid = mem[0]["team_id"]
+        rows = sb_get("teams", f"id=eq.{q(tid)}&select=id,name,color&limit=1")
+        if not rows:
+            return None
+        members = sb_get("team_members", f"team_id=eq.{q(tid)}&select=driver_name&order=driver_name.asc")
+        return {**rows[0], "members": [m["driver_name"] for m in members]}
+
+    def _lock_reason(cid):
+        evs = sb_get("events", f"championship_id=eq.{q(cid)}&select=start_at,status")
+        return rename_lock(evs)
+
+    def _name_taken(cid, new, exclude_id):
+        rows = sb_get("teams", f"championship_id=eq.{q(cid)}&select=id,name")
+        return any(str(r["id"]) != str(exclude_id) and str(r["name"]).lower() == new.lower() for r in rows)
+
+    @app.route("/teamname/show", methods=["POST"])
+    def teamname_show():
+        try:
+            body = request.json or {}
+            name, err = _who(body)
+            if err:
+                return err
+            champ, err = _champ(body)
+            if err:
+                return err
+            team = _my_team(champ["id"], name)
+            lock = _lock_reason(champ["id"]) if team else None
+            return jsonify({"driver_name": name, "team": team, "can_rename": bool(team) and lock is None,
+                            "lock_reason": lock, "min": TEAM_NAME_MIN, "max": TEAM_NAME_MAX})
+        except Exception as e:
+            return jsonify({"error": err_detail(e)}), 500
+
+    @app.route("/teamname/rename", methods=["POST"])
+    def teamname_rename():
+        try:
+            body = request.json or {}
+            name, err = _who(body)
+            if err:
+                return err
+            champ, err = _champ(body)
+            if err:
+                return err
+            cid = champ["id"]
+            team = _my_team(cid, name)
+            if not team:
+                return jsonify({"error": "You are not in a team of this championship."}), 403
+            lock = _lock_reason(cid)
+            if lock:
+                return jsonify({"error": f"Team names can no longer be changed. {lock}"}), 403
+            new, msg = clean_team_name(body.get("name"))
+            if msg:
+                return jsonify({"error": msg}), 400
+            if _name_taken(cid, new, team["id"]):
+                return jsonify({"error": "Another team already uses this name."}), 409
+            sb_patch("teams", f"id=eq.{q(team['id'])}", {"name": new})
+            team["name"] = new
+            return jsonify({"driver_name": name, "team": team, "can_rename": True, "lock_reason": None,
+                            "min": TEAM_NAME_MIN, "max": TEAM_NAME_MAX})
+        except Exception as e:
+            return jsonify({"error": err_detail(e)}), 500
+
+    @app.route("/admin/team-name/set", methods=["POST"])
+    @auth
+    def admin_team_name_set():
+        """Admin ueberschreibt einen Teamnamen (ignoriert die Sperre ab dem ersten Event)."""
+        try:
+            body = request.json or {}
+            cid, tid = body.get("championship_id"), str(body.get("team_id") or "")
+            if not isinstance(cid, str) or not _ID_RE.match(cid) or not tid:
+                return jsonify({"error": "championship_id and team_id required"}), 400
+            rows = sb_get("teams", f"id=eq.{q(tid)}&championship_id=eq.{q(cid)}&select=id&limit=1")
+            if not rows:
+                return jsonify({"error": "team not found"}), 404
+            new, msg = clean_team_name(body.get("name"), TEAM_NAME_ADMIN_MAX)
+            if msg:
+                return jsonify({"error": msg}), 400
+            if _name_taken(cid, new, tid):
+                return jsonify({"error": "Another team already uses this name."}), 409
+            sb_patch("teams", f"id=eq.{q(tid)}", {"name": new})
+            return jsonify({"ok": True, "name": new})
+        except Exception as e:
+            return jsonify({"error": err_detail(e)}), 500
+
 
     @app.route("/admin/team-signup/config", methods=["POST"])
     @auth

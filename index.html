@@ -1600,6 +1600,12 @@ textarea.inp-std { resize:vertical; }
           <div class="tm-lbl" style="color:rgba(255,255,255,0.75);">📝</div>
           <div class="tm-val" style="color:var(--white);">Sign up</div>
         </button>
+        <!-- Show team (PIN) + Teamname ändern; nur sichtbar, wenn die Championship Teams hat -->
+        <button class="themed-meta-item" id="teamed-team-btn" onclick="openSignupModal('team')"
+          style="display:none;cursor:pointer;text-align:left;background:var(--red-dark);border-left-color:var(--red-bright);font-family:inherit;margin:0;">
+          <div class="tm-lbl" style="color:rgba(255,255,255,0.75);">👥</div>
+          <div class="tm-val" style="color:var(--white);">Show team</div>
+        </button>
       </div>
     </div>
 
@@ -2639,6 +2645,13 @@ textarea.inp-std { resize:vertical; }
             </div>
             <div id="td-status" style="font-size:13px;min-height:18px;margin-bottom:10px;"></div>
             <div id="td-result"></div>
+          </div>
+          <div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--gray-dark);">
+            <div style="font-size:11px;color:#888;letter-spacing:1px;margin-bottom:6px;">TEAM NAMES (admin override)</div>
+            <p style="font-size:12px;color:#888;margin:0 0 10px;">Spieler dürfen ihren Teamnamen bis zum Start des ersten Events selbst ändern. Hier kannst du jeden Namen jederzeit überschreiben (bis 40 Zeichen).</p>
+            <button class="ev-btn" onclick="adminTnLoad()">Load teams</button>
+            <div id="tn-status" style="font-size:13px;min-height:18px;margin:8px 0;"></div>
+            <div id="tn-list"></div>
           </div>
         </div>
       </div>
@@ -5492,6 +5505,17 @@ function _teamedSignupIsOpen(champ) {
 function _teamedUpdateSignupButton() {
   const btn = $('teamed-signup-btn');
   if (btn) btn.style.display = _teamedSignupIsOpen(_teamedChamp) ? '' : 'none';
+  _teamedUpdateTeamButton();
+}
+
+/** "Show team" erscheint erst, wenn die Auslosung gespeichert ist (die Championship hat Teams). */
+async function _teamedUpdateTeamButton() {
+  const btn = $('teamed-team-btn');
+  if (!btn || !_teamedChampId) return;
+  try {
+    const rows = await sb('teams', `select=id&championship_id=eq.${encodeURIComponent(_teamedChampId)}&limit=1`);
+    btn.style.display = rows.length ? '' : 'none';
+  } catch (err) { btn.style.display = 'none'; }
 }
 
 function _adjustSignupModalForViewport() {
@@ -5503,10 +5527,10 @@ function _adjustSignupModalForViewport() {
   if (box) box.style.maxHeight = Math.max(200, window.visualViewport.height - 32) + 'px';
 }
 
-function openSignupModal() {
+function openSignupModal(mode) {
   if (!_teamedChampId) { alert('Championship not loaded yet.'); return; }
   _su = { champId: _teamedChampId, pin: '', driverName: '', status: null, view: 'pin',
-          signups: new Set(), results: [], pick: null, note: '' };
+          signups: new Set(), results: [], pick: null, note: '', mode: mode === 'team' ? 'team' : 'signup', teamData: null };
   // Overlay ZUERST sichtbar machen, dann rendern/fokussieren (s. Interview-Modal:
   // .focus() in einem display:none-Elternelement ist in echten Browsern ein No-Op).
   const overlay = $('signup-modal-overlay');
@@ -5613,9 +5637,71 @@ function _suRatingHtml(s) {
   </div>`;
 }
 
+/** "Show team": PIN -> eigenes Team (Name, Mitglieder) + Umbenennen bis zum ersten Event. */
+function _renderTeamModal() {
+  const content = $('signup-modal-content');
+  if (!content || !_su) return;
+  if (_su.view === 'pin') {
+    content.innerHTML = `
+      ${_suHeader('👥 SHOW TEAM')}
+      <p style="font-size:12px;color:#888;margin-bottom:6px;">Enter your PIN to see your team (the same one as for the sign-up).</p>
+      <input type="text" inputmode="numeric" maxlength="4" id="su-pin-input" placeholder="PIN"
+        onkeydown="if(event.key==='Enter')_suSubmitPin()"
+        style="${_SU_INPUT_STYLE}letter-spacing:4px;text-align:center;">
+      <div id="su-status" style="margin-bottom:8px;font-size:12px;color:var(--red);"></div>
+      <button class="ev-btn active" style="width:100%;" onclick="_suSubmitPin()">Continue →</button>`;
+    const el = $('su-pin-input'); if (el) el.focus();
+    return;
+  }
+  const d = _su.teamData || {};
+  const who = `<p style="font-size:12px;color:var(--gray-light);margin-bottom:10px;">Signed in as <strong style="color:var(--white);">${escapeHtml(_su.driverName)}</strong> — <span style="color:var(--red);cursor:pointer;text-decoration:underline;" onclick="_su.view='pin';_su.pin='';_renderTeamModal();">not you?</span></p>`;
+  if (!d.team) {
+    content.innerHTML = `${_suHeader('👥 SHOW TEAM')}${who}
+      <p style="font-size:13px;color:#ccc;margin-bottom:12px;">You are not in a team of this championship.</p>
+      <button class="ev-btn" style="width:100%;" onclick="closeSignupModal()">Close</button>`;
+    return;
+  }
+  const t = d.team;
+  const members = (t.members || []).map(m =>
+    `<div style="padding:3px 0;font-size:13px;color:${m.toLowerCase() === _su.driverName.toLowerCase() ? 'var(--white)' : '#ccc'};">${escapeHtml(m)}${m.toLowerCase() === _su.driverName.toLowerCase() ? ' <span style="color:#888;">(you)</span>' : ''}</div>`).join('');
+  const rename = d.can_rename
+    ? `<p style="font-size:12px;color:#888;margin:14px 0 6px;">Change the team name (${d.min}–${d.max} characters). Every team member can do this until the first event starts.</p>
+       <input type="text" id="su-team-name" maxlength="${d.max}" value="${escapeHtml(t.name)}"
+         onkeydown="if(event.key==='Enter')_suRenameTeam()" style="${_SU_INPUT_STYLE}">
+       <div id="su-status" style="margin-bottom:8px;font-size:12px;color:var(--red);">${escapeHtml(_su.note || '')}</div>
+       <button class="ev-btn active" style="width:100%;margin-bottom:8px;" onclick="_suRenameTeam()">Save name</button>`
+    : `<p style="font-size:12px;color:#888;margin:14px 0 10px;">Team names can no longer be changed${d.lock_reason ? ' — ' + escapeHtml(d.lock_reason.toLowerCase()) : ''}</p>
+       <div id="su-status" style="margin-bottom:8px;font-size:12px;"></div>`;
+  content.innerHTML = `${_suHeader('👥 SHOW TEAM')}${who}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="display:inline-block;width:18px;height:18px;background:${escapeHtml(t.color || '#c0392b')};border:1px solid #000;"></span>
+      <strong style="font-size:18px;color:var(--white);">${escapeHtml(t.name)}</strong>
+    </div>
+    <div style="font-size:11px;color:#888;letter-spacing:1px;margin-bottom:4px;">MEMBERS</div>
+    ${members}
+    ${rename}
+    <button class="ev-btn" style="width:100%;" onclick="closeSignupModal()">Close</button>`;
+  _su.note = '';
+}
+
+async function _suRenameTeam() {
+  const input = $('su-team-name');
+  const name = input ? input.value : '';
+  _suSetStatus('Saving…', true);
+  try {
+    const data = await _suCall('/teamname/rename', { name });
+    _su.teamData = data;
+    _su.note = '';
+    _renderTeamModal();
+    const st = $('su-status'); if (st) st.innerHTML = '<span style="color:var(--green);">✓ Saved.</span>';
+    if (typeof loadTeamedStandings === 'function' && $('tab-teamed-standings')?.classList.contains('active')) loadTeamedStandings();
+  } catch (err) { _suSetStatus('⚠ ' + err.message); }
+}
+
 function _renderSignup() {
   const content = $('signup-modal-content');
   if (!content || !_su) return;
+  if (_su.mode === 'team') { _renderTeamModal(); return; }
   const s = _su.status;
 
   // ── PIN ──
@@ -5736,6 +5822,14 @@ async function _suSubmitPin() {
   _su.pin = pin;
   _suSetStatus('Checking PIN…', true);
   try {
+    if (_su.mode === 'team') {
+      const td = await _suCall('/teamname/show');
+      _su.driverName = td.driver_name;
+      _su.teamData = td;
+      _su.view = 'team';
+      _renderSignup();
+      return;
+    }
     const data = await _suCall('/teamsignup/status');
     _su.driverName = data.driver_name;
     _su.status = data;
@@ -5952,6 +6046,42 @@ function _adminTsRender(d) {
     sect('SOFT WISHES (only considered last)', soft) +
     sect('VOID WISHES (partner / wisher not signed up)', voidW) +
     sect(`SIGNED UP (${(d.signups || []).length})`, signups));
+}
+
+// ── ADMIN: Teamnamen überschreiben ──
+let _adminTn = [];
+
+async function adminTnLoad() {
+  const cid = $('ts-champ-select')?.value;
+  if (!cid) return;
+  setText('tn-status', 'Loading…');
+  try {
+    _adminTn = await sb('teams', `select=id,name,color,team_members(driver_name)&championship_id=eq.${encodeURIComponent(cid)}&order=name.asc`);
+    setText('tn-status', _adminTn.length ? '' : 'No teams saved yet.');
+    setHTML('tn-list', _adminTn.map((t, i) => `
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+        <span style="width:14px;height:14px;flex:none;background:${escapeHtml(t.color || '#c0392b')};border:1px solid #000;"></span>
+        <input type="text" id="tn-in-${i}" maxlength="40" value="${escapeHtml(t.name)}"
+          style="flex:1;min-width:0;padding:6px 8px;background:#111;border:1px solid #333;color:var(--white);font-size:13px;">
+        <button class="ev-btn" onclick="adminTnSave(${i})">Save</button>
+      </div>
+      <div style="font-size:11px;color:#666;margin:-2px 0 8px 22px;">${(t.team_members || []).map(m => escapeHtml(m.driver_name)).join(', ')}</div>`).join(''));
+  } catch (err) {
+    setHTML('tn-status', `<span style="color:var(--red);">⚠ ${escapeHtml(err.message)}</span>`);
+  }
+}
+
+async function adminTnSave(i) {
+  const t = _adminTn[i];
+  const cid = $('ts-champ-select')?.value;
+  if (!t || !cid) return;
+  try {
+    await adminFetch('/admin/team-name/set', { championship_id: cid, team_id: t.id, name: $('tn-in-' + i).value });
+    setHTML('tn-status', '<span style="color:var(--green);">✓ Saved.</span>');
+    adminTnLoad();
+  } catch (err) {
+    setHTML('tn-status', `<span style="color:var(--red);">⚠ ${escapeHtml(err.message)}</span>`);
+  }
 }
 
 // ── ADMIN: Team-Auslosung (Vorschau + Speichern) ──
