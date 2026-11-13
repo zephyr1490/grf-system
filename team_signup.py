@@ -372,15 +372,20 @@ def register_routes(app, h):
 
     # ── Teamnamen: "Show team" (PIN) + Umbenennen bis zum ersten Event ──────────
     def _my_team(cid, name):
-        mem = sb_get("team_members", f"championship_id=eq.{q(cid)}&driver_name=eq.{q(name)}&select=team_id&limit=1")
+        # team_members hat KEINE championship_id-Spalte (nur team_id, driver_name) -> ueber die Teams der Championship gehen
+        teams = sb_get("teams", f"championship_id=eq.{q(cid)}&select=id,name,color")
+        if not teams:
+            return None
+        ids = ",".join(q(t["id"]) for t in teams)
+        mem = sb_get("team_members", f"driver_name=eq.{q(name)}&team_id=in.({ids})&select=team_id&limit=1")
         if not mem:
             return None
         tid = mem[0]["team_id"]
-        rows = sb_get("teams", f"id=eq.{q(tid)}&select=id,name,color&limit=1")
-        if not rows:
+        team = next((t for t in teams if str(t["id"]) == str(tid)), None)
+        if not team:
             return None
         members = sb_get("team_members", f"team_id=eq.{q(tid)}&select=driver_name&order=driver_name.asc")
-        return {**rows[0], "members": [m["driver_name"] for m in members]}
+        return {**team, "members": [m["driver_name"] for m in members]}
 
     def _lock_reason(cid):
         evs = sb_get("events", f"championship_id=eq.{q(cid)}&select=start_at,status")
@@ -458,6 +463,36 @@ def register_routes(app, h):
         except Exception as e:
             return jsonify({"error": err_detail(e)}), 500
 
+
+    # ── Team-Reveal: Serverzeit (alle Besucher sehen den Reveal zur selben Zeit) + Zeitpunkt setzen ──
+    @app.route("/teamreveal/now", methods=["GET"])
+    def teamreveal_now():
+        return jsonify({"now_ms": int(time.time() * 1000)})
+
+    @app.route("/admin/team-reveal/set", methods=["POST"])
+    @auth
+    def admin_team_reveal_set():
+        """Setzt (oder loescht mit reveal_at=null) den Reveal-Zeitpunkt der Championship."""
+        try:
+            body = request.json or {}
+            cid = body.get("championship_id")
+            if not isinstance(cid, str) or not _ID_RE.match(cid):
+                return jsonify({"error": "invalid championship_id"}), 400
+            raw = body.get("reveal_at")
+            if raw in (None, ""):
+                value = None
+            else:
+                ts = _parse_ts(raw)
+                if ts is None:
+                    return jsonify({"error": "reveal_at: invalid date"}), 400
+                value = ts.isoformat()
+            try:
+                sb_patch("championships", f"id=eq.{q(cid)}", {"reveal_at": value})
+            except Exception as e:
+                return jsonify({"error": f"{err_detail(e)} - team_reveal.sql in Supabase ausgefuehrt?"}), 500
+            return jsonify({"ok": True, "reveal_at": value})
+        except Exception as e:
+            return jsonify({"error": err_detail(e)}), 500
 
     @app.route("/admin/team-signup/config", methods=["POST"])
     @auth

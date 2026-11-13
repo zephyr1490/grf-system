@@ -819,6 +819,55 @@ textarea.inp-std { resize:vertical; }
   .improved-row { padding:5px 8px; gap:6px; }
   .improved-bar-wrap { width:40px; }
 }
+/* ═══ TEAM REVEAL (Popup über allem, nur auf der Teamed-Seite) — alles unter #rv-overlay gescoped ═══ */
+#rv-overlay { display:none; position:fixed; inset:0; z-index:10000; box-sizing:border-box;
+  --bg:#14161a; --panel:#2a2d31; --panel-2:#202226; --hi:#55595f; --lo:#0b0c0e; --fg:#ececec; --dim:#8d929b;
+  --red:#cc0000; --green:#3ddb6f; --amber:#f2c14e; --pix:'VT323',monospace; --ui:'Share Tech Mono',monospace; --head:'Oswald',sans-serif;
+  background:var(--bg); color:var(--fg); font-family:var(--ui); font-size:14px; overflow:hidden;
+  padding:6px max(10px,env(safe-area-inset-right,0px)) 6px max(10px,env(safe-area-inset-left,0px)); }
+#rv-overlay *, #rv-overlay *::before, #rv-overlay *::after { box-sizing:border-box; }
+#rv-overlay [hidden] { display:none !important; }
+#rv-overlay .rv-win { max-width:980px; margin:0 auto; height:100%; display:flex; flex-direction:column; position:relative; min-height:0; background:var(--panel); border:2px solid; border-color:var(--hi) var(--lo) var(--lo) var(--hi); }
+#rv-overlay .rv-titlebar { display:flex; align-items:center; gap:8px; background:var(--red); color:#fff; padding:2px 6px; font-family:var(--head); font-weight:700; letter-spacing:2px; font-size:12px; flex:none; }
+#rv-overlay .rv-sp { flex:1; }
+#rv-overlay .rv-cnt { font-family:var(--pix); font-size:20px; letter-spacing:1px; }
+#rv-overlay .rv-titlebar button { background:#a30000; border:2px solid; border-color:#ff6b6b #5a0000 #5a0000 #ff6b6b; font-family:var(--head); font-weight:700; letter-spacing:2px; font-size:12px; padding:0 8px; min-height:22px; color:#fff; cursor:pointer; border-radius:0; }
+#rv-overlay .rv-titlebar button:disabled { opacity:.45; cursor:default; }
+#rv-overlay .rv-wait { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:20px; }
+#rv-overlay .rv-wait .rv-big { font-family:var(--pix); font-size:clamp(64px,18vw,140px); line-height:1; color:var(--green); }
+#rv-overlay .rv-wait .rv-small { font-family:var(--head); letter-spacing:3px; color:var(--dim); font-size:13px; }
+#rv-overlay .rv-wait .rv-note { color:var(--dim); font-size:12px; line-height:1.5; max-width:420px; }
+#rv-overlay .rv-body { padding:6px; display:flex; flex-direction:column; gap:5px; flex:1; min-height:0; }
+#rv-overlay .rv-blocks { display:flex; gap:1px; flex:none; }
+#rv-overlay .rv-blocks i { flex:1 1 0; min-width:1px; height:6px; background:var(--lo); display:block; }
+#rv-overlay .rv-blocks i.on { background:var(--green); }
+#rv-overlay .rv-bevel { border:2px solid; border-color:var(--lo) var(--hi) var(--hi) var(--lo); background:var(--panel-2); }
+#rv-overlay .rv-poolbox { position:relative; flex:1 1 0; min-height:0; }
+#rv-overlay .rv-pool { position:absolute; inset:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:3px; padding:4px; overflow-y:auto; align-content:start; grid-auto-rows:max-content; overscroll-behavior:contain; }
+#rv-overlay .rv-tile { font-family:var(--pix); font-size:17px; line-height:1; padding:3px 4px 2px; min-width:0; background:var(--panel); border:2px solid; border-color:var(--hi) var(--lo) var(--lo) var(--hi); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#rv-overlay .rv-tile.pick { background:var(--red); color:#fff; animation:rv-blink .3s steps(1) infinite; }
+#rv-overlay .rv-tile.drawn { background:var(--panel-2); color:#4b4f56; border-color:var(--lo) var(--panel) var(--panel) var(--lo); }
+@keyframes rv-blink { 50% { background:var(--panel); color:var(--fg); } }
+#rv-overlay .rv-banner { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:6; width:min(86%,420px); text-align:center; background:rgba(11,12,14,.95); padding:8px 10px; border:2px solid; border-color:var(--hi) var(--lo) var(--lo) var(--hi); box-shadow:0 0 0 2px var(--lo); }
+#rv-overlay .rv-lbl { font-size:10px; letter-spacing:2px; color:var(--dim); font-family:var(--head); display:block; margin-bottom:2px; }
+#rv-overlay .rv-name { font-family:var(--pix); font-size:38px; line-height:1; color:var(--green); word-break:break-all; }
+#rv-overlay .rv-name.fin { animation:rv-blink2 .6s steps(1) 6; }
+@keyframes rv-blink2 { 50% { opacity:0; } }
+#rv-overlay .rv-teams { --f:16px; flex:2 1 0; min-height:0; display:grid; gap:4px; overflow:hidden; }
+#rv-overlay .rv-team { min-height:0; min-width:0; overflow:hidden; display:flex; flex-direction:column; background:var(--panel-2); border:2px solid; border-color:var(--lo) var(--hi) var(--hi) var(--lo); border-left:5px solid var(--c); }
+#rv-overlay .rv-team .rv-h { display:flex; justify-content:space-between; align-items:baseline; gap:4px; padding:0 5px; font-family:var(--head); font-weight:700; letter-spacing:1px; font-size:calc(var(--f) * .62); line-height:1.5; background:var(--panel); flex:none; }
+#rv-overlay .rv-team .rv-h span:first-child { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#rv-overlay .rv-team .rv-h span:last-child { font-family:var(--pix); font-size:calc(var(--f) * .95); color:var(--dim); letter-spacing:0; }
+#rv-overlay .rv-team .rv-m { padding:2px 3px; display:flex; flex-direction:column; gap:2px; min-height:0; }
+#rv-overlay .rv-mem { font-family:var(--pix); font-size:var(--f); line-height:1.05; padding:0 4px; background:var(--panel); border-left:3px solid var(--c); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:none; }
+#rv-overlay .rv-mem.hid { visibility:hidden; }
+#rv-overlay .rv-team.hop { background:#3b2a2a; border-color:var(--red); }
+#rv-overlay .rv-team.land { animation:rv-land .5s steps(2) 1; }
+@keyframes rv-land { 0% { background:var(--green); } 50% { background:var(--panel-2); } 100% { background:var(--green); } }
+.rv-ghost { position:fixed; left:0; top:0; z-index:10010; pointer-events:none; font-family:'VT323',monospace; line-height:1; padding:4px 6px; background:#cc0000; color:#fff; border:2px solid #fff; white-space:nowrap; }
+@media (min-width:640px) { #rv-overlay .rv-pool { grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); } #rv-overlay .rv-tile { font-size:19px; } }
+@media (prefers-reduced-motion:reduce) { #rv-overlay .rv-tile.pick, #rv-overlay .rv-team.land, #rv-overlay .rv-name.fin { animation:none; } }
+
 </style>
 </head>
 <body>
@@ -1605,6 +1654,12 @@ textarea.inp-std { resize:vertical; }
           style="display:none;cursor:pointer;text-align:left;background:var(--red-dark);border-left-color:var(--red-bright);font-family:inherit;margin:0;">
           <div class="tm-lbl" style="color:rgba(255,255,255,0.75);">👥</div>
           <div class="tm-val" style="color:var(--white);">Show team</div>
+        </button>
+        <!-- Team reveal: Live-Popup (10 Min vorher) bzw. Wiederholung; nur sichtbar, wenn ein Reveal-Zeitpunkt gesetzt ist -->
+        <button class="themed-meta-item" id="teamed-reveal-btn" onclick="rvHeroClick()"
+          style="display:none;cursor:pointer;text-align:left;background:var(--red-dark);border-left-color:var(--red-bright);font-family:inherit;margin:0;">
+          <div class="tm-lbl" style="color:rgba(255,255,255,0.75);">🎬</div>
+          <div class="tm-val" style="color:var(--white);">Team reveal</div>
         </button>
       </div>
     </div>
@@ -2645,6 +2700,18 @@ textarea.inp-std { resize:vertical; }
             </div>
             <div id="td-status" style="font-size:13px;min-height:18px;margin-bottom:10px;"></div>
             <div id="td-result"></div>
+          </div>
+          <div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--gray-dark);">
+            <div style="font-size:11px;color:#888;letter-spacing:1px;margin-bottom:6px;">TEAM REVEAL (live)</div>
+            <p style="font-size:12px;color:#888;margin:0 0 10px;">Zeitpunkt des Live-Reveals auf der Teamed-Seite. 10 Min vorher erscheint dort das Popup mit Countdown, zur eingestellten Zeit läuft die Ziehung, danach bleiben die Teams ca. 1 Min stehen. Die Teams müssen bis dahin gespeichert sein („Save teams"). Wer sie erst kurz vor dem Reveal speichert, hält das Ergebnis bis dahin aus den Standings heraus. Danach ist der Reveal über den Button „Team reveal" im Hero wiederholbar. Zeit in deiner Ortszeit.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+              <input type="datetime-local" id="rv-at-input"
+                style="padding:6px 8px;background:#111;border:1px solid #333;color:var(--white);font-size:13px;">
+              <button class="ev-btn active" onclick="adminRvSave()">Save time</button>
+              <button class="ev-btn" onclick="adminRvTest()">Test: in 2 min</button>
+              <button class="ev-btn" onclick="adminRvClear()">Clear</button>
+            </div>
+            <div id="rv-status" style="font-size:13px;min-height:18px;margin-bottom:6px;"></div>
           </div>
           <div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--gray-dark);">
             <div style="font-size:11px;color:#888;letter-spacing:1px;margin-bottom:6px;">TEAM NAMES (admin override)</div>
@@ -5508,14 +5575,14 @@ function _teamedUpdateSignupButton() {
   _teamedUpdateTeamButton();
 }
 
-/** "Show team" erscheint erst, wenn die Auslosung gespeichert ist (die Championship hat Teams). */
+/** "Show team" erscheint, wenn die Championship Teams hat und der Reveal (falls gesetzt) vorbei ist. */
 async function _teamedUpdateTeamButton() {
-  const btn = $('teamed-team-btn');
-  if (!btn || !_teamedChampId) return;
+  if (!_teamedChampId) return;
   try {
     const rows = await sb('teams', `select=id&championship_id=eq.${encodeURIComponent(_teamedChampId)}&limit=1`);
-    btn.style.display = rows.length ? '' : 'none';
-  } catch (err) { btn.style.display = 'none'; }
+    RV.teamsExist = rows.length > 0;
+  } catch (err) { RV.teamsExist = false; }
+  _rvRefreshUi();
 }
 
 function _adjustSignupModalForViewport() {
@@ -5975,6 +6042,7 @@ async function adminTsLoad() {
     const dl  = $('ts-deadline-input'); if (dl) dl.value = _adminTsLocalInput(data.signup_deadline);
     const sz  = $('ts-size-input'); if (sz) sz.value = data.team_size_pref || 3;
     _adminTsRender(data);
+    adminRvLoad();
   } catch (err) {
     setHTML('ts-overview', `<div style="color:var(--red);font-size:13px;">⚠ ${escapeHtml(err.message)}</div>`);
   }
@@ -6047,6 +6115,44 @@ function _adminTsRender(d) {
     sect('VOID WISHES (partner / wisher not signed up)', voidW) +
     sect(`SIGNED UP (${(d.signups || []).length})`, signups));
 }
+
+// ── ADMIN: Team-Reveal-Zeitpunkt ──
+function _adminRvLocalInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d)) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+async function adminRvLoad() {
+  const cid = $('ts-champ-select')?.value;
+  if (!cid) return;
+  const rows = await sb('championships', `select=reveal_at&id=eq.${encodeURIComponent(cid)}&limit=1`);
+  const v = rows[0] && rows[0].reveal_at;
+  const inp = $('rv-at-input'); if (inp) inp.value = _adminRvLocalInput(v);
+  setHTML('rv-status', rows.length
+    ? (v ? `<span style="color:var(--green);">● Reveal: ${escapeHtml(new Date(v).toLocaleString())}</span>` : '<span style="color:#888;">● kein Reveal-Zeitpunkt gesetzt</span>')
+    : '<span style="color:#e0a030;">⚠ Spalte reveal_at nicht lesbar — team_reveal.sql in Supabase ausgeführt?</span>');
+}
+
+async function _adminRvSet(iso) {
+  const cid = $('ts-champ-select')?.value;
+  if (!cid) return;
+  setText('rv-status', 'Saving…');
+  try {
+    await adminFetch('/admin/team-reveal/set', { championship_id: cid, reveal_at: iso });
+    await adminRvLoad();
+  } catch (err) {
+    setHTML('rv-status', `<span style="color:var(--red);">⚠ ${escapeHtml(err.message)}</span>`);
+  }
+}
+function adminRvSave() {
+  const v = $('rv-at-input')?.value;
+  if (!v) { setHTML('rv-status', '<span style="color:var(--red);">⚠ Bitte Datum und Uhrzeit wählen.</span>'); return; }
+  _adminRvSet(new Date(v).toISOString());
+}
+function adminRvTest() { _adminRvSet(new Date(Date.now() + 2 * 60 * 1000).toISOString()); }
+function adminRvClear() { _adminRvSet(null); }
 
 // ── ADMIN: Teamnamen überschreiben ──
 let _adminTn = [];
@@ -6938,6 +7044,7 @@ async function loadTeamedResults() {
     _teamedChampId = champ.id;
     _teamedChamp   = champ;
     _teamedUpdateSignupButton();
+    _rvInit();
 
     // 2. Championship Hero befüllen — Titel zeigt jetzt den Club-Namen
     // statt dem generischen RaceNet-Championship-Namen (Owner-Meldung
@@ -9531,6 +9638,290 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TEAM REVEAL — Live-Reveal (Popup mit Countdown) + Wiederholung
+// Ablauf: Admin setzt championships.reveal_at. 10 Min vorher öffnet sich das Popup mit Countdown,
+// zum Zeitpunkt läuft die Ziehung. Alle Fahrer, Teams und die Reihenfolge stammen aus den
+// gespeicherten Teams; die Reihenfolge ergibt sich deterministisch aus den Namen (gleiche Folge bei
+// jedem Besucher). Der Zeitplan ist fest (rvPlan), daher sieht jeder zur selben Zeit dieselbe Ziehung;
+// wer später dazukommt, springt an die richtige Stelle. Konzept: claude/team_lottery_concept.md.
+// ═══════════════════════════════════════════════════════════════════════════
+const RV_LIVE   = { hops: 13, blink: 650, hopMs: 60, fly: 600, pause: 3500 };
+const RV_REPLAY = { hops: 10, blink: 420, hopMs: 50, fly: 480, pause: 700 };
+const RV_PRE_MS  = 10 * 60 * 1000;   // Popup erscheint so lange vor dem Reveal
+const RV_HOLD_MS = 60 * 1000;        // Teams bleiben nach dem Ende so lange stehen (Live)
+const _rvReduce = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const RV = { open: false, mode: 'live', runId: 0, skipping: false, finished: false, offset: 0, dismissed: false,
+             teams: [], all: [], teamOf: {}, order: [], tiles: {}, cards: [], cfg: RV_LIVE, starts: [], durs: [],
+             done: 0, N: 0, tick: null, teamsExist: false, closeTimer: null };
+
+function _rvNow() { return Date.now() + RV.offset; }
+function _rvRevealAt() {
+  const v = _teamedChamp && _teamedChamp.reveal_at;
+  const t = v ? new Date(v).getTime() : NaN;
+  return isNaN(t) ? null : t;
+}
+const _rvSleep = (ms) => new Promise((r) => setTimeout(r, RV.skipping ? 0 : ms));
+const _rvByName = (a, b) => a.toLowerCase().localeCompare(b.toLowerCase());
+function _rvRng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function _rvShuffled(list, seed) { const r = _rvRng(seed), a = list.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function _rvHash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+/* ── Zeitplan: jede Ziehung hat eine feste Dauer, die nur von Position, Feldgröße und Tempo abhängt ── */
+function _rvHopLen(nTeams, hops) { return nTeams < 3 ? 1 : hops + 1; }
+function _rvHopDelays(len, cfg) {
+  const H = len - 1, a = [];
+  for (let i = 0; i <= H; i++) a.push(cfg.hopMs + i * i * 2 + (i > H - 4 ? (i - (H - 4)) * 90 : 0));
+  return a;
+}
+function _rvPickCfg(cfg, k, N) { const c = Object.assign({}, cfg); if (N - k <= 3) { c.blink *= 1.8; c.hops += 3; } return c; }
+function _rvPickMs(cfg, k, N, nTeams) {
+  const c = _rvPickCfg(cfg, k, N);
+  const drum = 7 * (c.blink / 8);
+  const hopsMs = _rvHopDelays(_rvHopLen(nTeams, c.hops), c).reduce((s, x) => s + x, 0);
+  return drum + c.blink + hopsMs + c.fly + (k < N - 1 ? c.pause : 0);
+}
+function _rvPlan(cfg, N, nTeams, t0) {
+  const starts = [], durs = []; let t = t0;
+  for (let k = 0; k < N; k++) { const d = _rvPickMs(cfg, k, N, nTeams); starts.push(t); durs.push(d); t += d; }
+  return { starts, durs, end: t };
+}
+function _rvTotalMs(N) { return _rvPlan(RV_LIVE, Math.max(N, 1), 8, 0).end; }
+function _rvRevealEnd() { const ra = _rvRevealAt(); return ra == null ? null : ra + _rvTotalMs(RV.N || 24); }
+
+/* ── Daten ── */
+async function _rvLoadTeams() {
+  const rows = await sb('teams', `select=id,name,color,team_members(driver_name)&championship_id=eq.${encodeURIComponent(_teamedChampId)}&order=id.asc`);
+  const teams = rows.map((t) => ({ id: t.id, name: t.name || '', color: t.color || '#c0392b',
+                                   members: (t.team_members || []).map((m) => m.driver_name) })).filter((t) => t.members.length);
+  return teams.length ? teams : null;
+}
+async function _rvSyncClock() {
+  try {
+    const t0 = Date.now();
+    const res = await fetch(`${ADMIN_API_URL}/teamreveal/now`);
+    const d = await res.json(); const t1 = Date.now();
+    if (res.ok && typeof d.now_ms === 'number') RV.offset = d.now_ms - (t0 + t1) / 2;
+  } catch (e) { /* ohne Serverzeit: lokale Uhr */ }
+}
+
+/* ── Szene (aus der Demo übernommen) ── */
+function _rvFit() {
+  const box = $('rv-teams'), W = box.clientWidth, H = box.clientHeight, N = RV.cards.length;
+  if (!N || !W || !H) return;
+  const M = Math.max(...RV.teams.map((t) => t.members.length)), gap = 4;
+  let best = null;
+  for (let c = 1; c <= Math.min(N, 8); c++) {
+    const r = Math.ceil(N / c), cw = (W - gap * (c - 1)) / c - 9, ch = (H - gap * (r - 1)) / r - 4;
+    const f = Math.min((ch - 4) / ((M + 1) * 1.2 + 0.2), cw * 0.9 / (15 * 0.46), 22);
+    if (!best || f > best.f) best = { c, r, f };
+  }
+  box.style.gridTemplateColumns = 'repeat(' + best.c + ',minmax(0,1fr))';
+  box.style.gridTemplateRows = 'repeat(' + best.r + ',minmax(0,1fr))';
+  box.style.setProperty('--f', Math.max(8, best.f).toFixed(1) + 'px');
+}
+function _rvHopSeq(N, ti, H) {
+  if (N < 3) return [ti];
+  const near = []; for (let d = -2; d <= 2; d++) { const j = ((ti + d) % N + N) % N; if (d !== 0 && j !== ti && !near.includes(j)) near.push(j); }
+  const nm = N >= 4 ? Math.min(3, Math.max(0, H - 2)) : 0, seq = [];
+  const pick = (pool, prev) => { const p = pool.filter((j) => j !== prev); return p[Math.floor(Math.random() * p.length)]; };
+  const allIdx = Array.from({ length: N }, (_, j) => j);
+  for (let i = 0; i < H; i++) {
+    const prev = i ? seq[i - 1] : -1;
+    if (i >= H - nm) seq.push(pick(near, prev));
+    else if (i === 0 && N > 5) seq.push(pick(allIdx.filter((j) => { const d = Math.abs(j - ti); return Math.min(d, N - d) > 2; }), -1));
+    else seq.push(pick(allIdx.filter((j) => i < H - 1 || j !== ti), prev));
+  }
+  seq.push(ti);
+  return seq;
+}
+function _rvScrollIn(box, el) {
+  const c = box.getBoundingClientRect(), r = el.getBoundingClientRect();
+  if (r.top < c.top + 2 || r.bottom > c.bottom - 2) box.scrollTop += (r.top - c.top) - (c.height - r.height) / 2;
+}
+function _rvShowBanner(text, label, dim) { $('rv-banner').hidden = false; $('rv-blbl').textContent = label; const e = $('rv-now'); e.textContent = text; e.className = 'rv-name'; e.style.color = dim ? 'var(--dim)' : ''; }
+function _rvUpdateCount() {
+  $('rv-count').textContent = RV.all.length ? RV.done + '/' + RV.all.length : '';
+  [...$('rv-blocks').children].forEach((el, i) => el.classList.toggle('on', i < RV.done));
+}
+function _rvBuildScene(teams) {
+  RV.teams = teams; RV.all = teams.flatMap((t) => t.members); RV.teamOf = {};
+  teams.forEach((t, i) => t.members.forEach((m) => { RV.teamOf[m] = i; }));
+  // Reihenfolge: deterministisch aus den Namen -> bei jedem Besucher gleich
+  const sorted = RV.all.slice().sort(_rvByName);
+  RV.order = _rvShuffled(sorted, _rvHash(String(_teamedChampId) + '|' + sorted.join('|')));
+  RV.done = 0; RV.finished = false; RV.skipping = false;
+  $('rv-pool').innerHTML = ''; $('rv-teams').innerHTML = ''; RV.tiles = {}; RV.cards = [];
+  sorted.forEach((n) => { const d = document.createElement('div'); d.className = 'rv-tile'; d.textContent = n; d.title = n; RV.tiles[n] = d; $('rv-pool').appendChild(d); });
+  // Teams starten mit dem Namen, den sie beim Laden haben (live: Platzhalter = Teamfarbe)
+  teams.forEach((t, i) => {
+    const c = document.createElement('div'); c.className = 'rv-team'; c.style.setProperty('--c', t.color);
+    const h = document.createElement('div'); h.className = 'rv-h';
+    const a = document.createElement('span'); a.textContent = String(t.name).toUpperCase();
+    const b = document.createElement('span'); b.textContent = '0';
+    h.appendChild(a); h.appendChild(b);
+    const m = document.createElement('div'); m.className = 'rv-m';
+    c.appendChild(h); c.appendChild(m); RV.cards.push(c); $('rv-teams').appendChild(c);
+  });
+  const bl = $('rv-blocks'); bl.innerHTML = ''; RV.all.forEach(() => bl.appendChild(document.createElement('i')));
+  $('rv-wait').hidden = true; $('rv-body').hidden = false;
+  _rvShowBanner('GET READY', 'TEAM REVEAL', true); _rvUpdateCount(); $('rv-pool').scrollTop = 0; _rvFit();
+}
+
+async function _rvPick(k, animate, id) {
+  const name = RV.order[k], tile = RV.tiles[name], ti = RV.teamOf[name], card = RV.cards[ti], m = card.querySelector('.rv-m');
+  const c = _rvPickCfg(RV.cfg, k, RV.order.length);
+  const mem = document.createElement('div'); mem.className = 'rv-mem hid'; mem.textContent = name; m.appendChild(mem);
+  if (animate) {
+    _rvScrollIn($('rv-pool'), tile);
+    const rest = RV.all.filter((n) => !RV.tiles[n].classList.contains('drawn'));
+    _rvShowBanner(name, 'NOW DRAWING', false);
+    for (let i = 0; i < 7; i++) { $('rv-now').textContent = rest[Math.floor(Math.random() * rest.length)]; await _rvSleep(c.blink / 8); if (id !== RV.runId) return false; }
+    $('rv-now').textContent = name; tile.classList.add('pick'); await _rvSleep(c.blink); if (id !== RV.runId) return false;
+    const len = _rvHopLen(RV.cards.length, c.hops), delays = _rvHopDelays(len, c), seq = _rvHopSeq(RV.cards.length, ti, len - 1);
+    for (let i = 0; i < len; i++) {
+      RV.cards.forEach((x) => x.classList.remove('hop')); RV.cards[seq[i]].classList.add('hop');
+      await _rvSleep(delays[i]); if (id !== RV.runId) return false;
+    }
+    RV.cards.forEach((x) => x.classList.remove('hop'));
+    $('rv-banner').hidden = true;
+    if (!RV.skipping) {
+      const a = tile.getBoundingClientRect(), b = mem.getBoundingClientRect();
+      const g = document.createElement('div'); g.className = 'rv-ghost'; g.textContent = name; g.style.fontSize = getComputedStyle(mem).fontSize; document.body.appendChild(g);
+      try { await g.animate([{ transform: 'translate(' + a.left + 'px,' + a.top + 'px)' }, { transform: 'translate(' + b.left + 'px,' + b.top + 'px)' }], { duration: c.fly, easing: 'steps(9, end)', fill: 'forwards' }).finished; } catch (e) {}
+      g.remove();
+    }
+  }
+  if (id !== RV.runId) return false;
+  mem.classList.remove('hid'); tile.classList.remove('pick'); tile.classList.add('drawn'); $('rv-pool').appendChild(tile);
+  card.querySelector('.rv-h span:last-child').textContent = m.children.length;
+  card.classList.remove('land'); void card.offsetWidth; if (animate) card.classList.add('land');
+  RV.done++; _rvUpdateCount();
+  return true;
+}
+
+async function _rvRun(t0) {
+  const id = ++RV.runId, N = RV.order.length;
+  const plan = _rvPlan(RV.cfg, N, RV.cards.length, t0); RV.starts = plan.starts; RV.durs = plan.durs;
+  $('rv-skip').hidden = false; $('rv-again').hidden = true;
+  for (let k = 0; k < N; k++) {
+    while (_rvNow() < plan.starts[k] && !RV.skipping) { await _rvSleep(Math.min(200, plan.starts[k] - _rvNow())); if (id !== RV.runId) return; }
+    const animate = !RV.skipping && !_rvReduce && (_rvNow() - plan.starts[k]) < 2000;
+    if (!(await _rvPick(k, animate, id))) return;
+  }
+  if (id !== RV.runId) return;
+  RV.finished = true; $('rv-skip').hidden = true; $('rv-again').hidden = false;
+  _rvShowBanner('TEAMS LOCKED', 'ALL DRAWN', false); $('rv-now').classList.add('fin');
+  try { navigator.vibrate && navigator.vibrate([80, 60, 80]); } catch (e) {}
+  if (RV.mode === 'live') {
+    const left = Math.max(2000, plan.end + RV_HOLD_MS - _rvNow());
+    clearTimeout(RV.closeTimer);
+    RV.closeTimer = setTimeout(() => { if (RV.open && RV.mode === 'live' && RV.runId === id) rvClose(false); }, left);
+  }
+}
+
+/* ── Popup öffnen / schließen ── */
+function _rvShow() {
+  RV.open = true; clearTimeout(RV.closeTimer);
+  $('rv-overlay').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+function rvClose(byUser) {
+  RV.runId++; RV.open = false; clearTimeout(RV.closeTimer); RV.skipping = false;
+  if (byUser && RV.mode === 'live') RV.dismissed = true;
+  const o = $('rv-overlay'); if (o) o.style.display = 'none';
+  document.body.style.overflow = '';
+  _rvRefreshUi();
+}
+function rvSkip() { RV.skipping = true; }
+
+async function _rvOpenLive() {
+  const ra = _rvRevealAt(); if (ra == null) return;
+  _rvShow(); RV.mode = 'live'; RV.cfg = RV_LIVE; RV.skipping = false;
+  const id = ++RV.runId;
+  $('rv-body').hidden = true; $('rv-wait').hidden = false; $('rv-skip').hidden = true; $('rv-again').hidden = true; $('rv-count').textContent = '';
+  const fmt = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : String(m).padStart(2, '0')) + ':' + String(x).padStart(2, '0'); };
+  $('rv-wait-note').textContent = 'Stay on this page — the teams are drawn live for everyone at the same time.';
+  let teams = null, loading = false;
+  const load = async () => { if (loading || teams) return; loading = true; try { teams = await _rvLoadTeams(); } catch (e) {} loading = false; };
+  // 1. Countdown
+  while (_rvNow() < ra) {
+    if (id !== RV.runId) return;
+    const left = ra - _rvNow();
+    $('rv-wait-title').textContent = 'TEAM REVEAL STARTS IN'; $('rv-wait-big').textContent = fmt(left);
+    if (left < 8000) load();
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  // 2. Auf die Teams warten, falls sie noch nicht gespeichert sind
+  $('rv-wait-title').textContent = 'STARTING…'; $('rv-wait-big').textContent = '00:00';
+  while (!teams) {
+    if (id !== RV.runId) return;
+    await load();
+    if (!teams) { $('rv-wait-note').textContent = 'Waiting for the teams to be published…'; await new Promise((r) => setTimeout(r, 2500)); }
+  }
+  if (id !== RV.runId) return;
+  _rvBuildScene(teams);
+  RV.N = RV.all.length;
+  await _rvRun(ra);
+}
+
+async function _rvOpenReplay() {
+  _rvShow(); RV.mode = 'replay'; RV.cfg = RV_REPLAY; RV.skipping = false;
+  const id = ++RV.runId;
+  $('rv-body').hidden = true; $('rv-wait').hidden = false; $('rv-skip').hidden = true; $('rv-again').hidden = true; $('rv-count').textContent = '';
+  $('rv-wait-title').textContent = 'TEAM REVEAL'; $('rv-wait-big').textContent = '…'; $('rv-wait-note').textContent = 'Loading the teams…';
+  let teams = null;
+  try { teams = await _rvLoadTeams(); } catch (e) {}
+  if (id !== RV.runId) return;
+  if (!teams) { $('rv-wait-big').textContent = ':('; $('rv-wait-note').textContent = 'The teams are not available yet.'; return; }
+  _rvBuildScene(teams);
+  RV.N = RV.all.length;
+  await _rvRun(_rvNow() + 1500);
+}
+function rvReplay() { _rvOpenReplay(); }
+
+/** Hero-Button "Team reveal": je nach Zeitpunkt Live (Countdown / läuft gerade) oder Wiederholung. */
+function rvHeroClick() {
+  const ra = _rvRevealAt(); if (ra == null) return;
+  const end = _rvRevealEnd();
+  if (_rvNow() < end + RV_HOLD_MS) { RV.dismissed = false; _rvOpenLive(); } else _rvOpenReplay();
+}
+
+/* ── Zeitsteuerung auf der Teamed-Seite (Popup 10 Min vorher, Buttons) ── */
+function _rvShowTeamAllowed() {
+  const ra = _rvRevealAt();
+  return ra == null || _rvNow() >= _rvRevealEnd();
+}
+function _rvRefreshUi() {
+  const ra = _rvRevealAt(), now = _rvNow();
+  const rb = $('teamed-reveal-btn');
+  if (rb) rb.style.display = (ra != null && now >= ra - RV_PRE_MS) ? '' : 'none';
+  const tb = $('teamed-team-btn');
+  if (tb) tb.style.display = (RV.teamsExist && _rvShowTeamAllowed()) ? '' : 'none';
+}
+function _rvTick() {
+  const ra = _rvRevealAt(); _rvRefreshUi();
+  if (ra == null || RV.open || RV.dismissed) return;
+  const pg = $('page-teamed'); if (!pg || !pg.classList.contains('active')) return;
+  const now = _rvNow();
+  if (now >= ra - RV_PRE_MS && now < _rvRevealEnd() + RV_HOLD_MS) _rvOpenLive();
+}
+async function _rvInit() {
+  clearInterval(RV.tick); RV.dismissed = false;
+  await _rvSyncClock();
+  try {
+    const su = await sb('team_signups', `select=driver_name&championship_id=eq.${encodeURIComponent(_teamedChampId)}`);
+    RV.N = su.length || RV.N;
+    const t = await sb('teams', `select=id&championship_id=eq.${encodeURIComponent(_teamedChampId)}&limit=1`);
+    RV.teamsExist = t.length > 0;
+  } catch (e) {}
+  _rvRefreshUi(); _rvTick();
+  RV.tick = setInterval(_rvTick, 1000);
+}
+addEventListener('resize', () => { if (RV.open && !$('rv-body').hidden) _rvFit(); });
+
 </script>
 
 <!-- ══════════════════════════════════════════
@@ -9550,6 +9941,29 @@ document.addEventListener('DOMContentLoaded', () => {
      (Overlay + Box, VisualViewport-Anpassung für die Handy-Tastatur). Inhalt wird
      komplett von _renderSignup() befüllt.
 ══════════════════════════════════════════ -->
+<!-- TEAM REVEAL: Popup über allem (Live-Reveal mit Countdown + Wiederholung), Logik: Abschnitt "TEAM REVEAL" im Script -->
+<div id="rv-overlay" role="dialog" aria-modal="true" aria-label="Team reveal">
+  <div class="rv-win">
+    <div class="rv-titlebar"><span>TEAM REVEAL</span><span class="rv-sp"></span><span class="rv-cnt" id="rv-count"></span>
+      <button id="rv-skip" hidden onclick="rvSkip()">SKIP</button>
+      <button id="rv-again" hidden onclick="rvReplay()">REPLAY</button>
+      <button id="rv-close" aria-label="Close" onclick="rvClose(true)">✕</button></div>
+    <div class="rv-wait" id="rv-wait">
+      <div class="rv-small" id="rv-wait-title">TEAM REVEAL STARTS IN</div>
+      <div class="rv-big" id="rv-wait-big">--:--</div>
+      <div class="rv-note" id="rv-wait-note"></div>
+    </div>
+    <div class="rv-body" id="rv-body" hidden>
+      <div class="rv-blocks" id="rv-blocks" aria-hidden="true"></div>
+      <div class="rv-poolbox rv-bevel">
+        <div class="rv-pool" id="rv-pool"></div>
+        <div class="rv-banner" id="rv-banner"><span class="rv-lbl" id="rv-blbl">NOW DRAWING</span><div class="rv-name" id="rv-now" aria-live="polite"></div></div>
+      </div>
+      <div class="rv-teams" id="rv-teams"></div>
+    </div>
+  </div>
+</div>
+
 <div id="signup-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; padding:16px;">
   <div id="signup-modal-box" style="background:var(--black); border:2px solid var(--red); max-width:440px; width:100%; max-height:85vh; overflow-y:auto; padding:16px;">
     <div id="signup-modal-content"></div>
