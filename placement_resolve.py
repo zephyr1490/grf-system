@@ -83,6 +83,7 @@ def leaderboard_counts(client, route_id, class_id, limit=5000):
 import json
 import os
 import statistics
+import time
 
 
 def _time_s(t):
@@ -158,6 +159,143 @@ def rank_candidates(results, max_minutes=8, per_group=15):
     return out
 
 
+
+# ── Placement-Rating: Zeit -> vorlaeufiger ELO-Startwert ─────────────────────
+# Festgelegt 10.11.2026 (Owner): drei trockene Time-Trial-Stages, Autowahl frei, NUR Rohzeiten
+# (kein CR-/Stage-Faktor). IDs stammen aus der Kandidatensuche (route_id / class_id verifiziert).
+PLACEMENT_STAGES = [
+    {"label": "Central Europe Rally \u2013 V\u00edtov\u00e1", "car_class": "Rally3", "route_id": 374, "class_id": 22},
+    {"label": "Secto Rally Finland \u2013 Saakoski", "car_class": "F2 Kit Car", "route_id": 206, "class_id": 11},
+    {"label": "EKO Acropolis Rally Greece \u2013 Parnass\u00f3s", "car_class": "Group B (RWD)", "route_id": 304, "class_id": 5},
+]
+PLACEMENT_SIGMA = {3: 200.0, 2: 250.0, 1: 300.0}   # Unsicherheit je Anzahl gefundener Stage-Zeiten (0 -> Standard 350)
+PLACEMENT_MIN_REF = 20                             # mind. so viele ELO-Fahrer als Referenz je Stage
+_LB_CACHE = {"t": 0.0, "data": None}
+LB_CACHE_SECONDS = 600
+
+
+def stage_reference(entries, elo_mu):
+    """Referenz einer Stage: Liste (Sekunden, mu) der Fahrer mit ELO, Zeit aufsteigend (schnellster zuerst)."""
+    ref = []
+    for e in entries or []:
+        sec = _time_s(e.get("time", ""))
+        if not sec or _dnf_like(sec):
+            continue
+        mu = elo_mu.get(str(e.get("displayName", "")).casefold())
+        if mu is not None:
+            ref.append((sec, mu))
+    ref.sort()
+    return ref
+
+
+def driver_time(entries, name):
+    """Zeit des Fahrers (Sekunden) in der Rangliste, None wenn nicht vorhanden / Ausfallzeit."""
+    key = str(name).casefold()
+    best = None
+    for e in entries or []:
+        if str(e.get("displayName", "")).casefold() == key:
+            sec = _time_s(e.get("time", ""))
+            if sec and not _dnf_like(sec) and (best is None or sec < best):
+                best = sec
+    return best
+
+
+def mu_from_time(sec, ref):
+    """Ordnet die Zeit unter den Referenzzeiten ein und gibt das mu an derselben Stelle der
+    mu-Verteilung dieser Fahrer zurueck. Rueckgabe (mu, anteil_langsamer) oder None."""
+    n = len(ref)
+    if n < 2:
+        return None
+    slower = sum(1 for t, _ in ref if t > sec) + 0.5 * sum(1 for t, _ in ref if t == sec)
+    f = slower / n                                  # 1.0 = schneller als alle, 0.0 = langsamer als alle
+    mus = sorted(m for _, m in ref)
+    pos = f * (n - 1)
+    lo = int(pos)
+    hi = min(lo + 1, n - 1)
+    mu = mus[lo] + (mus[hi] - mus[lo]) * (pos - lo)
+    return mu, f
+
+
+def combine_placement(per_stage):
+    """per_stage: Liste von mu-Werten der gefundenen Stages -> (mu, sigma) oder None."""
+    if not per_stage:
+        return None
+    return sum(per_stage) / len(per_stage), PLACEMENT_SIGMA.get(len(per_stage), 300.0)
+
+
+def _fetch_placement_leaderboards():
+    now = time.time()
+    if _LB_CACHE["data"] is not None and now - _LB_CACHE["t"] < LB_CACHE_SECONDS:
+        return _LB_CACHE["data"]
+    from racenet_client import RacenetClient
+    client = RacenetClient()
+    combos = [(st["route_id"], st["class_id"]) for st in PLACEMENT_STAGES]
+    lbs = client.get_public_leaderboards_parallel(combos, max_results=99999, max_workers=3, on_progress=None)
+    _LB_CACHE.update(t=now, data=lbs)
+    return lbs
+
+
+def placement_ratings(names, overall, leaderboards=None):
+    """names: Fahrer ohne ELO; overall: {Name: {mu,...}} der Club-ELO. Rueckgabe je Name:
+    {"mu","sigma","stages":[{label,time_s,faster_than,mu,ref_n}...]} - nur fuer Fahrer mit mind. einer Zeit."""
+    lbs = leaderboards if leaderboards is not None else _fetch_placement_leaderboards()
+    elo_mu = {str(n).casefold(): float(v["mu"]) for n, v in overall.items() if v and v.get("mu") is not None}
+    refs, entries_by = [], []
+    for st in PLACEMENT_STAGES:
+        entries = lbs.get((st["route_id"], st["class_id"])) or []
+        entries_by.append(entries)
+        refs.append(stage_reference(entries, elo_mu))
+    out = {}
+    for nm in names:
+        mus, detail = [], []
+        for st, entries, ref in zip(PLACEMENT_STAGES, entries_by, refs):
+            sec = driver_time(entries, nm)
+            d = {"label": st["label"], "time_s": sec, "ref_n": len(ref)}
+            if sec is not None and len(ref) >= PLACEMENT_MIN_REF:
+                r = mu_from_time(sec, ref)
+                if r:
+                    d["mu"], d["faster_than"] = round(r[0], 1), round(r[1], 3)
+                    mus.append(r[0])
+            detail.append(d)
+        comb = combine_placement(mus)
+        if comb:
+            out[nm] = {"mu": round(comb[0], 1), "sigma": comb[1], "stages": detail}
+        else:
+            out[nm] = {"mu": None, "sigma": None, "stages": detail}
+    return out
+
+
+
+def rating_status(names, overall):
+    """Status je Fahrer fuer Admin-Uebersicht / Spieler-Hinweis. Gleiche Regel wie die Auslosung
+    (Name exakt in overall = ELO). Rueckgabe {name: {"status": "elo"|"placement"|"none"|"unknown", "stages": n}}.
+    "unknown" = Placement-Abfrage bei RaceNet fehlgeschlagen."""
+    out, need = {}, []
+    for nm in names:
+        r = overall.get(nm)
+        if r and r.get("mu") is not None:
+            out[nm] = {"status": "elo", "stages": None}
+        else:
+            need.append(nm)
+    if need:
+        try:
+            found = placement_ratings(need, overall)
+        except Exception:
+            found = None
+        for nm in need:
+            if found is None:
+                out[nm] = {"status": "unknown", "stages": None}
+                continue
+            n = sum(1 for st in found[nm]["stages"] if st.get("mu") is not None)
+            out[nm] = {"status": "placement" if found[nm]["mu"] is not None else "none", "stages": n}
+    return out
+
+
+def placement_info():
+    return {"stages": [{"label": st["label"], "car_class": st["car_class"]} for st in PLACEMENT_STAGES],
+            "total": len(PLACEMENT_STAGES)}
+
+
 def register_routes(app, h):
     auth, err_detail = h["auth"], h["err_detail"]
 
@@ -181,6 +319,20 @@ def register_routes(app, h):
                         except Exception as e:
                             r["counts"] = {"error": str(e)}
             return jsonify({"stages": res})
+        except Exception as e:
+            return jsonify({"error": err_detail(e)}), 500
+
+    @app.route("/admin/placement/rating", methods=["POST"])
+    @auth
+    def admin_placement_rating():
+        """Testet die Placement-Einordnung: {names:[Fahrername,...]} -> je Name Zeit je Stage und
+        vorlaeufiges mu/sigma. Schreibt nichts."""
+        try:
+            from team_draw import _load_overall
+            names = (request.json or {}).get("names") or []
+            if not isinstance(names, list) or not names or len(names) > 50:
+                return jsonify({"error": "names: 1-50 Namen noetig"}), 400
+            return jsonify({"ratings": placement_ratings([str(n) for n in names], _load_overall(h["sb_get"]))})
         except Exception as e:
             return jsonify({"error": err_detail(e)}), 500
 

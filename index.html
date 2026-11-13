@@ -5597,6 +5597,22 @@ function _suInfoHtml(collapsed) {
   </div>`;
 }
 
+/** Hinweis zum ELO-/Placement-Stand des angemeldeten Fahrers (kommt als s.rating vom Server). */
+function _suRatingHtml(s) {
+  const r = s && s.rating;
+  if (!r || r.status === 'elo' || r.status === 'unknown') return '';
+  const total = (r.placement && r.placement.total) || 3;
+  const list = ((r.placement && r.placement.stages) || []).map((st, i) =>
+    `<div style="padding:2px 0;">${i + 1}. <b>${escapeHtml(st.label)}</b> — ${escapeHtml(st.car_class)}</div>`).join('');
+  const head = r.status === 'placement'
+    ? `Placement times found: <b>${r.stages} of ${total}</b>.${r.stages < total ? ' Please drive the missing stage(s) too.' : ' You are all set.'}`
+    : '<b>No ELO rating yet.</b> To get a provisional rating, please set a time on these <b>3 Time Trial stages (dry)</b> in RaceNet:';
+  return `<div style="font-size:12px;color:#e0c070;line-height:1.5;border-left:3px solid #b8860b;background:rgba(184,134,11,0.08);padding:8px 10px;margin-bottom:12px;">
+    ${head}${r.status === 'placement' && r.stages >= total ? '' : list}
+    <div style="color:#999;margin-top:4px;">Free choice of car — just set your best time. Times can take a short while to show up; do this before the deadline.</div>
+  </div>`;
+}
+
 function _renderSignup() {
   const content = $('signup-modal-content');
   if (!content || !_su) return;
@@ -5674,6 +5690,7 @@ function _renderSignup() {
   if (!s.registered) {
     content.innerHTML = `${_suHeader('📝 TEAM SIGN-UP')}${who}
       <p style="font-size:13px;color:#ccc;line-height:1.5;margin-bottom:10px;">You are about to sign up for this championship.</p>
+      ${_suRatingHtml(s)}
       <div style="font-size:12px;color:#e0c070;line-height:1.5;border-left:3px solid #b8860b;background:rgba(184,134,11,0.08);padding:8px 10px;margin-bottom:12px;">
         For fairness to your team mates it is expected that you take part in <b>all events</b> — at most <b>one</b> event may be skipped.
       </div>
@@ -5702,6 +5719,7 @@ function _renderSignup() {
   }
   content.innerHTML = `${_suHeader('📝 TEAM SIGN-UP')}${who}
     <p style="font-size:14px;color:var(--green);margin-bottom:12px;">✓ You are signed up.</p>
+    ${_suRatingHtml(s)}
     ${wishHtml}
     <div id="su-status" style="margin-bottom:8px;font-size:12px;color:var(--red);">${escapeHtml(_su.note || '')}</div>
     <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
@@ -5742,7 +5760,7 @@ async function _suRegister() {
 async function _suUnregister() {
   _suSetStatus('Working…', true);
   try {
-    _su.status = await _suCall('/teamsignup/unregister');
+    { const _rt = _su.status && _su.status.rating; _su.status = await _suCall('/teamsignup/unregister'); if (_rt && !_su.status.rating) _su.status.rating = _rt; }
     _su.view = 'main';
     _renderSignup();
   } catch (err) { _suSetStatus('⚠ ' + err.message); }
@@ -5750,7 +5768,7 @@ async function _suUnregister() {
 
 async function _suRemoveWish() {
   try {
-    _su.status = await _suCall('/teamsignup/wish/delete');
+    { const _rt = _su.status && _su.status.rating; _su.status = await _suCall('/teamsignup/wish/delete'); if (_rt && !_su.status.rating) _su.status.rating = _rt; }
     _su.note = '';
     _renderSignup();
   } catch (err) { _suSetStatus('⚠ ' + err.message); }
@@ -5762,7 +5780,8 @@ async function _suOpenSearch() {
   try {
     const rows = await sb('team_signups', `select=driver_name&championship_id=eq.${encodeURIComponent(_su.champId)}`);
     _su.signups = new Set(rows.map(r => String(r.driver_name).toLowerCase()));
-  } catch (err) { _su.signups = new Set(); }
+    _su.signupNames = rows.map(r => String(r.driver_name));
+  } catch (err) { _su.signups = new Set(); _su.signupNames = []; }
   _su.results = [];
   _su.query = '';
   _su.view = 'search';
@@ -5779,7 +5798,13 @@ function _suSearchInput(value) {
     const rows = await sb('drivers', `select=name&name=ilike.*${encodeURIComponent(q)}*&order=name.asc&limit=12`);
     if (seq !== _suSearchSeq || !_su) return;       // veraltete Antwort verwerfen
     const me = _su.driverName.toLowerCase();
-    _su.results = rows.map(r => r.name).filter(n => n.toLowerCase() !== me);
+    const names = rows.map(r => r.name);
+    // Neue Fahrer ohne Event stehen nicht in drivers, wohl aber unter den Angemeldeten
+    const ql = q.toLowerCase();
+    (_su.signupNames || []).forEach(n => {
+      if (n.toLowerCase().includes(ql) && !names.some(x => x.toLowerCase() === n.toLowerCase())) names.push(n);
+    });
+    _su.results = names.filter(n => n.toLowerCase() !== me).slice(0, 12);
     _suRenderResults(q);
   }, 250);
 }
@@ -5808,7 +5833,7 @@ function _suPick(i) {
 async function _suConfirmPick() {
   _suSetStatus('Saving…', true);
   try {
-    _su.status = await _suCall('/teamsignup/wish', { partner_name: _su.pick });
+    { const _rt = _su.status && _su.status.rating; _su.status = await _suCall('/teamsignup/wish', { partner_name: _su.pick }); if (_rt && !_su.status.rating) _su.status.rating = _rt; }
     _su.view = 'main';
     _renderSignup();
   } catch (err) { _suSetStatus('⚠ ' + err.message); }
@@ -5892,6 +5917,15 @@ async function adminTsRemove(i) {
   }
 }
 
+function _adminTsRatingTag(r) {
+  if (!r) return '';
+  const tag = (txt, col) => `<span style="font-size:11px;color:${col};margin-left:6px;">${txt}</span>`;
+  if (r.status === 'elo') return tag('ELO', 'var(--green)');
+  if (r.status === 'placement') return tag(`placement ${r.stages}/3`, r.stages >= 3 ? 'var(--green)' : '#e0a030');
+  if (r.status === 'none') return tag('no rating · no times', 'var(--red)');
+  return tag('?', '#888');
+}
+
 function _adminTsRender(d) {
   const a = d.analysis || {};
   const names = arr => arr.map(escapeHtml).join(' → ');
@@ -5904,12 +5938,16 @@ function _adminTsRender(d) {
   const soft = (a.soft_wishes || []).map(w => line(`${escapeHtml(w.from)} → ${escapeHtml(w.to)} <span style="color:#888;">(${escapeHtml(w.reason)})</span>`)).join('') || line('<span style="color:#666;">none</span>');
   const voidW = (a.void_wishes || []).map(w => line(`${escapeHtml(w.from)} → ${escapeHtml(w.to)} <span style="color:#888;">(${escapeHtml(w.reason)})</span>`)).join('') || line('<span style="color:#666;">none</span>');
   const signups = (d.signups || []).map((s, i) => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#ccc;padding:3px 0;border-bottom:1px solid #1a1a1a;">
-      <span>${escapeHtml(s.driver_name)}</span>
+      <span>${escapeHtml(s.driver_name)} ${_adminTsRatingTag(s.rating)}</span>
       <span style="color:var(--red);cursor:pointer;" title="Remove sign-up + wish" onclick="adminTsRemove(${i})">✕</span></div>`).join('') || line('<span style="color:#666;">nobody yet</span>');
+  const noRating = (d.signups || []).filter(s => s.rating && (s.rating.status === 'none' || (s.rating.status === 'placement' && s.rating.stages < 3)));
+  const ratingWarn = d.rating_ok === false
+    ? '<div style="font-size:12px;color:#e0a030;margin-bottom:10px;">⚠ ELO / placement status could not be loaded.</div>'
+    : (noRating.length ? `<div style="font-size:12px;color:#e0a030;margin-bottom:10px;">⚠ ${noRating.length} sign-up(s) without a full rating: ${noRating.map(s => escapeHtml(s.driver_name)).join(', ')}</div>` : '');
 
   setHTML('ts-overview',
     `<div style="font-size:13px;color:var(--white);margin-bottom:12px;">${d.open_now ? '<span style="color:var(--green);">● open now</span>' : '<span style="color:#999;">● closed</span>'}
-       · ${(d.signups || []).length} signed up · ${(d.wishes || []).length} wishes</div>` +
+       · ${(d.signups || []).length} signed up · ${(d.wishes || []).length} wishes</div>` + ratingWarn +
     sect(`FIXED GROUPS (from mutual wishes / chains of 2–${d.max_group || 4})`, firm) +
     sect('SOFT WISHES (only considered last)', soft) +
     sect('VOID WISHES (partner / wisher not signed up)', voidW) +

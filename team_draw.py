@@ -114,6 +114,25 @@ def compute_plan(sb_get, cid, seed, runs=1, pref=None):
             rating[nm] = (DEFAULT_MU, DEFAULT_SIGMA)
             unrated.append(nm)
 
+    # Placement: Fahrer ohne ELO werden anhand ihrer Zeiten auf den 3 Placement-Stages eingeordnet
+    # (placement_resolve.placement_ratings). Wer keine Zeit hat, bleibt bei 1500 / sigma 350 ("unrated").
+    placed, placement_error = {}, None
+    if unrated:
+        try:
+            import placement_resolve as PR
+        except ImportError:
+            placement_error = "placement_resolve.py nicht gefunden"
+        else:
+            try:
+                found = PR.placement_ratings(unrated, overall)
+                for nm, r in found.items():
+                    if r.get("mu") is not None:
+                        rating[nm] = (float(r["mu"]), float(r["sigma"]))
+                        placed[nm] = sum(1 for st in r["stages"] if st.get("mu") is not None)
+            except Exception as e:
+                placement_error = f"Placement-Abfrage fehlgeschlagen: {e}"
+    unrated = [nm for nm in unrated if nm not in placed]
+
     ep = TL.expected_points(rating, sims=4000, seed=EP_SEED)
     runs = max(1, min(int(runs), MAX_RUNS_PER_CALL))
     cand = []
@@ -140,12 +159,13 @@ def compute_plan(sb_get, cid, seed, runs=1, pref=None):
         out_teams.append({
             "name": name, "color": color,
             "members": [{"name": m, "ep": round(ep[m], 2), "mu": round(rating[m][0], 1),
-                         "sigma": round(rating[m][1], 1), "unrated": m in unrated} for m in members],
+                         "sigma": round(rating[m][1], 1), "unrated": m in unrated,
+                         "placement_stages": placed.get(m)} for m in members],
             "sum": round(sums[i], 2), "dev": round((sums[i] - mean) / mean, 4),
         })
     out_teams.sort(key=lambda t: -t["sum"])
     return {
-        "seed": seed, "players": n, "unrated": unrated,
+        "seed": seed, "players": n, "unrated": unrated, "placed": placed, "placement_error": placement_error,
         "team_size_pref": pref,
         "teams": out_teams,
         "sizes": sorted(len(t["members"]) for t in out_teams),

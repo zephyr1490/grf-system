@@ -219,6 +219,25 @@ def register_routes(app, h):
             "wish": wish,
         }
 
+    def _rating(names):
+        """{name: {status, stages}} - ELO oder Placement-Stand. Faellt bei Fehlern still auf None zurueck."""
+        try:
+            import placement_resolve as PR
+            from team_draw import _load_overall
+            return PR.rating_status(names, _load_overall(sb_get))
+        except Exception:
+            return None
+
+    def _rating_for(name):
+        r = _rating([name])
+        info = None
+        try:
+            import placement_resolve as PR
+            info = PR.placement_info()
+        except Exception:
+            pass
+        return {**(r[name] if r else {"status": "unknown", "stages": None}), "placement": info}
+
     def _prepare(body, need_open):
         name, err = _who(body)
         if err:
@@ -237,7 +256,9 @@ def register_routes(app, h):
             name, cid, champ, err = _prepare(body, need_open=False)
             if err:
                 return err
-            return jsonify(_status(cid, name, champ))
+            st = _status(cid, name, champ)
+            st["rating"] = _rating_for(name)
+            return jsonify(st)
         except Exception as e:
             return jsonify({"error": err_detail(e)}), 500
 
@@ -250,7 +271,9 @@ def register_routes(app, h):
                 return err
             if not _is_registered(cid, name):
                 sb_post("team_signups", {"championship_id": cid, "driver_name": name})
-            return jsonify(_status(cid, name, champ))
+            st = _status(cid, name, champ)
+            st["rating"] = _rating_for(name)
+            return jsonify(st)
         except Exception as e:
             return jsonify({"error": err_detail(e)}), 500
 
@@ -284,6 +307,9 @@ def register_routes(app, h):
                 return jsonify({"error": "partner_name required"}), 400
             rows = sb_get("drivers", f"name=ilike.{q(wanted)}&select=name&limit=5")
             match = [r["name"] for r in rows if r["name"].lower() == wanted.lower()]
+            if not match:   # neue Fahrer ohne Event stehen nicht in drivers, wohl aber unter den Angemeldeten
+                rows = sb_get("team_signups", f"championship_id=eq.{q(cid)}&driver_name=ilike.{q(wanted)}&select=driver_name&limit=5")
+                match = [r["driver_name"] for r in rows if r["driver_name"].lower() == wanted.lower()]
             if not match:
                 return jsonify({"error": "Driver not found."}), 404
             partner = match[0]
@@ -350,7 +376,12 @@ def register_routes(app, h):
             analysis = analyze_wishes([s["driver_name"] for s in signups],
                                       {w["driver_name"]: w["partner_name"] for w in wishes},
                                       max_group=pref + 1)
+            rating = _rating([s["driver_name"] for s in signups]) if signups else {}
+            if rating is not None:
+                for s_ in signups:
+                    s_["rating"] = rating.get(s_["driver_name"])
             return jsonify({
+                "rating_ok": rating is not None,
                 "signup_open": bool(champ[0].get("signup_open")),
                 "signup_deadline": champ[0].get("signup_deadline"),
                 "open_now": signup_is_open(champ[0]),
