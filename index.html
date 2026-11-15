@@ -434,6 +434,12 @@ body::after {
 .cr-bar-fg { height:4px; background:linear-gradient(90deg,var(--red-dark),var(--red-bright)); }
 
 /* CHALLENGE BOX */
+.guide-sec { margin-bottom: 18px; font-size: 13px; color: #bbb; line-height: 1.6; }
+.guide-sec h3 { font-family: 'VT323', monospace; font-size: 24px; color: var(--white); text-shadow: 1px 1px 0 var(--red-dark); margin: 0 0 6px; font-weight: normal; letter-spacing: 1px; }
+.guide-sec p { margin: 0 0 8px; }
+.guide-sec ul, .guide-sec ol { margin: 0 0 8px 20px; padding: 0; }
+.guide-sec li { margin-bottom: 5px; }
+.guide-sec b { color: var(--white); }
 .challenge-box {
   margin:6px; background:var(--black);
   border:1px solid #1a1a1a; padding:12px;
@@ -1671,6 +1677,7 @@ textarea.inp-std { resize:vertical; }
       <div class="sub-tab" data-tab="carratings" onclick="showTeamedSubTab('carratings',this)">Car Ratings</div>
       <div class="sub-tab" data-tab="challenges" onclick="showTeamedSubTab('challenges',this)">Bonus Rules</div>
       <div class="sub-tab" data-tab="stats" onclick="showTeamedSubTab('stats',this)">Stats</div>
+      <div class="sub-tab" data-tab="guide" onclick="showTeamedSubTab('guide',this)">How It Works</div>
     </div>
 
     <!-- TAB: LIVE RESULTS -->
@@ -1782,6 +1789,77 @@ textarea.inp-std { resize:vertical; }
       <div class="challenge-box" id="teamed-challenges-box">
         <div class="col-hdr" style="margin-bottom:10px;" id="teamed-challenges-hdr">ACTIVE CHALLENGES — LOADING…</div>
         <div id="teamed-challenges-list"></div>
+      </div>
+    </div>
+
+    <!-- TAB: HOW IT WORKS (Spieler-Anleitung: Anmeldung, ELO/Placement, Wünsche, Auslosung, Reveal) -->
+    <div class="themed-tab" id="tab-teamed-guide">
+      <div class="challenge-box" style="max-width:860px;">
+        <div class="col-hdr" style="margin-bottom:10px;">HOW IT WORKS — SIGN-UP, TEAM WISHES &amp; THE DRAW</div>
+        <div id="teamed-guide-status" style="font-size:12px;color:#e0c070;border-left:3px solid #b8860b;background:rgba(184,134,11,0.08);padding:8px 10px;margin-bottom:14px;line-height:1.5;"></div>
+
+        <div class="guide-sec">
+          <h3>1 · Signing up</h3>
+          <ol>
+            <li>Click <b>Sign up</b> in the header of this page (the button is only there while the sign-up is open).</li>
+            <li>Enter your <b>4-digit PIN</b>. It is the same PIN you use for the Stage Interview. If you don't have one yet, ask <b>zephyr</b> on Discord.</li>
+            <li>Read the short info box, tick the box and press <b>Confirm sign-up</b>. You are in.</li>
+            <li>Optional: pick <b>one team mate wish</b> (see section 3).</li>
+          </ol>
+          <p>You can change your wish or sign out again at any time <b>until the deadline</b>. Signing out also removes your own wish.</p>
+          <p><b>Please only sign up if you can take part in all events.</b> For fairness to your team mates it is expected that you race every event — at most <b>one</b> event may be skipped.</p>
+        </div>
+
+        <div class="guide-sec">
+          <h3>2 · Your rating: ELO or placement</h3>
+          <p>Teams are balanced by how strong everybody is, so every player needs a rating.</p>
+          <ul>
+            <li><b>You already have an ELO</b> (you have raced in GRF events before): nothing to do. The sign-up window shows no extra notice.</li>
+            <li><b>You have no ELO yet</b>: set a time on the <b>3 Time Trial stages (dry)</b> in RaceNet before the deadline. The sign-up window lists the three stages and car classes once you enter your PIN. You can choose <b>any car</b> — just set your best time. Your times are compared with the times of our rated drivers and give you a <b>provisional rating</b>. Times can take a short while to show up in RaceNet, so do it early.</li>
+            <li>The notice in the sign-up window tells you how many of the 3 stages were found. Every missing stage makes your provisional rating less certain.</li>
+            <li>Without any time you are drawn with a default, average rating, which makes the balancing less precise — please don't skip this.</li>
+          </ul>
+        </div>
+
+        <div class="guide-sec">
+          <h3>3 · Team wishes</h3>
+          <ul>
+            <li>Every player has <b>one wish</b>: the player you would like to be in a team with. Find them with <b>Find team mate</b> (type a part of the name, click, confirm). Your wish may point to someone who has not signed up yet — it only counts if they sign up before the deadline.</li>
+            <li><b>Two players who pick each other</b> are set as a team. <b>Chains</b> work too: A picks B, B picks C and C picks A → a team of three. The biggest possible group is <b><span class="g-maxgroup">4</span> players</b>. Longer chains only count as normal wishes.</li>
+            <li><b>Balanced teams come first.</b> Wishes are granted wherever the balancing allows it — the more players wish for a partner, the less likely it is that every wish works out. One-sided wishes are only considered last.</li>
+            <li>If <b>two very strong players</b> pick each other, they start as a duo — more players can still be drawn into their team. If a group is <b>too strong to balance</b>, its wishes can be dissolved and the draw decides.</li>
+            <li>Your wish stays <b>secret</b> until the team reveal. You will not see whether it is mutual, so talk to each other beforehand.</li>
+            <li>There are no negative wishes ("not with X").</li>
+          </ul>
+        </div>
+
+        <div class="guide-sec">
+          <h3>4 · How the draw works</h3>
+          <ul>
+            <li>After the deadline the teams are <b>calculated in advance</b> — nothing is rolled live, so there is no "roll again". The draw is based on a <b>fixed seed</b>, so it is reproducible.</li>
+            <li>We aim for teams of <b><span class="g-pref">3</span></b> players (one more or one less is possible). The <b>number of teams</b> follows from the number of players. <b>Every driver counts</b> for their team.</li>
+            <li>Teams are balanced by <b>expected points</b> (a simulation based on ELO, not a simple ELO sum), with at most about <b>10 %</b> difference between the teams.</li>
+            <li>That means the teams are <b>equally strong on paper, not in the result</b> — a rally stays a rally, and the day form decides. A very strong duo will face bigger teams.</li>
+          </ul>
+        </div>
+
+        <div class="guide-sec">
+          <h3>5 · The team reveal</h3>
+          <ul>
+            <li>The reveal is <b>live for everybody at the same time</b>. About <b>10 minutes before</b> it starts, a pop-up with a countdown appears on this page — stay on the page.</li>
+            <li>The players are drawn one by one into their teams. Afterwards the finished teams stay on screen for about a minute.</li>
+            <li>You can watch it again later with the <b>Team reveal</b> button in the header (a replay, which can be skipped).</li>
+          </ul>
+        </div>
+
+        <div class="guide-sec">
+          <h3>6 · Your team</h3>
+          <ul>
+            <li>Teams start with a colour name, e.g. <b>Team Pink</b> or <b>Team Light Blue</b>.</li>
+            <li>Press <b>Show team</b> in the header, enter your PIN and you see your team and its members.</li>
+            <li><b>Every member</b> can give the team a new name there (2–24 characters) until the <b>first event starts</b>. Two teams can't have the same name.</li>
+          </ul>
+        </div>
       </div>
     </div>
 
@@ -5706,10 +5784,36 @@ function _suInfoHtml(collapsed) {
   </div>`;
 }
 
+/** Deadline-Zeile + "What happens next" (Auslosung, Reveal, Teamname) fuer das Anmelde-Fenster. */
+function _suDeadlineText(s) {
+  const d = s && s.deadline ? new Date(s.deadline) : null;
+  if (!d || isNaN(d)) return '';
+  return d.toLocaleString([], { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function _suDeadlineHtml(s) {
+  const t = _suDeadlineText(s);
+  return t ? `<div style="font-size:12px;color:#ccc;margin-bottom:10px;">⏱ Sign-up closes: <b style="color:var(--white);">${escapeHtml(t)}</b> <span style="color:#777;">(your local time)</span></div>` : '';
+}
+function _suNextHtml(s) {
+  const ra = _teamedChamp && _teamedChamp.reveal_at ? new Date(_teamedChamp.reveal_at) : null;
+  const rv = ra && !isNaN(ra)
+    ? `The reveal is on <b>${escapeHtml(ra.toLocaleString([], { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }))}</b> (your local time).`
+    : 'The reveal time will be announced on Discord.';
+  return `<details style="font-size:12px;color:#aaa;line-height:1.5;margin-bottom:12px;">
+    <summary style="cursor:pointer;color:var(--white);font-weight:bold;">What happens next (tap to read)</summary>
+    <div style="margin-top:6px;">
+      <div>• <b>After the deadline</b> the teams are calculated in advance — balanced by expected points (based on ELO), about 10 % difference at most. Nothing is rolled live.</div>
+      <div>• <b>Team reveal:</b> ${rv} It runs live on the Teamed page for everybody at the same time; a pop-up with a countdown appears about 10 minutes before. Stay on the page.</div>
+      <div>• Afterwards you can watch the replay (<b>Team reveal</b> button) and look up your team with <b>Show team</b>. Every team member can rename the team until the first event starts.</div>
+    </div>
+  </details>`;
+}
+
 /** Hinweis zum ELO-/Placement-Stand des angemeldeten Fahrers (kommt als s.rating vom Server). */
 function _suRatingHtml(s) {
   const r = s && s.rating;
-  if (!r || r.status === 'elo' || r.status === 'unknown') return '';
+  if (r && r.status === 'elo') return '<div style="font-size:12px;color:var(--green);margin-bottom:12px;">✓ You have an ELO rating — nothing more to do for the balancing.</div>';
+  if (!r || r.status === 'unknown') return '';
   const total = (r.placement && r.placement.total) || 3;
   const list = ((r.placement && r.placement.stages) || []).map((st, i) =>
     `<div style="padding:2px 0;">${i + 1}. <b>${escapeHtml(st.label)}</b> — ${escapeHtml(st.car_class)}</div>`).join('');
@@ -5861,6 +5965,7 @@ function _renderSignup() {
   if (!s.registered) {
     content.innerHTML = `${_suHeader('📝 TEAM SIGN-UP')}${who}
       <p style="font-size:13px;color:#ccc;line-height:1.5;margin-bottom:10px;">You are about to sign up for this championship.</p>
+      ${_suDeadlineHtml(s)}
       ${_suRatingHtml(s)}
       <div style="font-size:12px;color:#e0c070;line-height:1.5;border-left:3px solid #b8860b;background:rgba(184,134,11,0.08);padding:8px 10px;margin-bottom:12px;">
         For fairness to your team mates it is expected that you take part in <b>all events</b> — at most <b>one</b> event may be skipped.
@@ -5889,9 +5994,11 @@ function _renderSignup() {
       <button class="ev-btn active" style="width:100%;margin-bottom:10px;" onclick="_suOpenSearch()">🔎 Find team mate</button>`;
   }
   content.innerHTML = `${_suHeader('📝 TEAM SIGN-UP')}${who}
-    <p style="font-size:14px;color:var(--green);margin-bottom:12px;">✓ You are signed up.</p>
+    <p style="font-size:14px;color:var(--green);margin-bottom:8px;">✓ You are signed up.</p>
+    ${_suDeadlineHtml(s)}
     ${_suRatingHtml(s)}
     ${wishHtml}
+    ${_suNextHtml(s)}
     <div id="su-status" style="margin-bottom:8px;font-size:12px;color:var(--red);">${escapeHtml(_su.note || '')}</div>
     <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
       <button class="ev-btn" onclick="closeSignupModal()">Close</button>
@@ -7013,6 +7120,20 @@ let _teamedEvents        = [];    // alle Events der Championship (sortiert nach
  * #page-teamed, damit ein Klick hier NICHT die Themed-Tabs (gleiche
  * CSS-Klassen .themed-tab/.sub-tab) mit umschaltet.
  */
+/** "How It Works": setzt Wunsch-Teamgröße, größte Wunschgruppe und den Stand der Anmeldung (Deadline) ein. */
+function _teamedRenderGuide() {
+  const pref = _teamedSizePref();
+  document.querySelectorAll('#tab-teamed-guide .g-pref').forEach(e => { e.textContent = pref; });
+  document.querySelectorAll('#tab-teamed-guide .g-maxgroup').forEach(e => { e.textContent = pref + 1; });
+  const el = $('teamed-guide-status'); if (!el) return;
+  const c = _teamedChamp;
+  if (!c || !c.signup_open) { el.innerHTML = 'Sign-up is <b>not open</b> at the moment. This page explains how it will work.'; return; }
+  const d = c.signup_deadline ? new Date(c.signup_deadline) : null;
+  const when = d && !isNaN(d) ? d.toLocaleString([], { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null;
+  if (!_teamedSignupIsOpen(c)) { el.innerHTML = 'Sign-up is <b>closed</b>' + (when ? ' (deadline was ' + when + ')' : '') + '.'; return; }
+  el.innerHTML = 'Sign-up is <b>open</b>' + (when ? ' until <b>' + when + '</b> (your local time)' : '') + '. Use the <b>Sign up</b> button in the header.';
+}
+
 function showTeamedSubTab(name, el) {
   document.querySelectorAll('#page-teamed .themed-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('#page-teamed .sub-tab').forEach(t => t.classList.remove('active'));
@@ -7024,6 +7145,7 @@ function showTeamedSubTab(name, el) {
   if (name === 'standings')  loadTeamedStandings();
   if (name === 'carratings') loadTeamedCarRatings();
   if (name === 'challenges') loadTeamedChallenges();
+  if (name === 'guide')      _teamedRenderGuide();
   if (name === 'stats' && !_teamedStatsLoaded) {
     _teamedStatsLoaded = true;
     loadClubStatPair('39230', 'club_event_win_stats', 'club_podium_stats', 'teamed-stats-stagewins', 'teamed-stats-podiums', null);
