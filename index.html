@@ -9822,7 +9822,7 @@ async function _rvPick(k, animate, id) {
 async function _rvRun(t0) {
   const id = ++RV.runId, N = RV.order.length;
   const plan = _rvPlan(RV.cfg, N, RV.cards.length, t0); RV.starts = plan.starts; RV.durs = plan.durs;
-  $('rv-skip').hidden = false; $('rv-again').hidden = true;
+  $('rv-skip').hidden = RV.mode === 'live'; $('rv-again').hidden = true;   // Skip nur im Replay, nie im Live-Reveal
   for (let k = 0; k < N; k++) {
     while (_rvNow() < plan.starts[k] && !RV.skipping) { await _rvSleep(Math.min(200, plan.starts[k] - _rvNow())); if (id !== RV.runId) return; }
     const animate = !RV.skipping && !_rvReduce && (_rvNow() - plan.starts[k]) < 2000;
@@ -9852,7 +9852,7 @@ function rvClose(byUser) {
   document.body.style.overflow = '';
   _rvRefreshUi();
 }
-function rvSkip() { RV.skipping = true; }
+function rvSkip() { if (RV.mode === 'live') return; RV.skipping = true; }
 
 async function _rvOpenLive() {
   const ra = _rvRevealAt(); if (ra == null) return;
