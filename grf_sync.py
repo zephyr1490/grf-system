@@ -13,7 +13,8 @@ Key fixes vs v2:
   - Every stage is loaded individually via its own leaderboardID
   - Times stored in milliseconds (integer, no float rounding issues)
   - Event result = sum of all stage times (not last stage only)
-  - DNF = driver missing from any stage OR has round-minute penalty time
+  - DNF (Stand 15.11.2026): Zeit auf der LETZTEN Stage = exakte Maximalzeit der Strecke (nach Laenge)
+    oder dort gar kein Eintrag; fehlende Zeit auf einer MITTLEREN Stage = Maximalzeit der Strecke addiert
   - status==0 is NOT used to skip events (unreliable in RaceNet for past champs)
   - Completed events skipped only if stage_results already exist in Supabase
 
@@ -74,9 +75,8 @@ POINTS_TABLE = [
 ]
 DNF_POINTS = 2
 
-# RaceNet encodes DNF as a round-minute penalty >= 4 minutes
-DNF_MIN_MS      = 4 * 60 * 1000   # 4 minutes in ms
-DNF_MODULUS_MS  = 60 * 1000       # must be exact multiple of 1 minute
+# DNF = exakt die Maximalzeit der Strecke (nach Streckenlaenge, s. stage_max_ms)
+# (alte "runde Minute ab 4:00"-Regel entfernt, s. is_dnf_ms / stage_max_ms)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -133,6 +133,30 @@ def ms_to_display(ms: int | None) -> str:
     return f"{m}:{s:02d}.{ms:03d}"
 
 
+# Maximalzeit (= DNF-Zeit) einer Stage. RaceNet vergibt sie fest pro STRECKE, und sie haengt nur an der
+# Streckenlaenge. Geprueft an 263 Strecken aus der DB (15.11.2026): keine einzige Ausnahme, die Grenzen
+# liegen in Datenluecken (8 Min: 3.4-6.9 km | 16: 7.2-14.8 | 25: 15.1-24.6 | 35: 25.6-34.8).
+# Obergrenze (km, inklusive) -> Minuten. Strecke ueber 25 km = 35 Min.
+STAGE_MAX_TIERS_KM = ((7.0, 8), (15.0, 16), (25.0, 25))
+STAGE_MAX_TOP_MIN  = 35
+ALL_STAGE_MAX_MS = frozenset(m * 60_000 for _, m in STAGE_MAX_TIERS_KM) | {STAGE_MAX_TOP_MIN * 60_000}
+
+
+def stage_max_ms(distance_km) -> int | None:
+    """Maximalzeit (ms) einer Stage aus ihrer Streckenlaenge in km. None, wenn die Laenge fehlt
+    (dann wird NICHT geraten — der Aufrufer ueberspringt die Strafzeit und warnt im Log)."""
+    try:
+        d = float(distance_km)
+    except (TypeError, ValueError):
+        return None
+    if d <= 0:
+        return None
+    for limit, minutes in STAGE_MAX_TIERS_KM:
+        if d <= limit:
+            return minutes * 60_000
+    return STAGE_MAX_TOP_MIN * 60_000
+
+
 def _stage_route_fields(stage: dict) -> dict:
     """Strecken-Infos aus stage.stageSettings (RaceNet): route_id, route_name, distance_km.
     Leer, wenn RaceNet sie nicht liefert (dann bleiben vorhandene DB-Werte unangetastet)."""
@@ -147,14 +171,19 @@ def _stage_route_fields(stage: dict) -> dict:
     return out
 
 
-def is_dnf_ms(ms: int | None) -> bool:
+def is_dnf_ms(ms: int | None, max_ms: int | None = None) -> bool:
     """
-    RaceNet marks DNF with a round-minute penalty time (e.g. 4:00, 6:00, 10:00).
-    Condition: >= 4 minutes AND exact multiple of 1 minute (no milliseconds).
+    DNF = die Zeit ist EXAKT die Maximalzeit der Strecke (RaceNet traegt sie bei Ausfall ein).
+    max_ms: Maximalzeit der Stage (stage_max_ms, aus der Streckenlaenge).
+    Ohne max_ms (Laenge unbekannt) zaehlt nur eine der vier moeglichen Maximalzeiten
+    (8/16/25/35 Min, exakt). Die alte Regel "jede runde Minute ab 4:00" ist ENTFERNT
+    (15.11.2026): eine echte Zeit wie 4:00.000 ist kein DNF.
     """
     if ms is None:
         return False
-    return ms >= DNF_MIN_MS and (ms % DNF_MODULUS_MS) == 0
+    if max_ms is not None:
+        return ms == max_ms
+    return ms in ALL_STAGE_MAX_MS
 
 
 def pg_in_list(values: list[str]) -> str:
@@ -637,7 +666,7 @@ def sync_event(db: SupabaseClient, client,
             for rank, entry in enumerate(entries, start=1):
                 t_str = entry.get("time", "")
                 t_ms  = time_str_to_ms(t_str)
-                dnf   = is_dnf_ms(t_ms)
+                dnf   = is_dnf_ms(t_ms, stage_max_ms((stage.get("stageSettings") or {}).get("distance")))
                 stage_rows.append({
                     "stage_id":        stage_id,
                     "event_id":        ev_id,
@@ -685,8 +714,9 @@ def sync_event(db: SupabaseClient, client,
     #
     # Rules (confirmed with owner):
     #   1. Every stage entry a driver has — real time OR RaceNet's own max/penalty
-    #      time — counts fully toward the total. We never compute/guess a max time
-    #      ourselves; if RaceNet gives one, we sum it like any other stage time.
+    #      time — counts fully toward the total.
+    #   1b. (15.11.2026) Fehlt der Eintrag auf einer Stage voellig, zaehlt dort die feste
+    #      Maximalzeit der Strecke (stage_max_ms, aus der Streckenlaenge) — kein Event-DNF.
     #   2. Finisher vs. DNF is decided EXCLUSIVELY by the LAST stage with data:
     #        - real time there              -> finisher (regardless of earlier stages)
     #        - max/round-number time there  -> DNF (regardless of earlier stages)
@@ -708,17 +738,44 @@ def sync_event(db: SupabaseClient, client,
                 driver_total_ms[name]    += t_ms
                 driver_stages_done[name] += 1
 
+    # 1b) Fehlt einem Fahrer der Eintrag auf einer Stage, die andere gefahren haben, wird die
+    #     Maximalzeit DIESER Strecke (aus ihrer Laenge, s. stage_max_ms) addiert — die Stage wird
+    #     nicht uebersprungen. Fehlt die Streckenlaenge: keine Strafzeit, laute Warnung.
+    driver_missing_stages: dict[str, int] = {n: 0 for n in driver_info}
+    for stage_obj, entries in stages_with_data:
+        dist   = ((stage_obj or {}).get("stageSettings") or {}).get("distance")
+        max_ms = stage_max_ms(dist)
+        have = {e.get("displayName", "") for e in entries
+                if time_str_to_ms(e.get("time", "")) is not None}
+        if max_ms is None:
+            n_missing = sum(1 for n in driver_info if n not in have)
+            if n_missing:
+                log(f"      ⚠ Stage ohne Streckenlaenge — {n_missing} Fahrer ohne Zeit bekommen KEINE "
+                    f"Strafzeit (stage {stage_obj.get('id')})")
+            continue
+        # Kontrolle: Eine beobachtete DNF-Zeit dieser Stage muss der Regel entsprechen.
+        seen_dnf = {time_str_to_ms(e.get("time", "")) for e in entries
+                    if is_dnf_ms(time_str_to_ms(e.get("time", "")))}
+        if seen_dnf - {max_ms}:
+            log(f"      ⚠ Stage {stage_obj.get('id')}: Zeit(en) {sorted(seen_dnf - {max_ms})} sehen wie eine "
+                f"andere Maximalzeit aus als die Regel {max_ms} (Laenge {dist} km) — Regel pruefen")
+        for name in driver_info:
+            if name not in have:
+                driver_total_ms[name]       += max_ms
+                driver_missing_stages[name] += 1
+
     # 2) Finisher/DNF decided exclusively by the LAST stage with data.
     #    Anyone not explicitly cleared here (incl. drivers absent from the last
     #    stage entirely) stays DNF from the default above.
     if stages_with_data:
         last_entries = stages_with_data[-1][1]
+        last_max = stage_max_ms((((stages_with_data[-1][0]) or {}).get("stageSettings") or {}).get("distance"))
         for entry in last_entries:
             name = entry.get("displayName", "")
             if not name:
                 continue
             t_ms = time_str_to_ms(entry.get("time", ""))
-            if t_ms is not None and not is_dnf_ms(t_ms):
+            if t_ms is not None and not is_dnf_ms(t_ms, last_max):
                 driver_is_dnf[name] = False
 
     # Split finishers / DNFs and rank
@@ -742,7 +799,7 @@ def sync_event(db: SupabaseClient, client,
             continue
         first = entries[0]
         t_ms  = time_str_to_ms(first.get("time", ""))
-        if t_ms is not None and not is_dnf_ms(t_ms):
+        if t_ms is not None and not is_dnf_ms(t_ms, stage_max_ms(((_stage or {}).get("stageSettings") or {}).get("distance"))):
             name = first.get("displayName", "")
             if name:
                 stage_wins_by_driver[name] = stage_wins_by_driver.get(name, 0) + 1
@@ -808,6 +865,10 @@ def sync_event(db: SupabaseClient, client,
     n_fin = len(finishers)
     n_dnf = len(dnfs)
     log(f"      ✅ {n_fin} finisher(s) | {n_dnf} DNF | CR: {bool(car_ratings)}")
+    penalised = [(n, driver_missing_stages[n]) for n in finishers if driver_missing_stages[n]]
+    if penalised:
+        log("      ⏱  Maximalzeit fuer fehlende Stage-Zeit bei: "
+            + ", ".join(f"{n} ({k}x)" for n, k in penalised))
 
     # Nur im --test-Modus: volle Ergebnisliste loggen (Position, Fahrer, Zeit,
     # Stages) — für gezielte Kontrolle einzelner Events (z.B. reload_single_
@@ -1234,7 +1295,8 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
     ev_status = main_ev.get("status", 0)
 
     # Stages der Haupt-Championship (Ziel) nach Stage-Nummer
-    main_stages = db.select_all("stages", f"event_id=eq.{ev_id}&select=id,stage_number&order=stage_number.asc")
+    main_stages = db.select_all("stages", f"event_id=eq.{ev_id}&select=id,stage_number,distance_km&order=stage_number.asc")
+    dist_by_no  = {st["stage_number"]: st.get("distance_km") for st in main_stages}
     if not main_stages:
         return False
     stage_id_by_no = {s["stage_number"]: s["id"] for s in main_stages}
@@ -1289,10 +1351,23 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
             if r.get("time_ms") is not None:
                 total[k] = total.get(k, 0) + r["time_ms"]
                 done[k]  = done.get(k, 0) + 1
+    # Fehlt einem Eintrag die Zeit auf einer Stage, zaehlt dort die Maximalzeit der Strecke
+    # (stage_max_ms aus distance_km; Regel wie in sync_event). Ohne Streckenlaenge: keine Strafzeit.
+    for no, rows in stage_data:
+        max_ms = stage_max_ms(dist_by_no.get(no))
+        have   = {(r["driver_name"], r["_src"]) for r in rows if r.get("time_ms") is not None}
+        if max_ms is None:
+            if any(k not in have for k in info):
+                log(f"      ⚠ Stage {no}: keine Streckenlaenge — fehlende Zeiten ohne Strafzeit")
+            continue
+        for k in info:
+            if k not in have:
+                total[k] = total.get(k, 0) + max_ms
     is_dnf = {k: True for k in info}
+    last_max = stage_max_ms(dist_by_no.get(stage_data[-1][0]))
     for r in stage_data[-1][1]:
         k = (r["driver_name"], r["_src"])
-        if r.get("time_ms") is not None and not is_dnf_ms(r["time_ms"]):
+        if r.get("time_ms") is not None and not is_dnf_ms(r["time_ms"], last_max):
             is_dnf[k] = False
 
     # Doppelstarter-Regel ZUERST, vor jeder Platzierung: pro Fahrer wird festgelegt,
@@ -1341,7 +1416,7 @@ def _mc_merge_event(db: "SupabaseClient", main: dict, main_ev: dict,
             else:
                 rank += 1
                 pos = rank
-                if rank == 1 and r.get("time_ms") is not None and not is_dnf_ms(r["time_ms"]):
+                if rank == 1 and r.get("time_ms") is not None and not is_dnf_ms(r["time_ms"], stage_max_ms(dist_by_no.get(no))):
                     wins[k] = wins.get(k, 0) + 1
             stage_rows_out.append({
                 "stage_id":        stage_id_by_no[no],
