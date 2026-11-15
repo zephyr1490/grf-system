@@ -187,13 +187,13 @@ def clean_team_name(raw, max_len=TEAM_NAME_MAX):
 
 
 def rename_lock(events, now=None):
-    """Umbenennen ist bis zum Start des ersten Events moeglich. events: Zeilen mit start_at/status.
-    Rueckgabe None (offen) oder Text, warum gesperrt."""
+    """Umbenennen ist bis zum Start des ersten Events moeglich. events: Zeilen mit start_date (Tabelle
+    events hat KEIN start_at) und status. Rueckgabe None (offen) oder Text, warum gesperrt."""
     now = now or datetime.now(timezone.utc)
     for e in events or []:
         if e.get("status") in (1, 2):
             return "The first event has started."
-        t = _parse_ts(e.get("start_at"))
+        t = _parse_ts(e.get("start_date") or e.get("start_at"))
         if t is not None and t <= now:
             return "The first event has started."
     return None
@@ -388,7 +388,7 @@ def register_routes(app, h):
         return {**team, "members": [m["driver_name"] for m in members]}
 
     def _lock_reason(cid):
-        evs = sb_get("events", f"championship_id=eq.{q(cid)}&select=start_at,status")
+        evs = sb_get("events", f"championship_id=eq.{q(cid)}&select=start_date,status")
         return rename_lock(evs)
 
     def _name_taken(cid, new, exclude_id):
