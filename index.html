@@ -3164,6 +3164,24 @@ function safe(strings, ...values) {
     out + str + (i < values.length ? escapeHtml(values[i]) : ''), '');
 }
 
+/**
+ * Fehlt einem Fahrer, der das Event beendet hat, die Zeit auf einer Stage, rechnet der Sync dort die
+ * Maximalzeit der Strecke ein (grf_sync.py: stage_max_ms). Hier wird diese Zeit angezeigt statt "—".
+ * Stufen nach Streckenlaenge: bis 7 km 8 Min | bis 15 km 16 | bis 25 km 25 | darueber 35.
+ * Muss mit STAGE_MAX_TIERS_KM in grf_sync.py uebereinstimmen. Kein Eintrag/ keine Laenge -> null.
+ */
+function stageMaxText(distKm) {
+  const d = Number(distKm);
+  if (!isFinite(d) || d <= 0) return null;
+  const min = d <= 7 ? 8 : d <= 15 ? 16 : d <= 25 ? 25 : 35;
+  return String(min).padStart(2, '0') + ':00:000';
+}
+function missingStageCell(st, r) {
+  if (r && r.is_dnf) return null;                       // Event-DNF: Luecken bleiben "—"
+  const t = stageMaxText(st && st.distance_km);
+  return t ? `<span style="color:#e8a23a;" title="No time recorded — stage maximum time counted">${t}*</span>` : null;
+}
+
 /** Formatiert ein ISO-Datum als "JUN 20". */
 function fmtDate(str) {
   if (!str) return '—';
@@ -4576,7 +4594,7 @@ async function _fetchAndRenderClubResults(eventId) {
   try {
     const [results, stages, stageResults] = await Promise.all([
       sb('event_results',  `select=*&event_id=eq.${eventId}&order=is_dnf.asc,position.asc`),
-      sb('stages',         `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`),
+      sb('stages',         `select=id,name,stage_number,distance_km&event_id=eq.${eventId}&order=stage_number.asc`),
       sb('stage_results',  `select=driver_name,stage_id,time_str,stage_position,is_dnf&event_id=eq.${eventId}`),
     ]);
 
@@ -4633,7 +4651,7 @@ async function _fetchAndRenderClubResults(eventId) {
         ).join('');
         const stageCells = stages.map(st => {
           const sr = stageIdx[st.id]?.[r.driver_name];
-          if (!sr) return `<td style="color:#555;">—</td>`;
+          if (!sr) { const mx = missingStageCell(st, r); return mx ? `<td>${mx}</td>` : `<td style="color:#555;">—</td>`; }
           const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
           return `<td ${cls}>${fmtStageTime(sr.time_str) || '—'}</td>`;
         }).join('');
@@ -4681,7 +4699,7 @@ async function _fetchAndRenderClubResults(eventId) {
       const stageBadges = stages.map(st => {
         const sr   = stageIdx[st.id]?.[r.driver_name];
         const best = sr?.stage_position === 1;
-        return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || '—'}</div></div>`;
+        return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || (sr ? '—' : (missingStageCell(st, r) || '—'))}</div></div>`;
       }).join('');
 
       const col4 = scoring
@@ -5048,7 +5066,7 @@ async function _fetchAndRenderResults(eventId) {
     // Results + Stage-Results parallel laden
     const [results, stages, stageResults] = await Promise.all([
       sb('event_results',  `select=*&event_id=eq.${eventId}&order=is_dnf.asc,position.asc`),
-      sb('stages',         `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`),
+      sb('stages',         `select=id,name,stage_number,distance_km&event_id=eq.${eventId}&order=stage_number.asc`),
       sb('stage_results',  `select=driver_name,stage_id,time_str,stage_position,is_dnf,src_championship_id&event_id=eq.${eventId}`),
     ]);
 
@@ -5099,7 +5117,7 @@ async function _fetchAndRenderResults(eventId) {
       if (stages.length) {
         const cells = stages.map(st => {
           const sr = stageIdx[st.id]?.[r.driver_name + '|' + (r.src_championship_id || '')];
-          if (!sr) return `<td style="color:#555;">—</td>`;
+          if (!sr) { const mx = missingStageCell(st, r); return mx ? `<td>${mx}</td>` : `<td style="color:#555;">—</td>`; }
           const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
           return `<td ${cls}>${fmtStageTime(sr.time_str) || '—'}</td>`;
         }).join('');
@@ -5144,7 +5162,7 @@ async function _fetchAndRenderResults(eventId) {
         const stageBadges = stages.map(st => {
           const sr   = stageIdx[st.id]?.[r.driver_name + '|' + (r.src_championship_id || '')];
           const best = sr?.stage_position === 1;
-          return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || '—'}</div></div>`;
+          return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || (sr ? '—' : (missingStageCell(st, r) || '—'))}</div></div>`;
         }).join('');
 
         return `
@@ -5251,7 +5269,7 @@ async function openInterviewModal(eventId) {
   let stages = _eventStagesCache[eventId];
   if (!stages) {
     try {
-      stages = await sb('stages', `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`);
+      stages = await sb('stages', `select=id,name,stage_number,distance_km&event_id=eq.${eventId}&order=stage_number.asc`);
       _cacheEventStages(eventId, stages);
     } catch (err) {
       stages = [];
@@ -7168,7 +7186,7 @@ async function _fetchAndRenderTeamedResults(eventId) {
   try {
     const [results, stages, stageResults] = await Promise.all([
       sb('event_results',  `select=*&event_id=eq.${eventId}&order=is_dnf.asc,position.asc`),
-      sb('stages',         `select=id,name,stage_number&event_id=eq.${eventId}&order=stage_number.asc`),
+      sb('stages',         `select=id,name,stage_number,distance_km&event_id=eq.${eventId}&order=stage_number.asc`),
       sb('stage_results',  `select=driver_name,stage_id,time_str,stage_position,is_dnf&event_id=eq.${eventId}`),
     ]);
 
@@ -7201,7 +7219,7 @@ async function _fetchAndRenderTeamedResults(eventId) {
       if (stages.length) {
         const cells = stages.map(st => {
           const sr = stageIdx[st.id]?.[r.driver_name];
-          if (!sr) return `<td style="color:#555;">—</td>`;
+          if (!sr) { const mx = missingStageCell(st, r); return mx ? `<td>${mx}</td>` : `<td style="color:#555;">—</td>`; }
           const cls = sr.stage_position === 1 ? 'style="color:var(--green);font-weight:bold;"' : 'style="color:#aaa;"';
           return `<td ${cls}>${fmtStageTime(sr.time_str) || '—'}</td>`;
         }).join('');
@@ -7243,7 +7261,7 @@ async function _fetchAndRenderTeamedResults(eventId) {
         const stageBadges = stages.map(st => {
           const sr   = stageIdx[st.id]?.[r.driver_name];
           const best = sr?.stage_position === 1;
-          return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || '—'}</div></div>`;
+          return `<div class="slim-badge"><div class="slim-badge-lbl">SS${st.stage_number}</div><div class="slim-badge-val" style="${best ? 'color:var(--green);' : ''}">${fmtStageTime(sr?.time_str) || (sr ? '—' : (missingStageCell(st, r) || '—'))}</div></div>`;
         }).join('');
 
         return `
