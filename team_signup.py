@@ -121,6 +121,8 @@ def analyze_wishes(signups, wishes, max_group=MAX_GROUP_SIZE):
 # ─────────────────────────────────────────────────────────────────────────────
 
 _ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+# Spieler-Antworten (Anmeldung/Status) warten hoechstens so lange auf die Placement-Ranglisten von RaceNet
+PLACEMENT_WAIT_S = 8
 _FAILS = {}             # ip -> [timestamps] fehlgeschlagener PIN-Versuche
 _FAIL_LIMIT, _FAIL_WINDOW = 12, 600
 
@@ -258,7 +260,7 @@ def register_routes(app, h):
         try:
             import placement_resolve as PR
             from team_draw import _load_overall
-            return PR.rating_status(names, _load_overall(sb_get))
+            return PR.rating_status(names, _load_overall(sb_get), wait=PLACEMENT_WAIT_S)
         except Exception:
             return None
 

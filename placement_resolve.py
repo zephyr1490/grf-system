@@ -223,22 +223,66 @@ def combine_placement(per_stage):
     return sum(per_stage) / len(per_stage), PLACEMENT_SIGMA.get(len(per_stage), 300.0)
 
 
-def _fetch_placement_leaderboards():
-    now = time.time()
-    if _LB_CACHE["data"] is not None and now - _LB_CACHE["t"] < LB_CACHE_SECONDS:
+import threading
+
+_LB_LOCK = threading.Lock()      # nur EIN RaceNet-Abruf gleichzeitig; Wartende nutzen danach den frischen Cache
+_LB_THREAD = {"t": None}
+
+
+def _lb_fresh():
+    return _LB_CACHE["data"] is not None and time.time() - _LB_CACHE["t"] < LB_CACHE_SECONDS
+
+
+def _lb_load():
+    """Laedt die Placement-Ranglisten (langsam: bis zu ein, zwei Minuten) und fuellt den Cache."""
+    with _LB_LOCK:
+        if _lb_fresh():                       # ein anderer Aufruf war schneller
+            return _LB_CACHE["data"]
+        from racenet_client import RacenetClient
+        client = RacenetClient()
+        combos = [(st["route_id"], st["class_id"]) for st in PLACEMENT_STAGES]
+        lbs = client.get_public_leaderboards_parallel(combos, max_results=99999, max_workers=3, on_progress=None)
+        _LB_CACHE.update(t=time.time(), data=lbs)
+        return lbs
+
+
+def _lb_background():
+    th = _LB_THREAD["t"]
+    if th is None or not th.is_alive():
+        th = threading.Thread(target=lambda: _safe(_lb_load), daemon=True)
+        _LB_THREAD["t"] = th
+        th.start()
+    return th
+
+
+def _safe(fn):
+    try:
+        fn()
+    except Exception as e:
+        print(f"[placement] Ranglisten laden fehlgeschlagen: {e}")
+
+
+def _fetch_placement_leaderboards(wait=None):
+    """wait=None: blockierend (Auslosung, Admin). wait=<Sekunden>: fuer Spieler-Antworten, die nicht
+    minutenlang haengen duerfen — alter Cache wird sofort genutzt (und im Hintergrund erneuert); gibt es
+    noch keinen, wird im Hintergrund geladen und hoechstens <wait> Sekunden gewartet, sonst TimeoutError."""
+    if _lb_fresh():
         return _LB_CACHE["data"]
-    from racenet_client import RacenetClient
-    client = RacenetClient()
-    combos = [(st["route_id"], st["class_id"]) for st in PLACEMENT_STAGES]
-    lbs = client.get_public_leaderboards_parallel(combos, max_results=99999, max_workers=3, on_progress=None)
-    _LB_CACHE.update(t=now, data=lbs)
-    return lbs
+    if wait is None:
+        return _lb_load()
+    th = _lb_background()
+    if _LB_CACHE["data"] is not None:         # veralteter Cache ist besser als Warten
+        return _LB_CACHE["data"]
+    th.join(wait)
+    if _LB_CACHE["data"] is None:
+        raise TimeoutError("Placement-Ranglisten werden noch geladen")
+    return _LB_CACHE["data"]
 
 
-def placement_ratings(names, overall, leaderboards=None):
+def placement_ratings(names, overall, leaderboards=None, wait=None):
     """names: Fahrer ohne ELO; overall: {Name: {mu,...}} der Club-ELO. Rueckgabe je Name:
     {"mu","sigma","stages":[{label,time_s,faster_than,mu,ref_n}...]} - nur fuer Fahrer mit mind. einer Zeit."""
-    lbs = leaderboards if leaderboards is not None else _fetch_placement_leaderboards()
+    lbs = leaderboards if leaderboards is not None else _fetch_placement_leaderboards(wait)
     elo_mu = {str(n).casefold(): float(v["mu"]) for n, v in overall.items() if v and v.get("mu") is not None}
     refs, entries_by = [], []
     for st in PLACEMENT_STAGES:
@@ -266,7 +310,7 @@ def placement_ratings(names, overall, leaderboards=None):
 
 
 
-def rating_status(names, overall):
+def rating_status(names, overall, wait=None):
     """Status je Fahrer fuer Admin-Uebersicht / Spieler-Hinweis. Gleiche Regel wie die Auslosung
     (Name exakt in overall = ELO). Rueckgabe {name: {"status": "elo"|"placement"|"none"|"unknown", "stages": n}}.
     "unknown" = Placement-Abfrage bei RaceNet fehlgeschlagen."""
@@ -279,7 +323,7 @@ def rating_status(names, overall):
             need.append(nm)
     if need:
         try:
-            found = placement_ratings(need, overall)
+            found = placement_ratings(need, overall, wait=wait)
         except Exception:
             found = None
         for nm in need:
@@ -298,6 +342,8 @@ def placement_info():
 
 def register_routes(app, h):
     auth, err_detail = h["auth"], h["err_detail"]
+    if os.environ.get("PLACEMENT_WARMUP", "1") != "0":   # Ranglisten schon beim Start im Hintergrund laden
+        _lb_background()
 
     @app.route("/admin/placement/resolve", methods=["POST"])
     @auth
