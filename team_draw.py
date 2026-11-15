@@ -34,13 +34,13 @@ DEFAULT_MU, DEFAULT_SIGMA = 1500.0, 350.0
 # Platzhalter-Teamnamen "Team [Farbe]" (Anzeigename, Hex fuer teams.color).
 # Reicht die Liste nicht (mehr Teams als Farben), bekommen weitere Runden eine Nummer: "Team Pink 2".
 COLORS = [
-    ("Pink", "#FF4FA3"), ("Hellblau", "#5BC8F5"), ("Gold", "#E8B923"), ("Rot", "#D93636"),
-    ("Dunkelblau", "#1F3FA8"), ("Silber", "#C0C4C8"), ("Grün", "#2FB14E"), ("Orange", "#F28C28"),
-    ("Lila", "#8E44C8"), ("Weiß", "#F4F4F4"), ("Türkis", "#1CB8A8"), ("Gelb", "#F5E336"),
-    ("Schwarz", "#2A2A2A"), ("Braun", "#8B5A2B"), ("Mint", "#8FE3B5"), ("Magenta", "#C2185B"),
-    ("Dunkelgrün", "#1B5E32"), ("Bordeaux", "#7A1F3D"), ("Beige", "#D8C3A0"), ("Grau", "#808488"),
-    ("Koralle", "#FF6F61"), ("Indigo", "#3F3FA0"), ("Bronze", "#B0713A"), ("Limette", "#B5E61D"),
-    ("Flieder", "#BFA2DB"),
+    ("Pink", "#FF4FA3"), ("Light Blue", "#5BC8F5"), ("Gold", "#E8B923"), ("Red", "#D93636"),
+    ("Dark Blue", "#1F3FA8"), ("Silver", "#C0C4C8"), ("Green", "#2FB14E"), ("Orange", "#F28C28"),
+    ("Purple", "#8E44C8"), ("White", "#F4F4F4"), ("Turquoise", "#1CB8A8"), ("Yellow", "#F5E336"),
+    ("Black", "#2A2A2A"), ("Brown", "#8B5A2B"), ("Mint", "#8FE3B5"), ("Magenta", "#C2185B"),
+    ("Dark Green", "#1B5E32"), ("Burgundy", "#7A1F3D"), ("Beige", "#D8C3A0"), ("Grey", "#808488"),
+    ("Coral", "#FF6F61"), ("Indigo", "#3F3FA0"), ("Bronze", "#B0713A"), ("Lime", "#B5E61D"),
+    ("Lilac", "#BFA2DB"),
 ]
 
 
