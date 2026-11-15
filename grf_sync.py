@@ -133,6 +133,20 @@ def ms_to_display(ms: int | None) -> str:
     return f"{m}:{s:02d}.{ms:03d}"
 
 
+def _stage_route_fields(stage: dict) -> dict:
+    """Strecken-Infos aus stage.stageSettings (RaceNet): route_id, route_name, distance_km.
+    Leer, wenn RaceNet sie nicht liefert (dann bleiben vorhandene DB-Werte unangetastet)."""
+    ss = (stage or {}).get("stageSettings") or {}
+    out = {}
+    if ss.get("routeID") is not None:
+        out["route_id"] = int(ss["routeID"])
+    if ss.get("route"):
+        out["route_name"] = str(ss["route"])
+    if ss.get("distance") is not None:
+        out["distance_km"] = ss["distance"]
+    return out
+
+
 def is_dnf_ms(ms: int | None) -> bool:
     """
     RaceNet marks DNF with a round-minute penalty time (e.g. 4:00, 6:00, 10:00).
@@ -588,6 +602,7 @@ def sync_event(db: SupabaseClient, client,
                 "stage_number":    i,
                 "leaderboard_id":  lb_id,
                 "status":          stage.get("status", 0),
+                **_stage_route_fields(stage),
             }, on_conflict="id")
 
         stage_specs.append((i, stage, lb_id))

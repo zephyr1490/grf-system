@@ -2439,6 +2439,12 @@ team_draw.register_routes(app, {
 import raw_inspect
 raw_inspect.register_routes(app, {"auth": auth, "err_detail": _err_detail})
 
+# Einmaliger Nachtrag route_id/route_name/distance_km fuer bestehende Stages (route_backfill.py,
+# Spalten per route_columns.sql).
+import route_backfill
+route_backfill.register_routes(app, {"auth": auth, "err_detail": _err_detail,
+                                     "sb_get_all": sb_get_all, "sb_patch": sb_patch})
+
 # ── Start ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
