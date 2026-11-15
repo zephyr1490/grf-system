@@ -2434,6 +2434,11 @@ team_draw.register_routes(app, {
     "auth": auth, "err_detail": _err_detail,
 })
 
+# ── Diagnose: RaceNet-Rohdaten eines Events (nur lesen) ───────────────────────
+# Eigenes Modul raw_inspect.py (neben dieser Datei). Zeigt, welche Stage-Felder RaceNet liefert.
+import raw_inspect
+raw_inspect.register_routes(app, {"auth": auth, "err_detail": _err_detail})
+
 # ── Start ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
