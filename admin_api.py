@@ -1049,6 +1049,87 @@ def _cr_build_response(leaderboards, client, top_pct, exponent, min_n, min_rank=
     }, 200
 
 
+# >>> CR-JOB-V2 BEGIN  (Rollback: siehe CR_JOB_ROLLBACK.md)
+# Hintergrund-Job fuer die CR-Berechnung mit Abfrage (Polling) statt langer Stream-Verbindung.
+# Grund: Bei vielen Leaderboards dauert ein Lauf mehrere Minuten (z. B. 60 Leaderboards = 665 s);
+# eine so lange offene HTTP-Verbindung wird unterwegs gekappt ("Error in input stream"), obwohl
+# der Server das Ergebnis fertig berechnet. Beim Job startet der Browser den Lauf (POST mit
+# job=true -> sofort job_id) und fragt kurz per GET /cr/job/<id> nach Fortschritt und Ergebnis.
+# Nur im Arbeitsspeicher (eine Railway-Instanz, wie _CR_RUNS); nach Neustart ist ein Job weg.
+# Der alte Stream-Modus (stream=true) und der normale JSON-Modus bleiben unveraendert bestehen.
+_CR_JOBS: dict = {}
+_CR_JOBS_MAX = 6                 # fertige Jobs, die im Speicher bleiben
+_CR_JOB_STALE_S = 45 * 60        # laeuft ein Job laenger, gilt er als haengend (blockiert nichts mehr)
+_CR_JOB_RE = re.compile(r"^[0-9a-f]{16}$")
+
+
+def _cr_job_running():
+    """job_id des aktuell laufenden (nicht haengenden) Jobs oder None."""
+    import time as _t
+    for jid, j in _CR_JOBS.items():
+        if j["state"] == "running" and _t.time() - j["t0"] < _CR_JOB_STALE_S:
+            return jid
+    return None
+
+
+def _cr_job_prune():
+    done = [jid for jid, j in _CR_JOBS.items() if j["state"] != "running"]
+    while len(done) > _CR_JOBS_MAX:
+        _CR_JOBS.pop(done.pop(0), None)
+
+
+def _cr_job_start(client, combos, max_results, top_pct, exponent, min_n, min_rank, no_assists):
+    import threading, time as _t, traceback
+    job_id = secrets.token_hex(8)
+    job = {"state": "running", "done": 0, "total": len(combos), "t0": _t.time(),
+           "t_end": None, "status": None, "data": None}
+    _CR_JOBS[job_id] = job
+    _cr_job_prune()
+    print(f"  ▶ CR-Job {job_id} gestartet: {len(combos)} Leaderboards")
+
+    def _progress(done, total, sid, cid):
+        job["done"] = done
+        print(f"  ⏳ CR-Job {job_id}: {done}/{total} Leaderboards ({_t.time() - job['t0']:.0f}s)")
+
+    def _worker():
+        try:
+            lbs = client.get_public_leaderboards_parallel(
+                combos, max_results=max_results, max_workers=8, on_progress=_progress)
+            data, status = _cr_build_response(lbs, client, top_pct, exponent, min_n, min_rank, no_assists)
+            job.update(status=status, data=data)
+            print(f"  ⏱ CR-Berechnung: {len(combos)} Leaderboards in {_t.time() - job['t0']:.0f}s, "
+                  f"throttle_events={client.throttle_events}, load_failed={len(client.last_load_failures)} "
+                  f"(Job {job_id})")
+        except Exception as e:
+            print(f"  ❌ CR-Job {job_id} fehlgeschlagen: {e}\n{traceback.format_exc()}")
+            job.update(status=500, data={"error": f"RaceNet error: {e}"})
+        finally:
+            job["t_end"] = _t.time()
+            job["state"] = "done"   # status/data zuletzt gesetzt -> Abfrage sieht nie einen halben Stand
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return job_id
+
+
+@app.route("/cr/job/<job_id>", methods=["GET"])
+@auth
+def cr_job_status(job_id):
+    """Status eines CR-Jobs. state=running -> {done,total,elapsed}; state=done -> zusaetzlich
+    {status, data} (data wie die normale /cr/calculate-Antwort, bei Fehlern {"error":...})."""
+    import time as _t
+    job = _CR_JOBS.get(job_id) if _CR_JOB_RE.match(job_id or "") else None
+    if not job:
+        return jsonify({"error": "Job not found (server restarted or result expired) — please recalculate"}), 404
+    end = job["t_end"] or _t.time()
+    out = {"state": job["state"], "done": job["done"], "total": job["total"],
+           "elapsed": round(end - job["t0"])}
+    if job["state"] == "done":
+        out["status"] = job["status"]
+        out["data"] = job["data"]
+    return jsonify(out)
+# <<< CR-JOB-V2 END
+
+
 @app.route("/cr/calculate", methods=["POST"])
 @auth
 def cr_calculate():
@@ -1075,12 +1156,23 @@ def cr_calculate():
     no_assists  = bool(body.get("no_assists", False))
     max_results = int(body.get("max_results", 99999))
     stream      = bool(body.get("stream", False))
+    job         = bool(body.get("job", False))      # CR-JOB-V2
 
     if not route_ids or not class_ids:
         return jsonify({"error": "route_ids and class_ids required"}), 400
 
     client = RacenetClient()
     combos = [(r, c) for r in route_ids for c in class_ids]
+
+    # >>> CR-JOB-V2 BEGIN: Job-Modus (job=true) -> sofort job_id, Fortschritt per GET /cr/job/<id>
+    if job:
+        running = _cr_job_running()
+        if running:
+            # kein zweiter Lauf parallel (wuerde RaceNet doppelt belasten); Client haengt sich an den laufenden an
+            return jsonify({"error": "A calculation is already running", "job_id": running}), 409
+        job_id = _cr_job_start(client, combos, max_results, top_pct, exponent, min_n, min_rank, no_assists)
+        return jsonify({"job_id": job_id, "total": len(combos)}), 202
+    # <<< CR-JOB-V2 END
 
     if not stream:
         try:

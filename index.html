@@ -2155,6 +2155,10 @@ textarea.inp-std { resize:vertical; }
                 style="background:var(--red); color:var(--white); border:2px solid; border-color:var(--red-bright) var(--red-dark) var(--red-dark) var(--red-bright); font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; letter-spacing:1px; padding:7px 12px; cursor:pointer;">
                 ▶ CALCULATE
               </button>
+              <button id="cr-resume-btn" onclick="crResumeJob()" title="A calculation was started in this browser and has not been shown yet"
+                style="display:none; background:#2a2418; color:#e0a030; border:2px solid; border-color:#6a5420 #1a1a1a #1a1a1a #6a5420; font-family:'Oswald',sans-serif; font-weight:700; font-size:12px; letter-spacing:1px; padding:6px 12px; cursor:pointer;">
+                ↻ RESUME LAST RUN
+              </button>
               <div id="cr-confirm-bar" style="display:none; background:#1a2a1a; border:2px solid var(--green-dim); padding:10px;">
                 <div style="font-size:11px; color:var(--green); margin-bottom:8px; letter-spacing:1px;">PREVIEW OK? NAME &amp; SAVE</div>
                 <input id="cr-set-name" type="text" placeholder="CR Set Name — e.g. Group B · Monte Carlo 2026"
@@ -8530,10 +8534,11 @@ async function crViewSet(name) {
   }
 }
 
-function _crShowProgress(done, total) {
+function _crShowProgress(done, total, elapsed) {
   const pct = total ? Math.round(done / total * 100) : 0;
+  const el  = (elapsed != null) ? ` · ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')} min` : '';
   setHTML('cr-status',
-    `⏳ Loading leaderboards from RaceNet… ${done} / ${total} (${pct}%)` +
+    `⏳ Loading leaderboards from RaceNet… ${done} / ${total} (${pct}%)${el}` +
     `<div style="margin-top:4px;height:6px;background:#1a1a1a;border:1px solid #333;">` +
     `<div style="height:100%;width:${pct}%;background:var(--red,#c33);transition:width .3s;"></div></div>`);
 }
@@ -8562,6 +8567,147 @@ async function _crReadStream(res, onProgress) {
   return final;
 }
 
+// >>> CR-JOB-V2 BEGIN  (Rollback: siehe CR_JOB_ROLLBACK.md)
+// Rollback-Schalter: false = zurueck zum alten Stream-Modus (Backend unterstuetzt beides).
+const CR_USE_JOB = true;
+const CR_JOB_POLL_MS = 3000;          // Abfrage-Intervall
+const CR_JOB_MAX_POLL_ERRORS = 20;    // so viele Abfragen in Folge duerfen scheitern (~1 min), dann Abbruch
+const CR_JOB_KEY = 'grf_cr_job';      // localStorage: laufender Job, damit er nach Reload fortgesetzt werden kann
+
+function _crJobSave(v) { try { v ? localStorage.setItem(CR_JOB_KEY, JSON.stringify(v)) : localStorage.removeItem(CR_JOB_KEY); } catch (_) {} }
+function _crJobLoad() { try { return JSON.parse(localStorage.getItem(CR_JOB_KEY) || 'null'); } catch (_) { return null; } }
+function _crJobShowResume() {
+  const b = $('cr-resume-btn'); if (!b) return;
+  b.style.display = _crJobLoad() ? 'block' : 'none';
+}
+
+// Fragt den Job ab, bis er fertig ist -> {status, data} wie das result-Ereignis des Streams.
+async function _crPollJob(jobId) {
+  let errors = 0;
+  while (true) {
+    await new Promise(r => setTimeout(r, CR_JOB_POLL_MS));
+    let res, j;
+    try {
+      res = await fetch(`${ADMIN_API_URL}/cr/job/${jobId}`, { headers: { 'X-Admin-Password': _adminPassword } });
+      j   = await res.json().catch(() => ({}));
+    } catch (e) {                                   // kurzer Verbindungsfehler: weiter versuchen
+      if (++errors >= CR_JOB_MAX_POLL_ERRORS) throw e;
+      continue;
+    }
+    if (res.status === 404) { _crJobSave(null); _crJobShowResume(); return { status: 404, data: { error: j.error || 'Job not found — please recalculate' } }; }
+    if (!res.ok) {
+      if (++errors >= CR_JOB_MAX_POLL_ERRORS) return { status: res.status, data: { error: j.error || res.status } };
+      continue;
+    }
+    errors = 0;
+    if (j.state === 'running') { _crShowProgress(j.done, j.total, j.elapsed); continue; }
+    _crJobSave(null); _crJobShowResume();
+    return { status: j.status, data: j.data };
+  }
+}
+
+async function _crRunJob(payload, ctx) {
+  const res = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+    body: JSON.stringify({ ...payload, job: true }),
+  });
+  const j = await res.json().catch(() => ({}));
+  let jobId = j.job_id;
+  if (res.status === 409 && jobId) {
+    setText('cr-status', '⏳ A calculation is already running — attaching to it…');   // z. B. nach Reload oder Doppelklick
+  } else if (!res.ok || !jobId) {
+    return { status: res.status, data: { error: j.error || res.status } };
+  }
+  _crJobSave({ job_id: jobId, minN: ctx.minN, exponent: ctx.exponent, ts: Date.now() });
+  _crJobShowResume();
+  return _crPollJob(jobId);
+}
+
+// Setzt einen nach Reload/Verbindungsverlust noch laufenden oder fertigen Job fort.
+async function crResumeJob() {
+  const st = _crJobLoad();
+  if (!st || !st.job_id) { _crJobShowResume(); return; }
+  setText('cr-status', '⏳ Checking the last calculation…');
+  try {
+    _crFinish(await _crPollJob(st.job_id), { minN: st.minN || 10, exponent: st.exponent || 1.5 });
+  } catch (err) {
+    setText('cr-status', `❌ Network error: ${err.message}`);
+  }
+}
+window.addEventListener('load', _crJobShowResume);
+
+// Alter Stream-Modus (Rollback-Pfad, unveraendert uebernommen): {status, data} oder null bei vorzeitigem Ende
+async function _crRunStream(payload) {
+  const res = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    return { status: res.status, data: err };
+  }
+  return await _crReadStream(res, (done, total) => _crShowProgress(done, total));
+}
+
+// Ergebnis (aus Job oder Stream) in der Vorschau darstellen
+function _crFinish(final, ctx) {
+  const { minN, exponent } = ctx;
+  const tbody = $('cr-preview-tbody');
+  if (!final) {
+    setText('cr-status', '❌ Connection closed before the calculation finished. Please try again.');
+    return;
+  }
+  if (final.status !== 200) {
+    setText('cr-status', `❌ ${final.data?.error || final.status}`);
+    return;
+  }
+  const data    = final.data;
+  const results = data.results || [];
+  const stats   = data.stats   || {};
+
+  _crLastResults = results;
+  _crLastRunId   = data.run_id || null;
+
+  if (!results.length) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
+    const slimTbodyEmpty = $('cr-preview-slim-tbody');
+    if (slimTbodyEmpty) slimTbodyEmpty.innerHTML = `<tr><td colspan="3"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
+    setText('cr-status', 'No results for selected filters.');
+    return;
+  }
+
+  _crLastStagesTotal = stats.stages_loaded ?? null;
+  _crRenderPreview(results, _crLastStagesTotal);
+
+  setText('cr-preview-info', `${results.length} vehicles · ${stats.stages_loaded} stages · ${stats.total_entries} entries · exp=${exponent}`);
+
+  const skipped = stats.stages_skipped || 0;
+  const loadFailed = stats.load_failed || [];
+  if (loadFailed.length > 0) {
+    const list = loadFailed.map(f => `${f.route_id}/${f.class_id}`).join(', ');
+    setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${loadFailed.length} leaderboard(s) could not be loaded from RaceNet (even after retry): ${list}</span>. ${skipped} of ${stats.stages_loaded + skipped} stage(s) skipped in total. Please recalculate before saving.`);
+  } else if (skipped > 0) {
+    const detail = (stats.skipped_detail || []).map(d => {
+      const cb   = document.querySelector(`input[name="cr-route"][value="${d.route_id}"]`);
+      const name = cb ? cb.parentElement.textContent.trim() : `Route ${d.route_id}`;
+      const cars = Object.entries(d.cars || {}).map(([c, n]) => `${c} (N=${n})`).join(', ');
+      let why;
+      if (d.reason === 'min_n')              why = `below min N=${minN}: ${cars}`;
+      else if (d.reason === 'too_few_cars')  why = `fewer than 2 cars with valid times${cars ? ': ' + cars : ''}`;
+      else if (d.reason === 'no_data')       why = 'no leaderboard data returned';
+      else                                   why = d.reason || 'unknown';
+      return `<li>${escapeHtml(name)} — ${escapeHtml(why)}</li>`;
+    }).join('');
+    setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${skipped} of ${stats.stages_loaded + skipped} selected stage(s) were skipped</span>. Review preview carefully before saving.<ul style="margin:6px 0 0 18px;">${detail}</ul>`);
+  } else {
+    setText('cr-status', `✓ ${results.length} vehicles — all ${stats.stages_loaded} selected stages used, review preview then confirm to save.`);
+  }
+  if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'block';
+}
+// <<< CR-JOB-V2 END
+
 async function crCalculate() {
   const topPct   = parseFloat($('cr-top-pct')?.value)  || 25;
   const minN     = parseInt($('cr-min-n')?.value)       || 10;
@@ -8587,71 +8733,12 @@ async function crCalculate() {
   if (slimTbodyLoading) slimTbodyLoading.innerHTML = `<tr><td colspan="3"><div class="empty"><div class="empty-title">LOADING…</div><div class="empty-sub">Fetching RaceNet time trial leaderboards. This may take 30–60 seconds.</div></div></td></tr>`;
 
   try {
-    const res  = await fetch(`${ADMIN_API_URL}/cr/calculate`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': _adminPassword },
-      body: JSON.stringify({ route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, min_rank: minRank, no_assists: noAssists, exponent, max_results: 99999, stream: true }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      setText('cr-status', `❌ ${err.error || res.status}`);
-      return;
-    }
-
-    // Streaming: Fortschritt pro geladenem Leaderboard, am Ende das Ergebnis
-    const final = await _crReadStream(res, (done, total) => _crShowProgress(done, total));
-    if (!final) {
-      setText('cr-status', '❌ Connection closed before the calculation finished. Please try again.');
-      return;
-    }
-    if (final.status !== 200) {
-      setText('cr-status', `❌ ${final.data?.error || final.status}`);
-      return;
-    }
-    const data    = final.data;
-    const results = data.results || [];
-    const stats   = data.stats   || {};
-
-    _crLastResults = results;
-    _crLastRunId   = data.run_id || null;
-
-    if (!results.length) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
-      const slimTbodyEmpty = $('cr-preview-slim-tbody');
-      if (slimTbodyEmpty) slimTbodyEmpty.innerHTML = `<tr><td colspan="3"><div class="empty"><div class="empty-title">NO DATA</div><div class="empty-sub">No vehicles with min N=${minN}. Try lower threshold or more locations.</div></div></td></tr>`;
-      setText('cr-status', 'No results for selected filters.');
-      return;
-    }
-
-    _crLastStagesTotal = stats.stages_loaded ?? null;
-    _crRenderPreview(results, _crLastStagesTotal);
-
-    setText('cr-preview-info', `${results.length} vehicles · ${stats.stages_loaded} stages · ${stats.total_entries} entries · exp=${exponent}`);
-
-    const skipped = stats.stages_skipped || 0;
-    const loadFailed = stats.load_failed || [];
-    if (loadFailed.length > 0) {
-      const list = loadFailed.map(f => `${f.route_id}/${f.class_id}`).join(', ');
-      setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${loadFailed.length} leaderboard(s) could not be loaded from RaceNet (even after retry): ${list}</span>. ${skipped} of ${stats.stages_loaded + skipped} stage(s) skipped in total. Please recalculate before saving.`);
-    } else if (skipped > 0) {
-      const detail = (stats.skipped_detail || []).map(d => {
-        const cb   = document.querySelector(`input[name="cr-route"][value="${d.route_id}"]`);
-        const name = cb ? cb.parentElement.textContent.trim() : `Route ${d.route_id}`;
-        const cars = Object.entries(d.cars || {}).map(([c, n]) => `${c} (N=${n})`).join(', ');
-        let why;
-        if (d.reason === 'min_n')              why = `below min N=${minN}: ${cars}`;
-        else if (d.reason === 'too_few_cars')  why = `fewer than 2 cars with valid times${cars ? ': ' + cars : ''}`;
-        else if (d.reason === 'no_data')       why = 'no leaderboard data returned';
-        else                                   why = d.reason || 'unknown';
-        return `<li>${escapeHtml(name)} — ${escapeHtml(why)}</li>`;
-      }).join('');
-      setHTML('cr-status', `✓ ${results.length} vehicles — <span style="color:var(--red);font-weight:bold;">⚠ ${skipped} of ${stats.stages_loaded + skipped} selected stage(s) were skipped</span>. Review preview carefully before saving.<ul style="margin:6px 0 0 18px;">${detail}</ul>`);
-    } else {
-      setText('cr-status', `✓ ${results.length} vehicles — all ${stats.stages_loaded} selected stages used, review preview then confirm to save.`);
-    }
-    if ($('cr-confirm-bar')) $('cr-confirm-bar').style.display = 'block';
-
+    const payload = { route_ids: routeIds, class_ids: classIds, top_pct: topPct, min_n: minN, min_rank: minRank, no_assists: noAssists, exponent, max_results: 99999 };
+    // CR_USE_JOB=true: Hintergrund-Job + Abfrage; false: alter Stream-Modus (Rollback, s. CR_JOB_ROLLBACK.md)
+    const final = CR_USE_JOB
+      ? await _crRunJob(payload, { minN, exponent })
+      : await _crRunStream({ ...payload, stream: true });
+    _crFinish(final, { minN, exponent });
   } catch (err) {
     setText('cr-status', `❌ Network error: ${err.message}`);
   }
