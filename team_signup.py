@@ -116,6 +116,26 @@ def analyze_wishes(signups, wishes, max_group=MAX_GROUP_SIZE):
     return {"firm_groups": firm, "soft_wishes": soft, "void_wishes": void, "free_players": free}
 
 
+def wish_state(name, partner, signups, wishes, max_group=MAX_GROUP_SIZE):
+    """
+    Was der Spieler ueber SEINEN Wunsch erfahren darf (rein, ohne Flask/DB):
+      void   — Partner ist (noch) nicht angemeldet
+      mutual — Partner hat dich auch gewaehlt (feste 2er-Gruppe)
+      chain  — Kette, die sich schliesst (feste Gruppe aus mehr als 2); size = Gruppengroesse
+      open   — Partner ist angemeldet, hat dich aber (noch) nicht gewaehlt
+    Bewusst NICHT enthalten: wer DICH gewaehlt hat, wenn du ihn nicht auch gewaehlt hast.
+    """
+    signed = set(signups)
+    if partner not in signed:
+        return {"state": "void"}
+    if wishes.get(partner) == name:
+        return {"state": "mutual"}
+    for grp in analyze_wishes(signed, wishes, max_group)["firm_groups"]:
+        if name in grp and partner in grp:
+            return {"state": "chain", "size": len(grp)}
+    return {"state": "open"}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  HILFEN
 # ─────────────────────────────────────────────────────────────────────────────
@@ -247,6 +267,16 @@ def register_routes(app, h):
         if rows:
             p = rows[0]["partner_name"]
             wish = {"partner_name": p, "partner_registered": _is_registered(cid, p)}
+            try:
+                signups = [r["driver_name"] for r in sb_get("team_signups", f"championship_id=eq.{q(cid)}&select=driver_name")]
+                wishes = {r["driver_name"]: r["partner_name"] for r in sb_get("team_wishes", f"championship_id=eq.{q(cid)}&select=driver_name,partner_name")}
+                try:
+                    pref = clamp_team_size(sb_get("championships", f"id=eq.{q(cid)}&select=team_size_pref&limit=1")[0].get("team_size_pref"))
+                except Exception:   # team_size.sql noch nicht gelaufen
+                    pref = DEFAULT_TEAM_SIZE
+                wish.update(wish_state(name, p, signups, wishes, pref + 1))
+            except Exception:
+                pass   # Status ist nur Zusatzinfo; die Anmeldung selbst darf daran nicht scheitern
         return {
             "driver_name": name,
             "open": signup_is_open(champ),

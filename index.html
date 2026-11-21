@@ -882,7 +882,7 @@ textarea.inp-std { resize:vertical; }
 
   <!-- TITLE BAR -->
   <div class="titlebar">
-    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.7</span></span>
+    <span class="titlebar-text">GLOBAL RALLY FANS <span class="version-badge" id="site-version-badge">v1.8</span></span>
   </div>
 
   <!-- MENU BAR — GRF Themed/Teamed haben seit Session 10 bewusst KEINEN
@@ -1815,7 +1815,15 @@ textarea.inp-std { resize:vertical; }
           <p>Teams are balanced by how strong everybody is, so every player needs a rating.</p>
           <ul>
             <li><b>You already have an ELO</b> (you have raced in GRF events before): nothing to do. The sign-up window shows no extra notice.</li>
-            <li><b>You have no ELO yet</b>: set a time on the <b>3 Time Trial stages (dry)</b> in RaceNet before the deadline. The sign-up window lists the three stages and car classes once you enter your PIN. You can choose <b>any car</b> — just set your best time. Your times are compared with the times of our rated drivers and give you a <b>provisional rating</b>. Times can take a short while to show up in RaceNet, so do it early.</li>
+            <li><b>You have no ELO yet</b>: set a time on the <b>3 Time Trial stages (dry)</b> in RaceNet before the deadline. The sign-up window also shows them once you enter your PIN. You can choose <b>any car</b> — just set your best time. Your times are compared with the times of our rated drivers and give you a <b>provisional rating</b>. Times can take a short while to show up in RaceNet, so do it early.</li>
+            <li class="g-stages"><b>The 3 placement stages</b> (all dry, free choice of car):
+              <ol style="margin:4px 0 4px 18px;">
+                <li>Central Europe Rally – Vítová · <b>Rally3</b></li>
+                <li>Secto Rally Finland – Saakoski · <b>F2 Kit Car</b></li>
+                <li>EKO Acropolis Rally Greece – Parnassós · <b>Group B (RWD)</b></li>
+              </ol>
+              <!-- Muss zu PLACEMENT_STAGES in placement_resolve.py passen. -->
+            </li>
             <li>The notice in the sign-up window tells you how many of the 3 stages were found. Every missing stage makes your provisional rating less certain.</li>
             <li>Without any time you are drawn with a default, average rating, which makes the balancing less precise — please don't skip this.</li>
           </ul>
@@ -1828,7 +1836,7 @@ textarea.inp-std { resize:vertical; }
             <li><b>Two players who pick each other</b> are set as a team. <b>Chains</b> work too: A picks B, B picks C and C picks A → a team of three. The biggest possible group is <b><span class="g-maxgroup">4</span> players</b>. Longer chains only count as normal wishes.</li>
             <li><b>Balanced teams come first.</b> Wishes are granted wherever the balancing allows it — the more players wish for a partner, the less likely it is that every wish works out. One-sided wishes are only considered last.</li>
             <li>If <b>two very strong players</b> pick each other, they start as a duo — more players can still be drawn into their team. If a group is <b>too strong to balance</b>, its wishes can be dissolved and the draw decides.</li>
-            <li>Your wish stays <b>secret</b> until the team reveal. You will not see whether it is mutual, so talk to each other beforehand.</li>
+            <li>Nobody sees <b>who picked them</b>. You only see whether <b>your own</b> wish is returned (<i>mutual</i>) — if it isn't, talk to the person: maybe they simply forgot to pick you.</li>
             <li>There are no negative wishes ("not with X").</li>
           </ul>
         </div>
@@ -1858,6 +1866,16 @@ textarea.inp-std { resize:vertical; }
             <li>Teams start with a colour name, e.g. <b>Team Pink</b> or <b>Team Light Blue</b>.</li>
             <li>Press <b>Show team</b> in the header, enter your PIN and you see your team and its members.</li>
             <li><b>Every member</b> can give the team a new name there (2–24 characters) until the <b>first event starts</b>. Two teams can't have the same name.</li>
+          </ul>
+        </div>
+
+        <div class="guide-sec">
+          <h3>7 · Loyalty bonus (same car)</h3>
+          <ul>
+            <li>Everybody chooses their <b>own car</b> — you don't have to agree on one car with your team.</li>
+            <li>Whoever drives the <b>same car in every event</b> earns the team a share of the loyalty bonus. The bonus for a whole team is <b><span class="g-loyalpool">150</span> points</b>, split evenly by the number of team members.</li>
+            <li>Example with <span class="g-pref">3</span> members: each loyal member is worth <b>50 points</b> to the team; if only two of three stay with one car, the team gets 100. In bigger or smaller teams the share per member is adjusted, so the maximum stays the same.</li>
+            <li>Skipping an event is fine: you stay loyal as long as every car you used is the same one.</li>
           </ul>
         </div>
       </div>
@@ -2895,6 +2913,20 @@ textarea.inp-std { resize:vertical; }
 // Admin-UI/DB-Tabelle nötig dafür — ändert sich selten genug, dass ein
 // Code-Eintrag reicht). Neueste ZUERST in der Liste.
 const CHANGELOG = [
+  {
+    version: '1.8',
+    date:    '2026-11-21',
+    label:   'GRF Teamed',
+    notes: [
+      'New: GRF Teamed with sign-up, team wishes, balanced team draw and live team reveal.',
+      'Drivers without ELO get a provisional rating from three Time Trial stages.',
+      'Teamed loyalty bonus is shared among the team members who keep one car all season.',
+      'Missing stage times now count with the stage\u2019s maximum time, marked with *.',
+      'Stage Interview: optional Rally Summary for the whole event.',
+      'GRF Group Rally2 now has its own points system.',
+      'Admin: the Car Rating calculation now runs in the background.',
+    ],
+  },
   {
     version: '1.7',
     date:    '2026-10-24',
@@ -5652,7 +5684,7 @@ async function _interviewPostDiscord() {
 // Wunschpartner an. Ablauf: PIN → (Bestätigung der Teilnahme) → "Find team
 // mate" → Namenssuche → Auswahl bestätigen. Beim erneuten Öffnen sieht man
 // Status + gewählten Partner (✕ löscht den Wunsch). Wünsche sind geheim —
-// ob sie gegenseitig sind, wird dem Spieler bewusst NICHT angezeigt.
+// ob DEIN Wunsch erwidert wird (wish.state: void/open/mutual/chain), sieht der Spieler; wer ihn selbst gewaehlt hat, NICHT.
 // Backend: team_signup.py (/teamsignup/*), Konzept: team_lottery_concept.md.
 
 let _su = null;            // { champId, pin, driverName, status, view, signups:Set, results:[], pick, note }
@@ -5783,7 +5815,7 @@ function _suInfoHtml(collapsed) {
     <div>• <b>Balanced teams come first.</b> Teams are balanced by expected points (based on ELO), with at most about 10 % difference. Wishes are granted wherever that allows it. <b>The more players wish for a partner, the less likely it is that every wish can be granted.</b></div>
     <div>• One-sided wishes are only considered last.</div>
     <div>• If <b>two very strong players</b> pick each other, they start as a duo, but further players can still be drawn into their team. If a group is <b>too strong to balance</b>, the wishes of that group can be dissolved and the draw decides.</div>
-    <div>• Your wish stays secret until the team reveal.</div>
+    <div>• You see whether your own wish is mutual — but never who picked you.</div>
     ${close}
   </div>`;
 }
@@ -5811,6 +5843,22 @@ function _suNextHtml(s) {
       <div>• Afterwards you can watch the replay (<b>Team reveal</b> button) and look up your team with <b>Show team</b>. Every team member can rename the team until the first event starts.</div>
     </div>
   </details>`;
+}
+
+/** Status des eigenen Wunsches (kommt als s.wish.state vom Server). Gezeigt wird nur, ob DEIN Wunsch erwidert wird —
+ *  nicht, wer dich gewaehlt hat. */
+function _suWishStateHtml(w) {
+  const nm = escapeHtml(w.partner_name);
+  const box = (color, html) => `<p style="font-size:12px;color:${color};line-height:1.5;margin-bottom:10px;">${html}</p>`;
+  const state = w.state || (w.partner_registered ? null : 'void');   // alter Server: nur "Partner angemeldet?"
+  if (state === 'void')   return box('#e0a030', `⚠ ${nm} has not signed up yet. The wish only counts if they sign up before the deadline — tell them!`);
+  if (state === 'mutual') return box('var(--green)', `✓ <b>Mutual</b> — ${nm} picked you too. You will be drawn into the same team, unless the balancing can't allow it.`)
+                                + box('#666', 'Nobody else sees who picked whom.');
+  if (state === 'chain')  return box('var(--green)', `✓ Your wish is part of a <b>chain that closes</b> — a group of ${w.size} players. You will be drawn into the same team, unless the balancing can't allow it.`)
+                                + box('#666', 'Nobody else sees who picked whom.');
+  if (state === 'open')   return box('#e0c070', `${nm} is signed up but has <b>not picked you</b> (yet).`)
+                                + box('#666', 'You only see whether <b>your</b> wish is returned, not who picked you.');
+  return '';
 }
 
 /** Hinweis zum ELO-/Placement-Stand des angemeldeten Fahrers (kommt als s.rating vom Server). */
@@ -5991,8 +6039,7 @@ function _renderSignup() {
         <span><strong>${escapeHtml(s.wish.partner_name)}</strong></span>
         <span title="Remove wish" style="color:var(--red);font-size:20px;padding:0 6px;cursor:pointer;" onclick="_suRemoveWish()">✕</span>
       </div>
-      ${s.wish.partner_registered ? '' : `<p style="font-size:12px;color:#e0a030;margin-bottom:10px;">⚠ ${escapeHtml(s.wish.partner_name)} has not signed up yet. The wish only counts if they sign up before the deadline.</p>`}
-      <p style="font-size:11px;color:#666;margin-bottom:10px;">Whether your wish is mutual stays secret until the team reveal. Talk to each other!</p>`;
+      ${_suWishStateHtml(s.wish)}`;
   } else {
     wishHtml = `${_suInfoHtml()}
       <button class="ev-btn active" style="width:100%;margin-bottom:10px;" onclick="_suOpenSearch()">🔎 Find team mate</button>`;
@@ -7129,6 +7176,7 @@ function _teamedRenderGuide() {
   const pref = _teamedSizePref();
   document.querySelectorAll('#tab-teamed-guide .g-pref').forEach(e => { e.textContent = pref; });
   document.querySelectorAll('#tab-teamed-guide .g-maxgroup').forEach(e => { e.textContent = pref + 1; });
+  document.querySelectorAll('#tab-teamed-guide .g-loyalpool').forEach(e => { e.textContent = 50 * pref; });
   const el = $('teamed-guide-status'); if (!el) return;
   const c = _teamedChamp;
   if (!c || !c.signup_open) { el.innerHTML = 'Sign-up is <b>not open</b> at the moment. This page explains how it will work.'; return; }
@@ -7435,6 +7483,12 @@ async function _fetchAndRenderTeamedResults(eventId) {
  * loadStandings()/renderTeamStandings() (Themed, Abschnitt 7 oben), aber
  * ohne Einzelfahrer-Fallback: Teamed hostet immer Team-Championships.
  */
+/** Loyalty-Zelle der Teamed-Wertung: Bonus + wie viele Mitglieder loyal sind (z. B. "+100 (2/3)"). */
+function _teamLoyaltyHtml(t) {
+  if (t.isUnassigned || !t.members.length || !(t.loyalBonus > 0)) return '—';
+  return `<span style="color:var(--green);">✓ +${t.loyalBonus}</span> <span style="color:#888;font-size:11px;">(${t.loyalN}/${t.members.length})</span>`;
+}
+
 async function loadTeamedStandings() {
   setHTML('teamed-standings-tbody', emptyRow(10, 'LOADING…'));
   setHTML('teamed-standings-slim-tbody', emptyRow(4, 'LOADING…'));
@@ -7515,11 +7569,11 @@ async function loadTeamedStandings() {
         name: t.name, color: t.color || '#c0392b',
         members: (t.team_members || []).map(m => m.driver_name),
         roundPts: {}, total: 0,
-        loyal: true,
+        loyalN: 0, loyalBonus: 0,
       };
     });
     const UNASSIGNED_ID = '__unassigned__';
-    teamMap[UNASSIGNED_ID] = { name: 'Unassigned', color: '#555', members: [], roundPts: {}, total: 0, loyal: false, isUnassigned: true };
+    teamMap[UNASSIGNED_ID] = { name: 'Unassigned', color: '#555', members: [], roundPts: {}, total: 0, loyalN: 0, loyalBonus: 0, isUnassigned: true };
 
     Object.values(driverMap).forEach(d => {
       const teamId = memberToTeam[d.name] || UNASSIGNED_ID;
@@ -7532,11 +7586,17 @@ async function loadTeamedStandings() {
       });
       bucket.total += d.total;
 
-      if (d.vehicles.size !== 1) bucket.loyal = false;
+      if (d.vehicles.size === 1) bucket.loyalN++;   // Mitglied ist loyal: genau EIN Auto die ganze Saison
     });
 
+    // Loyalty (Teamed): Bonus-Topf = 50 x Wunsch-Teamgroesse (Standard 3 -> 150). Jedes Mitglied, das die
+    // ganze Saison bei EINEM Auto bleibt, bringt dem Team seinen Anteil (Topf / Mitgliederzahl). Dadurch
+    // hat kein Team durch mehr Mitglieder einen Vorteil. Keine Absprache noetig, kein Alles-oder-nichts.
+    const loyaltyPool = 50 * _teamedSizePref();
     Object.values(teamMap).forEach(t => {
-      if (!t.isUnassigned && t.members.length && t.loyal) t.total += 50;
+      if (t.isUnassigned || !t.members.length) return;
+      t.loyalBonus = Math.round(loyaltyPool * t.loyalN / t.members.length);
+      t.total += t.loyalBonus;
     });
 
     const rows = Object.values(teamMap).filter(t => t.members.length);
@@ -7559,8 +7619,7 @@ async function loadTeamedStandings() {
     if (tbody) {
       tbody.innerHTML = rows.map((t, i) => {
         const membersStr = t.members.join(', ');
-        const loyal = (!t.isUnassigned && t.loyal && t.members.length)
-          ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+        const loyal = _teamLoyaltyHtml(t);
 
         const roundCells = evOrder.map(evId => {
           const rd  = evs.find(e => e.id === evId);
@@ -7590,8 +7649,7 @@ async function loadTeamedStandings() {
     if (slimTbody) {
       slimTbody.innerHTML = rows.map((t, i) => {
         const membersStr = t.members.join(', ');
-        const loyal = (!t.isUnassigned && t.loyal && t.members.length)
-          ? '<span style="color:var(--green);">✓ +50</span>' : '—';
+        const loyal = _teamLoyaltyHtml(t);
         const rowId = `teamed-standings-slim-${i}`;
 
         const roundBadges = evOrder.map(evId => {
@@ -7675,7 +7733,9 @@ async function loadTeamedChallenges() {
 
     const items = [];
 
-    items.push({ ...CHALLENGE_INFO.loyalty, points: 50, active: true, name: CHALLENGE_INFO.loyalty.name });
+    const _lp = 50 * _teamedSizePref();
+    items.push({ ...CHALLENGE_INFO.loyalty, name: 'Loyalty Bonus (team)', points: _lp, active: true,
+      desc: `Every team member who drives the same car all season earns the team a share of ${_lp} points (the share is ${_lp} divided by the number of team members). Nobody has to agree on a car — everybody decides for themselves. Checked automatically at season end.` });
 
     ['stage_improvement', 'penalty_challenge', 'survivor_bonus', 'livery_challenge'].forEach(type => {
       const rule = byType[type];
